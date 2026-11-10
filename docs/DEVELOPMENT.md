@@ -138,3 +138,9 @@ cargo run -p virgostars-events-p0 --bin p0-verify -- datasets/2026-11-10/_assemb
 ```
 
 The expected digest above belongs **only** to the immutable 2026-11-10 dataset in draft PR #6; fetch the correct versioned manifest when verifying newer snapshots. Three new Rust golden regression tests cover full-file digest, CLI correct digest and CLI corrupt/invalid expected digest; **NOT RUN** here because Cargo is unavailable. The Python reference audit was rerun in this session: **8/8 PASS** and **761/761 blocks, 380,844/380,844 encoded events**, correct full-archive SHA-256. Rust build, Clippy and runtime parity are not yet verified.
+
+## Automated local gate orchestration (no GitHub Actions)
+
+The branch includes `tools/validate_rust.py` (Python 3.10+ stdlib) and `tools/test_validate_rust.py`. It works on Windows PowerShell with `py -3 tools\\validate_rust.py` and on macOS/Linux with `python3 tools/validate_rust.py`. It stops immediately on failed Rust format, Clippy, tests or release build. For a reconstructed P0 archive it also runs **two independent full-file audits** and compares JSON `sha256`, `blocks`, `records` and `sections`, requiring the Rust CLI to declare `coverage_certified:false`.
+
+The validation wrapper was executed with a **simulated Cargo invocation** and passed **9/9 Python regression tests**; it correctly refuses to claim success when Cargo is not installed. The actual Cargo toolchain was unavailable here, so the four Rust gates remain **NOT RUN**. Exact commands, dataset instructions and Windows steps are in [LOCAL_RUST_CHECKS.md](LOCAL_RUST_CHECKS.md).
