@@ -2,6 +2,16 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — Indexed Rust queries and synod navigation (draft PR #5)
+
+- **Existing PR / branch:** [#5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`; extended rather than opening another Rust PR. PR #6 covers the Python experimental binary reader and SHA-bound coverage policy and remains separate.
+- **Implementation:** new `crates/events-core/src/indexed.rs`, exposed from `lib.rs`. In-memory immutable grouped index; deterministic per-family/body ordering; reject same-series/same-instant duplicate input. Implement recorded-event `at`, strict `next`/`previous`, [start,end) `between`; `synod_at` returning a handle supporting `event`, `next`, `previous` and `next_recorded_start`.
+- **Scientific safety:** these APIs explicitly return **recorded events, not proven sign/motion states**. No inference across missing periods. Production-grade coverage state requires reviewed windows tied to the dataset digest.
+- **Tests added (not executed):** six new Rust unit tests and two external integration tests covering strict bounds, pre-epoch timestamp, empty/missing series, duplicate rejection, cross-family same-time, same-body synod navigation and gap awareness. Existing 13 tests unchanged.
+- **Checks performed:** GitHub connector readback and structural checks (file presence, public re-export, test declarations). No Cargo toolchain on authoring container; `cargo fmt/clippy/test/build` **NOT RUN**, and no compilation claim made. Standard Cargo verification remains mandatory before merge.
+- **Next:** run Cargo checks and fix any compile/style errors; freeze VSEPH v1 header/index (#3), implement file decoder, and move SHA-bound coverage semantics from Python into Rust before exposing verified states in bindings.
+- **No merge, deploy, package release, data change or GitHub Actions**.
+
 ## 2026-11-10 — P0.2 Rust workspace (draft PR #5)
 
 - **Issue / PR / branch:** [#2](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/2) / [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) / `feat/p0-2-rust-workspace` (branch from `main`; no merge).
