@@ -2,6 +2,18 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — Original PostgreSQL row-ID uniqueness enforced throughout experimental VSEPH-P0 (draft PR #5)
+
+- **Existing draft branch:** `feat/p0-2-rust-workspace`, [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5); owner-authorized CSV/binary dataset remains untouched on [PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6). No redundant PR.
+- **Bug fixed:** the indexed P0 reader previously accepted `source_id=0` and a repeated PostgreSQL row ID at a different event time (even when the block checksum was valid). `crates/events-p0/src/lib.rs` now rejects zero/repeated IDs in any individually decoded block and `P0Archive::verify_all()` checks **entire-family uniqueness** across all bodies and blocks. IDs may coincide between independent source families (separate original tables).
+- **Tests committed, NOT RUN in Rust:** four new `golden_p0.rs` tests with synthetic checksum-valid compressed archives: zero source ID, duplicate in one block, duplicate in two blocks and duplicate across two bodies in one family. The last two are discoverable only with full validation, not necessarily a targeted query.
+- **Independent Python oracle:** `tools/audit_p0_bytes.py` now enforces the same full-family rule. `tools/test_audit_p0_bytes.py` contains five new semantic tests (four rejected bad-ID patterns and one legal cross-family ID reuse), extending the actual suite to **13 tests**.
+- **Actual execution:** exact GitHub-committed Python auditor `ca5b8afbe5de8c16deceacbf785d80a525eb44ec`, test script `f7f3afb3a19dd8cfb77f5d4f86fc81c0ca8c82f6`, and synthetic fixture `64f38ded0a336f0d2652e994bf87b8e16ce8d393` were reconstructed byte-for-byte and checked using `git hash-object`. Command `VSEPH_P0_PATH=/mnt/data/virgostars-events-20261110.vseph-p0 python -m unittest discover -s /mnt/data/vseph_verify_next/tools -p test_audit_p0_bytes.py -v`: **13/13 PASS**, including full real-data ID scan and all checksum-valid adversarial fixtures. Independent `python tools/audit_p0_bytes.py /mnt/data/virgostars-events-20261110.vseph-p0 --sha256 c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e`: **761/761 blocks, 380,844/380,844 events**, sections `synod=70,554`, `motion=266,516`, `ingress=43,774`, **no zero or duplicate source IDs**, full archive digest matches.
+- **Docs:** AGENTS.md, README, DEVELOPMENT, P0_BYTE_AUDIT, ROADMAP (P1.3 remains in progress), this log; no astronomy calculations or source data modified.
+- **Not validated:** `cargo fmt`, `cargo clippy`, `cargo test`, `cargo build --release` and actual Rust/Python parity **NOT RUN**. The container lacks `cargo/rustc`; Rust distribution DNS lookup fails. These remain blockers to merge.
+- **Next:** execute all four Cargo gates in a real Rust environment, run `p0-verify --sha256` on the assembled PR #6 file and compare Rust/Python block identity audits; preserve original source ID as an immutable key in future appended datasets.
+- **No merge, deploy, GitHub Actions, production database access, new package publication or data-license selection.**
+
 ## 2026-11-10 — Scientific CSV ↔ VSEPH-P0 exact record-field parity (draft PR #5)
 
 - **PR/branch:** existing [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`; dataset remains separate and unchanged on [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6). No new overlapping PR.
