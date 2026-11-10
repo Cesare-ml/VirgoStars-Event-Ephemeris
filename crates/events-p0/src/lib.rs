@@ -20,7 +20,7 @@ pub use coverage::{CoverageAwareP0, CoveredState};
 use flate2::bufread::ZlibDecoder;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -305,9 +305,21 @@ impl P0Archive {
             records: 0,
             by_family: BTreeMap::new(),
         };
+        // PostgreSQL IDs are unique within each source table/family, even
+        // when events belong to different bodies or compressed blocks.
+        let mut seen_source_ids: BTreeMap<EventFamily, BTreeSet<u64>> = BTreeMap::new();
         for ((family, body), blocks) in &self.blocks {
             for block in blocks {
                 let decoded = self.load_block(*family, body, block)?;
+                let seen = seen_source_ids.entry(*family).or_default();
+                for record in &decoded {
+                    if !seen.insert(record.source_id) {
+                        return Err(invalid(format!(
+                            "duplicate original source ID {} across {:?} blocks/bodies",
+                            record.source_id, family
+                        )));
+                    }
+                }
                 let count = u64::try_from(decoded.len())
                     .map_err(|_| invalid("decoded block record count overflows u64"))?;
                 summary.records = summary.records.checked_add(count)
@@ -468,8 +480,12 @@ fn decode_records(
         .map_err(|_| invalid("invalid block base time"))?);
     let mut pos = 8;
     let mut records = Vec::with_capacity(count);
+    let mut source_ids = BTreeSet::new();
     for i in 0..count {
         let source_id = take_varint(bytes, &mut pos)?;
+        if source_id == 0 || !source_ids.insert(source_id) {
+            return Err(invalid("zero or duplicate original source ID inside block"));
+        }
         let current = take_i64_delta(bytes, &mut pos, previous)?;
         if (i == 0 && current != previous) || (i > 0 && current <= previous) {
             return Err(invalid("non-increasing or incorrect block-base timestamp"));
