@@ -67,6 +67,15 @@ class AuditP0BytesTest(unittest.TestCase):
         with self.assertRaises((ValueError, zlib.error)):
             self.audit(self.good[:-1])
 
+    def test_unqueried_block_corruption_detected_by_full_audit(self):
+        # Damage the ingress block while leaving the independently indexed
+        # Mercury synod block intact. An exhaustive audit must still fail.
+        altered = bytearray(self.good)
+        header_length = struct.unpack_from('<I', altered, 8)[0]
+        altered[12 + header_length] ^= 1
+        with self.assertRaises((ValueError, zlib.error)):
+            self.audit(altered)
+
     @unittest.skipUnless(os.environ.get('VSEPH_P0_PATH'), 'optional reconstructed public dataset')
     def test_real_snapshot_full_block_audit(self):
         path = Path(os.environ['VSEPH_P0_PATH'])
