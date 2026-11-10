@@ -78,3 +78,15 @@ cargo run -p virgostars-events-p0 --bin p0-verify -- datasets/2026-11-10/_assemb
 ```
 
 It returns JSON event counts, full-file `sha256` and a nonzero exit status for invalid blocks, with `coverage_certified: false`. Add `--sha256 <trusted-manifest-digest>` to reject a mismatched or corrupt **entire** archive; do not trust an unauthenticated digest printed by the file itself. The executable is **not yet compiled/tested with Cargo** in this authoring environment. The independent Python verifier has executed successfully across 761 blocks and 380,844 records, with 8/8 tests passing. See [P0 byte-audit instructions](docs/P0_BYTE_AUDIT.md) for steps and checksum verification. Neither program fills astronomical coverage gaps.
+
+### One-command local Rust gates (Windows, macOS, Linux)
+
+For contributors who need to validate a Rust change without GitHub Actions, draft PR #5 now includes a cross-platform Python wrapper:
+
+```sh
+python tools/validate_rust.py
+```
+
+It runs `cargo fmt`, `cargo clippy`, workspace tests and release build in sequence, stopping at the first failure. To additionally validate the experimental VSEPH-P0 archive, pass `--archive <path> --sha256 <trusted-manifest-digest>`; the wrapper independently checks the complete archive using Python and the Rust CLI and **requires the two JSON summaries to match**. On Windows use `py -3 tools\\validate_rust.py`.
+
+See [local Rust validation instructions](docs/LOCAL_RUST_CHECKS.md). The helper's own **9 Python tests passed**; this does **not** establish that the Rust compiler/build has run in the current environment. The experimental adapter and original dataset are still staged on separate draft PRs.
