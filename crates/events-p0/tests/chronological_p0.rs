@@ -206,6 +206,89 @@ fn invalid_query_limits_and_cursor_ranges_fail_closed() {
 }
 
 #[test]
+fn pages_advance_across_compressed_blocks_and_interleaved_families() {
+    use flate2::write::ZlibEncoder;
+    use flate2::Compression;
+    use serde_json::json;
+
+    // Two separately compressed ingress blocks (Moon 0 and Moon 10) and
+    // an interleaved Mars station (time 5), with valid independent digests.
+    let synthetic = [
+        ("ingress", "Moon", 0_i64, 51_u8, vec![0_u8]),
+        ("ingress", "Moon", 10_i64, 52_u8, vec![1_u8]),
+        ("motion", "Mars", 5_i64, 31_u8, vec![4_u8, 0_u8]),
+    ];
+    let mut toc = Vec::new();
+    let mut payload = Vec::new();
+    for (family, name, at, id, extras) in synthetic {
+        let mut raw = at.to_le_bytes().to_vec();
+        raw.extend_from_slice(&[id, 0]); // original source ID, delta=0
+        raw.extend_from_slice(&extras);
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&raw).unwrap();
+        let compressed = encoder.finish().unwrap();
+        toc.push(json!({
+            "body": name,
+            "family": family,
+            "start": payload.len(),
+            "length": compressed.len(),
+            "raw_length": raw.len(),
+            "count": 1,
+            "min_us": at.to_string(),
+            "max_us": at.to_string(),
+            "raw_sha256": format!("{:x}", Sha256::digest(&raw)),
+        }));
+        payload.extend_from_slice(&compressed);
+    }
+    let header = json!({
+        "format": "VSEPH-P0-EXPERIMENTAL",
+        "format_version": [0, 0, 1],
+        "codec": "zlib",
+        "block_records_max": 512,
+        "sections": {"ingress": 2, "motion": 1},
+        "table_of_contents": toc,
+    });
+    let header_bytes = serde_json::to_vec(&header).unwrap();
+    let mut archive_bytes = b"VSEPH-P0".to_vec();
+    archive_bytes.extend_from_slice(&(header_bytes.len() as u32).to_le_bytes());
+    archive_bytes.extend_from_slice(&header_bytes);
+    archive_bytes.extend_from_slice(&payload);
+
+    let file = {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let id = NEXT_FILE_ID.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "virgostars-interleaved-{}-{nanos}-{id}.p0", std::process::id()
+        ));
+        let mut output = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        output.write_all(&archive_bytes).unwrap();
+        FixtureFile(path)
+    };
+    let archive = P0Archive::open(&file.0).unwrap();
+    assert_eq!(archive.verify_all().unwrap().records, 3);
+
+    let first = archive.chronological_between(time(0), time(11), 1, None).unwrap();
+    assert_eq!(selected(&first.events)[0].3, 51);
+    let second = archive
+        .chronological_between(time(0), time(11), 1, first.next_cursor.as_ref())
+        .unwrap();
+    assert_eq!(selected(&second.events)[0].3, 31);
+    let third = archive
+        .chronological_between(time(0), time(11), 1, second.next_cursor.as_ref())
+        .unwrap();
+    assert_eq!(selected(&third.events)[0].3, 52);
+    assert!(third.next_cursor.is_none());
+
+    let last_only = archive.chronological_between(time(6), time(11), 2, None).unwrap();
+    assert_eq!(selected(&last_only.events)[0].3, 52);
+    assert!(last_only.next_cursor.is_none());
+}
+
+#[test]
 fn fully_consumed_page_does_not_expose_a_spurious_next_cursor() {
     let fixture = FixtureFile::new();
     let archive = P0Archive::open(&fixture.0).unwrap();
