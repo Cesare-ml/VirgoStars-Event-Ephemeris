@@ -178,7 +178,7 @@ pub struct SynodHandle<'a> {
 }
 
 impl<'a> SynodHandle<'a> {
-    pub fn event(&self) -> &'a SynodEvent {
+    pub fn event(&self) -> &SynodEvent {
         let events = self.index.series(EventFamily::Synod, &self.body)
             .expect("handle references an indexed series");
         match &events[self.position] {
