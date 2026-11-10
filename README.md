@@ -107,3 +107,9 @@ See [CSV ↔ P0 field parity](docs/CSV_P0_FIELD_PARITY.md). This is Python 3.10+
 ### PostgreSQL row identity checks
 
 The experimental P0 reader and independent Python byte auditor now reject **zero or reused original source row IDs in one event family**, even when duplicates occur in different compressed blocks or celestial bodies. IDs are allowed to coincide **across the three independent source tables**. The original 2026-11-10 archive passed all identity checks: **380,844 valid rows**, **761 indexed blocks**. See [P0 byte-audit guide](docs/P0_BYTE_AUDIT.md); the Python suite reports **13/13 PASS**, while Rust tests/compilation remain **NOT RUN** in the authoring environment.
+
+### Chronological merged event pages — experimental Rust core
+
+Draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) now provides `EventIndex::chronological_between(start, end, limit, after)` for **recorded events** from all three families. It uses a stable timestamp/family/body tie order, cursor pagination, a 10,000-record maximum page size and half-open UTC microsecond ranges, without an unbounded materialization of the selected interval. Missing astronomical events are never interpolated or declared complete.
+
+The initial implementation is **in-memory only**; the file-backed VSEPH-P0 counterpart and public v1 API are still pending. Six new Rust public integration tests are written but **have not yet been run** with Cargo for this update. See the [developer notes](docs/DEVELOPMENT.md). Please do not use this draft as evidence of a production-ready chronological calendar service.
