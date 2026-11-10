@@ -2,6 +2,17 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — owner-authorized scientific dataset import (draft)
+
+- **Scope:** 2026-11-10 pgAdmin export supplied by maintainer; public release of scientific fields explicitly requested; 70,554 synods, 266,516 motion events, 43,774 sign ingresses.
+- **Prepared:** normalized headered CSVs, experimental indexed VSEPH-P0 binary, SHA-256 manifests, per-year event counts and 3 heuristic long-interval candidates (not proof of missing events). Original application-only fields are excluded.
+- **Integrity:** all 380,844 normalized event records reproduce exactly the canonical scientific digests of the original exports. Compressed P0 SHA-256: `c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e`.
+- **Storage:** some large files need ordered `*.parts/part-NNN` blobs because the GitHub connector rejects single multi-megabyte transfers. `tools/assemble_dataset.py` must verify byte length, SHA-256 and record counts on checkout.
+- **Scientific gaps:** sparse historical coverage depends on body/family; Moon synods have candidate 1918–1920 and 2017–2019 long intervals; Moon ingresses 2099–4836 disjoint, then Aries-only records.
+- **Licensing:** code CPAL-1.0; **separate scientific data license still pending selection**, no invented unrestricted rights.
+- **Next tasks:** confirm data blobs present in draft PR tree, run assembler/reader tests against a fresh checkout, decide open-data license, then design Rust VSEPH v1 and reproducible gap-completion workflow.
+- **No merge, package publication, production integration or GitHub Actions**.
+
 ## 2026-11-10 — repository initialization
 
 - **Baseline:** public repository empty; first README created, CPAL-1.0 licensing and project/agent docs initialized.
