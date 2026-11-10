@@ -68,3 +68,13 @@ The draft Rust branch provides `EventIndex` and `virgostars-events-p0`, includin
 ### Reproducible experimental byte integrity audit
 
 An independent Python test tool in draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) validates **all** P0 compressed blocks and encoded records, including file/block SHA-256 and corruption checks. The actual 2026-11-10 P0 file passed **761 block checks / 380,844 record decodes**; see [auditor instructions](docs/P0_BYTE_AUDIT.md). This is a check of source **bytes**, not missing astronomical events or the still-unverified Rust decoder; `cargo test` is not yet run.
+
+### Verify the entire experimental compressed archive
+
+On the Rust development branch (draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5)), the new `P0Archive::verify_all()` validates **every** block, not only blocks accessed by an individual query. A provisional offline command is available after installing Rust and reconstructing the dataset from [PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6):
+
+```sh
+cargo run -p virgostars-events-p0 --bin p0-verify -- datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0
+```
+
+It returns JSON event counts or a nonzero exit status for invalid blocks, with `coverage_certified: false`. The executable is **not yet compiled/tested with Cargo** in this authoring environment. The independent Python verifier has executed successfully across 761 blocks and 380,844 records, with 8/8 tests passing. See [P0 byte-audit instructions](docs/P0_BYTE_AUDIT.md) for steps and checksum verification. Neither program fills astronomical coverage gaps.
