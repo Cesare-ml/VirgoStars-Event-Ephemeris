@@ -177,8 +177,8 @@ fn unreviewed_or_overlapping_ranges_are_rejected() {
         reviewed_window("ingress", "Moon", 0, 20),
         reviewed_window("ingress", "Moon", 10, 30)
     ];
-    let policy_file = policy_file(GOLDEN_SHA256, bad);
-    assert!(archive.with_coverage_policy(&policy_file.0).is_err());
+    let overlapping_policy = policy_file(GOLDEN_SHA256, bad);
+    assert!(archive.with_coverage_policy(&overlapping_policy.0).is_err());
 
     let mut invalid = reviewed_window("ingress", "Moon", 0, 20);
     invalid["evidence"] = Value::String(String::new());
