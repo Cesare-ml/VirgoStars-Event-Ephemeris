@@ -199,9 +199,16 @@ fn invalid_query_limits_and_cursor_ranges_fail_closed() {
     assert_eq!(cursor.source_id(), 10);
     assert_eq!(cursor.family(), EventFamily::Synod);
     assert_eq!(cursor.at(), time(-876_544));
+    assert_eq!(cursor.interval_start(), time(-876_545));
+    assert_eq!(cursor.interval_end(), time(5_000_001));
     assert_eq!(cursor.body().as_str(), "Moon");
     assert!(archive
         .chronological_between(time(0), time(5_000_001), 1, Some(cursor))
+        .is_err());
+    // Even though the cursor timestamp remains within the changed interval,
+    // the previous query's cursor must not be silently reused.
+    assert!(archive
+        .chronological_between(time(-876_546), time(5_000_001), 1, Some(cursor))
         .is_err());
 }
 
