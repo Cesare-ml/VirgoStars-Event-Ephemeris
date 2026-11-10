@@ -14,6 +14,9 @@
 //!
 //! All results are only RECORDED events. No claim of astronomical coverage.
 
+pub mod coverage;
+pub use coverage::{CoverageAwareP0, CoveredState};
+
 use flate2::bufread::ZlibDecoder;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
