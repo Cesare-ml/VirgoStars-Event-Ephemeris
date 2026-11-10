@@ -3,6 +3,8 @@
 # Copyright (c) 2026 Cesare-ml. Powered by VirgoStars — https://www.virgostars.it/
 """Independent VSEPH-P0 integrity tests (synthetic fixture, no real data needed)."""
 import base64
+import hashlib
+import json
 import os
 import struct
 import zlib
@@ -75,6 +77,78 @@ class AuditP0BytesTest(unittest.TestCase):
         altered[12 + header_length] ^= 1
         with self.assertRaises((ValueError, zlib.error)):
             self.audit(altered)
+
+    @staticmethod
+    def build_semantic_fixture(chunks):
+        """Construct deliberately synthetic, checksum-valid P0 blocks.
+
+        Each chunk: (family, body, min_us, max_us, count, uncompressed bytes).
+        This prevents integrity/hash failures from masking the source-ID bug.
+        """
+        toc = []
+        payload = bytearray()
+        sections = {}
+        for family, body, first, last, count, raw in sorted(chunks):
+            compressed = zlib.compress(raw)
+            toc.append({
+                'family': family, 'body': body, 'start': len(payload),
+                'length': len(compressed), 'raw_length': len(raw),
+                'count': count, 'min_us': str(first), 'max_us': str(last),
+                'raw_sha256': hashlib.sha256(raw).hexdigest()
+            })
+            payload.extend(compressed)
+            sections[family] = sections.get(family, 0) + count
+        header = json.dumps({
+            'format': 'VSEPH-P0-EXPERIMENTAL',
+            'format_version': [0, 0, 1],
+            'codec': 'zlib',
+            'block_records_max': 512,
+            'sections': sections,
+            'table_of_contents': toc,
+        }, sort_keys=True, separators=(',', ':')).encode()
+        return b'VSEPH-P0' + struct.pack('<I', len(header)) + header + payload
+
+    def test_zero_original_source_id_rejected_even_with_valid_checksum(self):
+        raw = struct.pack('<q', 0) + bytes([0, 0, 1])
+        archive = self.build_semantic_fixture([('ingress', 'Moon', 0, 0, 1, raw)])
+        with self.assertRaisesRegex(ValueError, 'zero or duplicate original source ID'):
+            self.audit(archive)
+
+    def test_reused_source_id_inside_one_block_rejected(self):
+        raw = struct.pack('<q', 0) + bytes([4, 0, 0, 4, 10, 1])
+        archive = self.build_semantic_fixture([('ingress', 'Moon', 0, 10, 2, raw)])
+        with self.assertRaisesRegex(ValueError, 'duplicate original source ID'):
+            self.audit(archive)
+
+    def test_reused_source_id_across_different_blocks_rejected(self):
+        first = struct.pack('<q', 0) + bytes([4, 0, 0])
+        second = struct.pack('<q', 10) + bytes([4, 0, 1])
+        archive = self.build_semantic_fixture([
+            ('ingress', 'Moon', 0, 0, 1, first),
+            ('ingress', 'Moon', 10, 10, 1, second),
+        ])
+        with self.assertRaisesRegex(ValueError, 'duplicate original source ID'):
+            self.audit(archive)
+
+    def test_reused_source_id_across_bodies_of_same_family_rejected(self):
+        raw = struct.pack('<q', 0) + bytes([4, 0, 0])
+        archive = self.build_semantic_fixture([
+            ('ingress', 'Moon', 0, 0, 1, raw),
+            ('ingress', 'Venus', 0, 0, 1, raw),
+        ])
+        with self.assertRaisesRegex(ValueError, 'duplicate original source ID'):
+            self.audit(archive)
+
+    def test_same_source_id_in_independent_family_is_allowed(self):
+        ingress = struct.pack('<q', 0) + bytes([4, 0, 0])
+        motion = struct.pack('<q', 0) + bytes([4, 0, 1, 0])
+        archive = self.build_semantic_fixture([
+            ('ingress', 'Moon', 0, 0, 1, ingress),
+            ('motion', 'Mars', 0, 0, 1, motion),
+        ])
+        report = self.audit(archive)
+        self.assertEqual(report['records'], 2)
+        self.assertEqual(report['sections'], {'ingress': 1, 'motion': 1})
 
     @unittest.skipUnless(os.environ.get('VSEPH_P0_PATH'), 'optional reconstructed public dataset')
     def test_real_snapshot_full_block_audit(self):
