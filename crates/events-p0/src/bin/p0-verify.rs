@@ -24,7 +24,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     if args.next().is_some() {
         return Err(IoError::new(ErrorKind::InvalidInput, "expected exactly one archive path").into());
     }
-    let archive = P0Archive::open(path)?;
+    let archive = P0Archive::open(std::path::Path::new(&path))?;
     let result = archive.verify_all()?;
     let count = |family| result.by_family.get(&family).copied().unwrap_or(0);
     println!(
