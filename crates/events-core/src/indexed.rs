@@ -72,6 +72,78 @@ impl fmt::Display for QueryError {
 
 impl Error for QueryError {}
 
+/// Cursor for an immutable chronological event index.
+///
+/// It identifies the last returned event by (timestamp, family, body), in
+/// that order. A cursor is valid only for the same immutable EventIndex and
+/// the same half-open query interval. It is not a serializable dataset ID.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChronologicalCursor {
+    at: TimestampMicros,
+    family: EventFamily,
+    body: BodyId,
+}
+
+impl ChronologicalCursor {
+    pub const fn at(&self) -> TimestampMicros {
+        self.at
+    }
+
+    pub const fn family(&self) -> EventFamily {
+        self.family
+    }
+
+    pub fn body(&self) -> &BodyId {
+        &self.body
+    }
+}
+
+/// A bounded chronological page of *recorded* events, never coverage proof.
+#[derive(Clone, Debug)]
+pub struct ChronologicalPage<'a> {
+    pub events: Vec<&'a Event>,
+    /// Present only when another page exists in the requested interval.
+    pub next_cursor: Option<ChronologicalCursor>,
+}
+
+/// Errors for bounded, chronological queries on the immutable event index.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ChronologicalQueryError {
+    ReversedRange {
+        start: TimestampMicros,
+        end: TimestampMicros,
+    },
+    InvalidLimit {
+        requested: usize,
+        max: usize,
+    },
+    InvalidCursor,
+}
+
+impl fmt::Display for ChronologicalQueryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ReversedRange { start, end } => write!(
+                f,
+                "chronological range {}..{} is reversed",
+                start.as_i64(),
+                end.as_i64()
+            ),
+            Self::InvalidLimit { requested, max } => {
+                write!(f, "chronological page size {requested} must be 1..={max}")
+            }
+            Self::InvalidCursor => {
+                f.write_str("chronological cursor does not match this index and interval")
+            }
+        }
+    }
+}
+
+impl Error for ChronologicalQueryError {}
+
+/// Hard cap for an in-memory chronological page, independent of source size.
+pub const MAX_CHRONOLOGICAL_PAGE_SIZE: usize = 10_000;
+
 /// Sorted, immutable, per-family/body recorded event index.
 /// Queries do NOT infer continuity, completeness, or a scientifically valid state.
 #[derive(Clone, Debug, Default)]
@@ -158,6 +230,97 @@ impl EventIndex {
             body: body.clone(),
             position: end.checked_sub(1)?,
         })
+    }
+
+    /// Return the next bounded page of recorded events in [start,end).
+    ///
+    /// Stable ordering: timestamp ascending, then EventFamily, then BodyId.
+    /// A family/body series cannot contain two events at the same timestamp,
+    /// so no additional ordinal is required for the current in-memory model.
+    ///
+    /// Merge uses one ordered head per nonempty series; it does not allocate
+    /// every matching event or claim continuous astronomical coverage.
+    /// A returned cursor is valid only for this exact immutable index and
+    /// interval. A zero or oversized page size is rejected.
+    pub fn chronological_between(
+        &self,
+        start: TimestampMicros,
+        end: TimestampMicros,
+        limit: usize,
+        after: Option<&ChronologicalCursor>,
+    ) -> Result<ChronologicalPage<'_>, ChronologicalQueryError> {
+        if end < start {
+            return Err(ChronologicalQueryError::ReversedRange { start, end });
+        }
+        if limit == 0 || limit > MAX_CHRONOLOGICAL_PAGE_SIZE {
+            return Err(ChronologicalQueryError::InvalidLimit {
+                requested: limit,
+                max: MAX_CHRONOLOGICAL_PAGE_SIZE,
+            });
+        }
+        if let Some(cursor) = after {
+            let valid = cursor.at >= start
+                && cursor.at < end
+                && self.series(cursor.family, &cursor.body).is_some_and(|records| {
+                    let pos = records.partition_point(|event| event.at() < cursor.at);
+                    records.get(pos).is_some_and(|event| event.at() == cursor.at)
+                });
+            if !valid {
+                return Err(ChronologicalQueryError::InvalidCursor);
+            }
+        }
+        if start == end {
+            return Ok(ChronologicalPage {
+                events: Vec::new(),
+                next_cursor: None,
+            });
+        }
+
+        // Each map entry owns the current head of one (family, body) series;
+        // advancing that head costs O(log number_of_series).
+        let mut heads: BTreeMap<
+            (TimestampMicros, EventFamily, &BodyId),
+            (&[Event], usize),
+        > = BTreeMap::new();
+        for ((family, body), series) in &self.series {
+            let records = series.as_slice();
+            let pos = records.partition_point(|event| {
+                event.at() < start
+                    || after.is_some_and(|cursor| {
+                        (event.at(), *family, body)
+                            <= (cursor.at, cursor.family, &cursor.body)
+                    })
+            });
+            if let Some(event) = records.get(pos) {
+                if event.at() < end {
+                    heads.insert((event.at(), *family, body), (records, pos));
+                }
+            }
+        }
+
+        let mut events = Vec::with_capacity(limit.min(self.len()));
+        while events.len() < limit {
+            let Some(((_, family, body), (records, position))) = heads.pop_first() else {
+                break;
+            };
+            events.push(&records[position]);
+            let next_position = position + 1;
+            if let Some(next) = records.get(next_position) {
+                if next.at() < end {
+                    heads.insert((next.at(), family, body), (records, next_position));
+                }
+            }
+        }
+        let next_cursor = if heads.is_empty() {
+            None
+        } else {
+            events.last().map(|event| ChronologicalCursor {
+                at: event.at(),
+                family: event.family(),
+                body: event.body().clone(),
+            })
+        };
+        Ok(ChronologicalPage { events, next_cursor })
     }
 
     pub fn len(&self) -> usize {
