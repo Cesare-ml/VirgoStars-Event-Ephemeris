@@ -43,7 +43,7 @@ Choose one family/body/year, inspect coverage and event-level gaps, document you
 
 ## Reproduction
 
-The original P0 packer/reader is a Python proof of concept (not the Rust crate, and not VSEPH v1). Published CSVs are **normalized**; its original `pack`/`verify` CLI expects older pgAdmin-shaped exports and cannot consume these new headered CSVs without an explicit adapter. The manifest records cryptographic checksums for all scientific fields, including source IDs, and may be used for independent parity validation.
+The original P0 packer/reader is published in [`prototype/`](../../prototype) as a Python proof of concept (not the Rust crate, and not VSEPH v1). Published CSVs are **normalized**; its original `pack`/`verify` CLI expects older pgAdmin-shaped exports and cannot consume these new headered CSVs without an explicit adapter. The manifest records cryptographic checksums for all scientific fields, including source IDs, and may be used for independent parity validation.
 
 Verify any files you receive by their exact SHA-256 before treating them as the source snapshot. No GitHub Actions or automated release is enabled.
 
@@ -56,3 +56,13 @@ The programmatic GitHub interface used for initialization can reject multi-megab
 - [Issue #7](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/7) — two unusually long Moon synod intervals (candidate gaps, independent re-calculation needed).
 - [Issue #8](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/8) — Moon ingress discontinuity 2099–4836 and isolated Aries-only tail; ensure unknown coverage is surfaced to clients.
 - [Issue #9](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/9) — select a separate open-data reuse license; public repository visibility alone does not grant unrestricted reuse rights.
+
+## Read the compressed data now (Python 3.10+)
+
+```bash
+python tools/assemble_dataset.py
+python prototype/test_vseph_prototype.py
+python prototype/virgostars_vseph_reader.py datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0 synod Mercury 2026-11-10T12:00:00Z
+```
+
+These are real queries against **precomputed records**. They do not infer astronomical events for gaps or perform actual calculations; inspect coverage before treating state lookups as valid.
