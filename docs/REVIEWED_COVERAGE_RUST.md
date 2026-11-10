@@ -64,3 +64,5 @@ The full 2026-11-10 policy and actual P0 binary are published on a **different d
 4. Have independent reviewers certify any specific family/body/time range and record the evidence in a separate versioned coverage policy. Never edit the immutable 2026-11-10 dataset to fabricate missing events.
 
 Attribution: **Powered by VirgoStars** — https://www.virgostars.it/. Source CPAL-1.0; dataset reuse license is tracked separately in issue #9.
+
+The experimental policy adapter now calls the P0 reader's shared streaming `verify_archive_sha256()` / `archive_sha256()` helpers instead of maintaining a second hash implementation. This is an internal consistency improvement, not scientific certification. The new CLI can require the same digest explicitly with `--sha256`; see [P0 byte audit](P0_BYTE_AUDIT.md).
