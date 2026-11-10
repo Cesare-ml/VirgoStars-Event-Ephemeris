@@ -1,0 +1,35 @@
+# Rust
+/target/
+**/*.rs.bk
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+*.egg-info/
+# JavaScript and TypeScript
+node_modules/
+coverage/
+*.tsbuildinfo
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+# Local PostgreSQL output, reports and raw/binary data (explicit approval required)
+*.dump
+*.sql.gz
+*.csv.gz
+*.vseph
+*.vseph.*
+/data-private/
+/exports/
+/benchmarks/out/
+# Exception: fixture binaries can be explicitly added later via a documented allowlist.

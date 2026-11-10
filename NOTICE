@@ -1,0 +1,37 @@
+VirgoStars-Event-Ephemeris
+=========================
+
+Original project: VirgoStars
+Source repository: https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris
+Project website: https://www.virgostars.it/
+
+Original Developer and Initial Developer: Cesare-ml (VirgoStars project)
+Original source code copyright (c) 2026 Cesare-ml, with separate copyrights
+for contributors where applicable.
+
+License for original source code: Common Public Attribution License
+Version 1.0 (CPAL-1.0), including completed Exhibits A and B in LICENSE.
+
+EXHIBIT B — original developer attribution:
+Copyright (c) 2026 Cesare-ml (VirgoStars project)
+Powered by VirgoStars
+https://www.virgostars.it/
+
+Attribution applies to Larger Works as specified in LICENSE.
+The legal obligations are in CPAL-1.0, including Section 14
+(GUI attribution at launch/initial use/session when applicable)
+and Section 15 (network use and source availability).
+NOTICE does not introduce independent restrictions.
+
+DATA DISCLAIMER:
+The repository maintainer states that the astronomical event dataset
+is their own original work produced by their own algorithms.
+No dataset has been published in this repository; dataset license and
+release rights/terms must be declared separately before distribution.
+This software license is not a grant of rights to an unpublished
+or later separately licensed dataset.
+
+No source or binaries of Swiss Ephemeris, Astrodienst, NASA/JPL kernels
+or other third-party ephemeris programs are included by this notice.
+Any later third-party dependencies retain their own terms.
+Contributors must preserve applicable notices and copyrights.
