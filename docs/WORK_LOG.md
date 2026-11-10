@@ -2,6 +2,17 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — P0.2 Rust workspace (draft PR #5)
+
+- **Issue / PR / branch:** [#2](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/2) / [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) / `feat/p0-2-rust-workspace` (branch from `main`; no merge).
+- **Existing work check:** [draft PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4) already addresses P0.1 synthetic JS fixtures. P0.2 does not copy or publish them.
+- **Implementation:** dependency-free Rust workspace; `virgostars-events-format` candidate magic probe only; `virgostars-events-core` strongly typed body/timestamp/sign/direction, synod phase order/null semantics, motion and ingress models; unified event enum. Format/parser indexing and actual `next()` remain out of scope.
+- **Files:** `Cargo.toml`, `crates/events-core/{Cargo.toml,src/lib.rs,tests/public_api.rs}`, `crates/events-format/{Cargo.toml,src/lib.rs}`, `docs/DEVELOPMENT.md`, `AGENTS.md`, this log and roadmap.
+- **Checks NOT RUN:** `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo build --workspace --release`; Cargo/rustc are absent from authoring environment. Test cases have been written but not executed.
+- **Source verification:** GitHub file fetch/readback and manifest/source inspection performed; these are NOT a substitute for compilation.
+- **Blockers:** no Rust toolchain in current environment; run standard checks before PR is eligible for review/merge.
+- **Next step:** issue #3 byte-level VSEPH format/golden bytes after review, or iterate on any Cargo issues. Do not claim P0.2 complete, deploy or merge without verification and approval.
+
 ## 2026-11-10 — repository initialization
 
 - **Baseline:** public repository empty; first README created, CPAL-1.0 licensing and project/agent docs initialized.
