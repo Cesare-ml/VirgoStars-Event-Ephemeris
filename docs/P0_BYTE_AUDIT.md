@@ -58,3 +58,13 @@ The current dataset is **4,143,385 bytes**, with **761** compressed blocks and *
 The dataset has gaps; see [the reviewed coverage contract](REVIEWED_COVERAGE_RUST.md). All returns from a raw P0 search are *recorded events*, not scientifically certified states. The current policy contains zero approved completeness intervals.
 
 Attribution: **Powered by VirgoStars** — https://www.virgostars.it/. Source code CPAL-1.0; scientific dataset reuse licensing is tracked separately in [issue #9](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/9).
+
+## New equivalent Rust full-block verification (draft; uncompiled here)
+
+The experimental Rust P0 reader on the same branch now has `P0Archive::verify_all()` and a one-command CLI. It walks every indexed block, decodes it and checks all per-block hashes and totals without retaining the whole dataset in memory.
+
+```sh
+cargo run -p virgostars-events-p0 --bin p0-verify -- datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0
+```
+
+A correctly verified 2026-11-10 archive should report **761 blocks / 380,844 records** (ingress 43,774; motion 266,516; synod 70,554), with `coverage_certified:false`. An invalid input should cause a nonzero exit status. The CLI verifies **all P0 compressed blocks**, but an independent whole-file SHA-256 check against the manifest is still necessary. The Rust command has **NOT BEEN RUN** here: Rust/Cargo toolchain is unavailable. The corresponding independent Python audit is tested and passed **8/8**, including corruption of a block not accessed by a targeted Mercury query.
