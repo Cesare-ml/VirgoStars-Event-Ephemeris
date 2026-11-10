@@ -154,18 +154,18 @@ fn offline_cli_exits_nonzero_on_corrupt_archive() {
 
 // Build checksum-valid synthetic archives to prove that source-ID checks are
 // semantic, not merely block-hash corruption checks.
-fn ingress_only_archive(blocks: Vec<(i64, i64, usize, Vec<u8>)>) -> Vec<u8> {
+fn ingress_archive_for_bodies(blocks: Vec<(&str, i64, i64, usize, Vec<u8>)>) -> Vec<u8> {
     let mut payload = Vec::new();
     let mut entries = Vec::new();
     let mut total = 0usize;
-    for (first, last, count, raw) in blocks {
+    for (body, first, last, count, raw) in blocks {
         let mut encoder = flate2::write::ZlibEncoder::new(
             Vec::new(), flate2::Compression::default(),
         );
         encoder.write_all(&raw).unwrap();
         let compressed = encoder.finish().unwrap();
         entries.push(serde_json::json!({
-            "body": "Moon",
+            "body": body,
             "family": "ingress",
             "start": payload.len(),
             "length": compressed.len(),
@@ -192,6 +192,32 @@ fn ingress_only_archive(blocks: Vec<(i64, i64, usize, Vec<u8>)>) -> Vec<u8> {
     bytes.extend_from_slice(&serialized);
     bytes.extend_from_slice(&payload);
     bytes
+}
+
+fn ingress_only_archive(blocks: Vec<(i64, i64, usize, Vec<u8>)>) -> Vec<u8> {
+    ingress_archive_for_bodies(blocks.into_iter()
+        .map(|(first, last, count, raw)| ("Moon", first, last, count, raw))
+        .collect())
+}
+
+#[test]
+fn reused_source_id_across_different_bodies_in_same_family_rejected() {
+    let mut moon = 0_i64.to_le_bytes().to_vec();
+    moon.extend_from_slice(&[4, 0, 0]);
+    let mut venus = 0_i64.to_le_bytes().to_vec();
+    venus.extend_from_slice(&[4, 0, 1]);
+    let file = TempFile::new(&ingress_archive_for_bodies(vec![
+        ("Moon", 0, 0, 1, moon),
+        ("Venus", 0, 0, 1, venus),
+    ]));
+    let archive = P0Archive::open(&file.0).unwrap();
+    assert_eq!(
+        archive.at(EventFamily::Ingress, &body("Venus"), stamp(0))
+            .unwrap().unwrap().source_id,
+        4
+    );
+    // Row IDs belong to the source ingress table, NOT to each body.
+    assert!(archive.verify_all().is_err());
 }
 
 #[test]
