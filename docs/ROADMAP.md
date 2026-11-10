@@ -16,7 +16,7 @@
 - [ ] **P0.3 ([issue #3](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/3)) — Freeze VSEPH v1 byte layout** following `VSEPH_FORMAT.md`. Define offsets, endian, varint, limits, checksums, format version, stable body registry and golden bytes. **Done when:** a byte-by-byte spec and hand-authored golden header/invalid-header tests exist.
 - [ ] **P0.4 — Reader header/index MVP (experimental VSEPH-P0 Rust reader in [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5); v1 reader still pending).** Open synthetic VSEPH bytes/files with overflow and corruption tests and bounded memory. **Done when:** tests cover correct/unknown/truncated/corrupt header/index.
 - [~] **P0.5 — Synod body queries/navigation (in-memory foundation in [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5)).** Implement `at`, `next`, `previous`, `between`, optional phases with strict bounds and handle navigation. **Done when:** fixture parity and phase boundary tests pass.
-- [ ] **P0.6 — Motion + ingress queries.** Implement date/range, latest-state, `signAt`, retrograde re-entries and no-coverage errors. **Done when:** fixture boundary/empty/gap tests pass.
+- [~] **P0.6 — Motion + ingress queries (draft Rust coverage policy in [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5); still unverified).** Implement date/range, latest-state, `signAt`, retrograde re-entries and no-coverage errors. **Done when:** fixture boundary/empty/gap tests pass.
 - [ ] **P0.7 — Unified event iterator.** Merge sorted families chronologically, with stable ties and limits. **Done when:** deterministic ordering and pagination tests pass.
 
 ## P1 — exporter, manifest and real-data validation
