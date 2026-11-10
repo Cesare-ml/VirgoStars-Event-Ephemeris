@@ -90,3 +90,16 @@ python tools/validate_rust.py
 It runs `cargo fmt`, `cargo clippy`, workspace tests and release build in sequence, stopping at the first failure. To additionally validate the experimental VSEPH-P0 archive, pass `--archive <path> --sha256 <trusted-manifest-digest>`; the wrapper independently checks the complete archive using Python and the Rust CLI and **requires the two JSON summaries to match**. On Windows use `py -3 tools\\validate_rust.py`.
 
 See [local Rust validation instructions](docs/LOCAL_RUST_CHECKS.md). The helper's own **9 Python tests passed**; this does **not** establish that the Rust compiler/build has run in the current environment. The experimental adapter and original dataset are still staged on separate draft PRs.
+
+
+### Verify public CSV fields against the compressed archive
+
+The experimental development tool `tools/verify_csv_p0.py` (draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5)) compares **every scientific field** in the three normalized public CSV tables (draft PR #6) with the compressed VSEPH-P0 file by original PostgreSQL row ID and celestial body. This detects missing or modified events, changed signs/directions and loss of synod phases (including NULL vs an explicit empty list). The 2026-11-10 snapshot passed **380,844/380,844** individual comparisons, with **11/11** synthetic regression tests passing. No missing dates are inferred or generated.
+
+After assembling the archived data in a temporary combined PR checkout:
+
+```sh
+python tools/verify_csv_p0.py datasets/2026-11-10 datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0 --sha256 c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e
+```
+
+See [CSV ↔ P0 field parity](docs/CSV_P0_FIELD_PARITY.md). This is Python 3.10+ standard-library tooling, **not** evidence that the Rust parser has compiled or that historical coverage is complete.
