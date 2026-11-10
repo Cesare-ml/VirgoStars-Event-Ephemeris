@@ -95,3 +95,11 @@ VSEPH_P0_PATH=datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0
 ~~~
 
 The ignored test checks 761 blocks and performs a recorded-event lookup, NOT an astronomical coverage certification. Global file SHA-256 is separately validated by the published dataset manifest and assembler; the reader checks block hashes lazily when queried.
+
+## SHA-256-bound coverage policy in Rust (draft)
+
+Shared `events-core` now defines validated `ReviewedWindow`, `CoveragePolicy` and `CoverageAssessment` with fail-closed state semantics. The P0 adapter parses the same `virgostars-reviewed-coverage/v0` policy format used by the Python reference in draft PR #6, verifies the full archive SHA-256, and rejects policy overlap, invalid ranges and changed binary data. `CoverageAwareP0.sign_at` and `direction_at` distinguish `UnknownCoverage`, `UnknownInitialState` and an explicitly `Reviewed` recorded event. The latter relies on externally reviewed completeness evidence and is not derived from file index density. The real-data policy currently contains **zero approved intervals**, so no real-data states are certified.
+
+New tests: five shared-core coverage cases in `crates/events-core/src/coverage.rs` and seven P0 cross-language-behavior cases in `crates/events-p0/tests/coverage_p0.rs`. **These Rust tests have not been compiled or executed here**; Cargo is unavailable. The reference Python decoder tests were actually executed in the local source directory with `python -m unittest -v test_vseph_prototype` and passed **6/6**. The real VSEPH-P0 file was inspected again with SHA-256 `c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e` and **380,844 source records / 761 blocks**.
+
+Full behavior, usage and hash caveats: [REVIEWED_COVERAGE_RUST.md](REVIEWED_COVERAGE_RUST.md). P0 currently re-hashes the complete archive for each coverage-aware query to detect changes; benchmark and replace with immutable verified file handles before performance-sensitive use. No production release or merge until Cargo checks and cross-language parity execute successfully.
