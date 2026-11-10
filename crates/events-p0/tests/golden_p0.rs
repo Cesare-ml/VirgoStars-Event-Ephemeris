@@ -8,6 +8,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use sha2::{Digest, Sha256};
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use virgostars_events_core::{BodyId, Event, EventFamily, TimestampMicros};
@@ -149,6 +150,88 @@ fn offline_cli_exits_nonzero_on_corrupt_archive() {
         .expect("Cargo should build the experimental verification CLI");
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("verification failed"));
+}
+
+// Build checksum-valid synthetic archives to prove that source-ID checks are
+// semantic, not merely block-hash corruption checks.
+fn ingress_only_archive(blocks: Vec<(i64, i64, usize, Vec<u8>)>) -> Vec<u8> {
+    let mut payload = Vec::new();
+    let mut entries = Vec::new();
+    let mut total = 0usize;
+    for (first, last, count, raw) in blocks {
+        let mut encoder = flate2::write::ZlibEncoder::new(
+            Vec::new(), flate2::Compression::default(),
+        );
+        encoder.write_all(&raw).unwrap();
+        let compressed = encoder.finish().unwrap();
+        entries.push(serde_json::json!({
+            "body": "Moon",
+            "family": "ingress",
+            "start": payload.len(),
+            "length": compressed.len(),
+            "raw_length": raw.len(),
+            "count": count,
+            "min_us": first.to_string(),
+            "max_us": last.to_string(),
+            "raw_sha256": format!("{:x}", Sha256::digest(&raw))
+        }));
+        total += count;
+        payload.extend_from_slice(&compressed);
+    }
+    let header = serde_json::json!({
+        "format": "VSEPH-P0-EXPERIMENTAL",
+        "format_version": [0, 0, 1],
+        "codec": "zlib",
+        "block_records_max": 512,
+        "sections": {"ingress": total},
+        "table_of_contents": entries
+    });
+    let serialized = serde_json::to_vec(&header).unwrap();
+    let mut bytes = b"VSEPH-P0".to_vec();
+    bytes.extend_from_slice(&(serialized.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(&serialized);
+    bytes.extend_from_slice(&payload);
+    bytes
+}
+
+#[test]
+fn zero_postgresql_source_id_rejected_even_if_block_hash_is_valid() {
+    let mut block = 0_i64.to_le_bytes().to_vec();
+    block.extend_from_slice(&[0, 0, 1]); // ID 0, delta 0, Taurus
+    let file = TempFile::new(&ingress_only_archive(vec![(0, 0, 1, block)]));
+    let archive = P0Archive::open(&file.0).unwrap();
+    assert!(archive.at(EventFamily::Ingress, &body("Moon"), stamp(0)).is_err());
+    assert!(archive.verify_all().is_err());
+}
+
+#[test]
+fn reused_source_id_within_one_block_rejected_despite_valid_sha256() {
+    let mut block = 0_i64.to_le_bytes().to_vec();
+    block.extend_from_slice(&[4, 0, 0, 4, 10, 1]); // ID 4, twice, at 0 and 10
+    let file = TempFile::new(&ingress_only_archive(vec![(0, 10, 2, block)]));
+    let archive = P0Archive::open(&file.0).unwrap();
+    assert!(archive.at(EventFamily::Ingress, &body("Moon"), stamp(10)).is_err());
+    assert!(archive.verify_all().is_err());
+}
+
+#[test]
+fn reused_source_id_across_separate_blocks_requires_full_audit() {
+    let mut first = 0_i64.to_le_bytes().to_vec();
+    first.extend_from_slice(&[4, 0, 0]); // Moon ID 4 at time 0
+    let mut second = 10_i64.to_le_bytes().to_vec();
+    second.extend_from_slice(&[4, 0, 1]); // Same ID 4 at time 10
+    let file = TempFile::new(&ingress_only_archive(vec![
+        (0, 0, 1, first), (10, 10, 1, second),
+    ]));
+    let archive = P0Archive::open(&file.0).unwrap();
+    // Either individual block is correctly formed, so a targeted lookup works.
+    assert_eq!(
+        archive.at(EventFamily::Ingress, &body("Moon"), stamp(10))
+            .unwrap().unwrap().source_id,
+        4,
+    );
+    // The complete archive's original row identity is not consistent.
+    assert!(archive.verify_all().is_err());
 }
 
 #[test]
