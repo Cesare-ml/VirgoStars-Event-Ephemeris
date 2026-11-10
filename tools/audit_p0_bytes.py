@@ -42,14 +42,17 @@ def _varint(data: bytes, pos: int) -> tuple[int, int]:
     raise ValueError("varint too long")
 
 
-def _decode(family: str, data: bytes, expected: int) -> tuple[int, int, int]:
+def _decode(family: str, data: bytes, expected: int, seen_source_ids: set[int]) -> tuple[int, int, int]:
     if len(data) < 8:
         raise ValueError("missing signed i64 base timestamp")
     first = struct.unpack_from("<q", data)[0]
     previous = first
     pos = 8
     for n in range(expected):
-        _, pos = _varint(data, pos)  # original source ID
+        source_id, pos = _varint(data, pos)
+        if source_id == 0 or source_id in seen_source_ids:
+            raise ValueError(f"zero or duplicate original source ID in {family}: {source_id}")
+        seen_source_ids.add(source_id)
         delta, pos = _varint(data, pos)
         current = previous + delta
         if current > (1 << 63) - 1 or current < -(1 << 63):
@@ -110,6 +113,9 @@ def audit_file(path: str | Path, expected_sha256: str | None = None) -> dict:
     previous_key = None
     previous_last = None
     counts = Counter()
+    # IDs are globally unique per original PostgreSQL table/family, including
+    # across celestial bodies and compressed blocks.
+    seen_source_ids = {family: set() for family in FAMILIES}
     base = 12 + header_len
     for entry in toc:
         family, body = entry["family"], entry["body"]
@@ -131,7 +137,7 @@ def audit_file(path: str | Path, expected_sha256: str | None = None) -> dict:
             raise ValueError("truncated or trailing compressed stream")
         if hashlib.sha256(block).hexdigest() != entry["raw_sha256"]:
             raise ValueError("block SHA-256 mismatch")
-        first, last, count = _decode(family, block, count)
+        first, last, count = _decode(family, block, count, seen_source_ids[family])
         if str(first) != entry["min_us"] or str(last) != entry["max_us"]:
             raise ValueError("TOC timestamps do not match decoded records")
         if key == previous_key and previous_last >= first:
