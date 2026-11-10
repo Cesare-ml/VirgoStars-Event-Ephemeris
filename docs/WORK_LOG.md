@@ -2,6 +2,15 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — Rust P0 exhaustive verification and CLI (draft PR #5)
+
+- **PR/branch:** [#5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`; no new PR or merge.
+- **Code:** `crates/events-p0/src/lib.rs` adds `P0AuditSummary` and `P0Archive::verify_all()`, processing each compressed block with exact decoded per-family counts, without interpreting data gaps as completeness. `crates/events-p0/src/bin/p0-verify.rs` provides an offline JSON-producing CLI with error exit code. No stable v1 format changes.
+- **Tests added (Rust, NOT RUN):** four new `golden_p0.rs` cases: full synthetic archive counts, corrupt nonqueried block, successful CLI JSON, CLI failure on corrupt archive. The ignored real-snapshot test now reads all 761 compressed blocks / 380,844 records and verifies section totals in Rust when executed in a combined PR checkout. `tools/test_audit_p0_bytes.py` adds a matching independently executable Python test for corruption outside a targeted query.
+- **Actual validation:** `VSEPH_P0_PATH=/mnt/data/virgostars-events-20261110.vseph-p0 python -m unittest discover -s /mnt/data/local_rust/tools -p test_audit_p0_bytes.py -v` → **8/8 PASS**. `python .../audit_p0_bytes.py .../virgostars-events-20261110.vseph-p0 --sha256 c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e` → **761 blocks and 380,844 events, SHA valid**. Independent Python test confirmed Mercury targeted query still succeeds with an unrelated ingress block corrupt, while full validation rejects the file.
+- **Unverified:** no `cargo`/`rustc` installed. Attempted system package index refresh failed to complete in time. The new Rust methods and CLI have **NOT been compiled or executed**; no Rust/Python runtime parity claim is made. Continue to block merge until Cargo fmt, clippy, tests and release build pass.
+- **Next:** run Cargo checks in a Rust-equipped checkout; fix any compile/style errors; compare Rust `verify_all()` against the Python reference and manifest; then continue VSEPH v1 and reviewed-coverage work. No CI Actions, deploy, data edits or merge.
+
 ## 2026-11-10 — Independent full-block P0 integrity audit (draft PR #5)
 
 - **Existing PR/branch:** [#5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`; no competing PR and no changes to the separate public snapshot on PR #6.
