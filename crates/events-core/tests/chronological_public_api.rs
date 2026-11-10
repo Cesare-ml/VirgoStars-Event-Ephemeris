@@ -164,11 +164,19 @@ fn stale_or_out_of_interval_cursors_are_rejected() {
     let first = index.chronological_between(time(-10), time(11), 1, None).unwrap();
     let cursor = first.next_cursor.unwrap();
     assert_eq!(cursor.at(), time(-10));
+    assert_eq!(cursor.interval_start(), time(-10));
+    assert_eq!(cursor.interval_end(), time(11));
     assert_eq!(cursor.family(), EventFamily::Ingress);
     assert_eq!(cursor.body().as_str(), "Mars");
 
     assert_eq!(
         index.chronological_between(time(0), time(11), 1, Some(&cursor)).unwrap_err(),
+        ChronologicalQueryError::InvalidCursor
+    );
+    // The cursor still falls within this changed interval, but the query
+    // itself is different and cannot safely reuse the old pagination state.
+    assert_eq!(
+        index.chronological_between(time(-11), time(11), 1, Some(&cursor)).unwrap_err(),
         ChronologicalQueryError::InvalidCursor
     );
     let another_index = EventIndex::from_events(vec![ingress("Venus", -10)]).unwrap();
