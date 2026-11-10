@@ -2,6 +2,17 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — P0 binary decoder in Rust (draft PR #5)
+
+- **Branch/PR:** feat/p0-2-rust-workspace / [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5). Existing PR reused; dataset and Python reference remain on separate PR #6.
+- **Implementation:** new isolated crates/events-p0/ Rust crate with bounded VSEPH-P0 JSON-header/index parser, independently verified zlib blocks with SHA-256, varint decoder, exact i64 timestamps, source IDs, and recorded-event queries at/next/previous/between/synod_at.
+- **Fixture:** independent Python-built 1470-byte, 8-event, four-block golden file; SHA-256 4b7dbe3171633402b76565df79a31066f58913b52b2839c735ea3e68cb413499; seven active Rust tests and one explicitly ignored real-snapshot integration test defined, NOT executed with Cargo.
+- **Executed checks:** Python P0 reference reader verified all expected golden fixture records/query outcomes and integrity, and six existing Python synthetic tests passed. Real binary header shows 380,844 records, 761 indexed blocks, 4,143,385 bytes.
+- **Not executed:** cargo fmt, cargo clippy, cargo test, cargo build; rustc/cargo unavailable. No Rust runtime parity or successful compilation is claimed.
+- **Scientific boundary:** P0 reader produces recorded events only. The separate SHA-bound coverage policy in PR #6 is not yet ported to Rust; verified sign/direction state must not be inferred from the last record.
+- **Next:** execute standard Cargo gates, correct compile/style issues, run ignored real-data integration test on combined checkout, then define stable VSEPH v1 format and move reviewed coverage semantics into Rust.
+- **No merge, deployment, GitHub Actions, production changes or dataset modification.**
+
 ## 2026-11-10 — Indexed Rust queries and synod navigation (draft PR #5)
 
 - **Existing PR / branch:** [#5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`; extended rather than opening another Rust PR. PR #6 covers the Python experimental binary reader and SHA-bound coverage policy and remains separate.
