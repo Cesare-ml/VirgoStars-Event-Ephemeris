@@ -1,0 +1,38 @@
+{
+  "schema": "vseph-synthetic-fixtures/v0",
+  "synthetic": true,
+  "id": "retrograde-ingresses",
+  "expected": {
+    "valid": true
+  },
+  "records": [
+    {
+      "family": "ingress",
+      "body": "Mercury",
+      "at": "2030-01-01T00:00:00Z",
+      "atUs": "1893456000000000",
+      "sign": 0
+    },
+    {
+      "family": "ingress",
+      "body": "Mercury",
+      "at": "2030-01-05T00:00:00Z",
+      "atUs": "1893801600000000",
+      "sign": 11
+    },
+    {
+      "family": "ingress",
+      "body": "Mercury",
+      "at": "2030-01-10T00:00:00Z",
+      "atUs": "1894233600000000",
+      "sign": 0
+    },
+    {
+      "family": "ingress",
+      "body": "Moon",
+      "at": "2030-01-10T23:59:59.999999Z",
+      "atUs": "1894319999999999",
+      "sign": 2
+    }
+  ]
+}
