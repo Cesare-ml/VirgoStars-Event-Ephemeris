@@ -21,6 +21,8 @@ After cloning this branch, with **Python 3.10+**, from the repository root:
 ```bash
 python tools/assemble_dataset.py
 python -m unittest test/test_assemble_dataset.py
+python prototype/test_vseph_prototype.py
+python prototype/virgostars_vseph_reader.py datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0 synod Mercury 2026-11-10T12:00:00Z
 ```
 
 The first command writes complete files under `datasets/2026-11-10/_assembled/` (intentionally ignored by Git) and verifies each exact expected **byte length**, **SHA-256**, CSV **header** and **row count**; binary magic checked separately. A corrupted or missing part fails rather than silently omitting records. The `_assembled` directory can be deleted/recreated any time.
