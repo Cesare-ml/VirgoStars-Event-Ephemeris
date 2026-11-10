@@ -144,3 +144,15 @@ The expected digest above belongs **only** to the immutable 2026-11-10 dataset i
 The branch includes `tools/validate_rust.py` (Python 3.10+ stdlib) and `tools/test_validate_rust.py`. It works on Windows PowerShell with `py -3 tools\\validate_rust.py` and on macOS/Linux with `python3 tools/validate_rust.py`. It stops immediately on failed Rust format, Clippy, tests or release build. For a reconstructed P0 archive it also runs **two independent full-file audits** and compares JSON `sha256`, `blocks`, `records` and `sections`, requiring the Rust CLI to declare `coverage_certified:false`.
 
 The validation wrapper was executed with a **simulated Cargo invocation** and passed **9/9 Python regression tests**; it correctly refuses to claim success when Cargo is not installed. The actual Cargo toolchain was unavailable here, so the four Rust gates remain **NOT RUN**. Exact commands, dataset instructions and Windows steps are in [LOCAL_RUST_CHECKS.md](LOCAL_RUST_CHECKS.md).
+
+
+## CSV-to-compressed-archive field parity (executed)
+
+The stdlib-only `tools/verify_csv_p0.py` independently compares normalized **public** CSV rows with the experimental compressed P0 archive **by family, body and original source row ID**. It verifies every scientific field including signed historical UTC microseconds, phases (NULL versus empty), direction and sign; requires exactly the documented CSV headers; and uses a disposable SQLite database so duplicates, missing rows and mismatches are rejected. It first invokes `tools/audit_p0_bytes.py` to check P0 framing and hashes. A trusted `--sha256` checks the complete immutable binary against its snapshot digest.
+
+```sh
+python -m unittest discover -s tools -p test_verify_csv_p0.py -v
+python tools/verify_csv_p0.py datasets/2026-11-10 datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0 --sha256 c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e
+```
+
+**Verified on 2026-11-10:** 11/11 synthetic Python tests PASS; **380,844** normalized CSV rows compared field by field against the actual P0 archive with **no discrepancies**. Tested source and test file bytes match the current GitHub branch blobs. The local integration run used a compatible `audit_file` helper rather than the exact repo copy; a fresh checkout containing both PR #5 and PR #6 remains a necessary additional review step. Rust Cargo checks are still **NOT RUN**. More context: [CSV_P0_FIELD_PARITY.md](CSV_P0_FIELD_PARITY.md).
