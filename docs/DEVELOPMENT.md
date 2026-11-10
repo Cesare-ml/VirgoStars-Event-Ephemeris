@@ -114,3 +114,17 @@ python tools/audit_p0_bytes.py datasets/2026-11-10/_assembled/virgostars-events-
 ```
 
 **Actual execution on 2026-11-10:** **PASS 7/7** Python tests with the real-data optional test enabled; **PASS 761/761 zlib blocks and 380,844/380,844 encoded records**, with all per-block SHA-256 and complete-archive hash matching. The exact committed Python files were matched to locally executed copies via Git blob IDs. The dataset and tests remain in separate PR branches; a fresh checkout is not yet validated. Rust/Cargo tests are **NOT RUN** in this environment; do not infer Rust compilation from Python results.
+
+## Full-archive validation from Rust (new, not yet compiled)
+
+The experimental P0 crate now exposes `P0Archive::verify_all()`. It traverses every block in the index, reuses the bounded zlib decoder, verifies each decompressed SHA-256, checks source IDs, timestamps, signs, directions, synod phases, per-block first/last times, and returns a `P0AuditSummary` with exact records, blocks and per-family counts. One block's records are held in memory at a time.
+
+For an offline CLI after reconstructing the snapshot in a combined checkout containing PRs #5 and #6:
+
+```sh
+cargo run -p virgostars-events-p0 --bin p0-verify -- datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0
+```
+
+The command prints JSON with `blocks`, `records`, `sections` and `coverage_certified: false`, and exits nonzero on corruption or invalid input. It **does not** certify continuous astronomical coverage or independently compare the whole-file SHA-256 with the dataset manifest. Keep using `tools/audit_p0_bytes.py --sha256 ...` or a trusted manifest/checksum for that separate requirement.
+
+Two new golden tests cover all-block validation and corruption in a **nonqueried** series; two more exercise the CLI's successful JSON result and nonzero exit on corruption. The optional ignored integration test now requests a full Rust audit of all **761 indexed blocks / 380,844 records**, not merely a header inspection. These Rust tests and CLI are **COMMITTED BUT NOT EXECUTED**: there is no Cargo/rustc in the current environment. The independent Python regression suite, including a matching nonqueried-block corruption case, was executed on the real archive: **8/8 PASS**. See [byte audit instructions](P0_BYTE_AUDIT.md).
