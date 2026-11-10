@@ -1,3 +1,11 @@
+## 2026-11-10 — First actual Windows Cargo run: formatting gate then Clippy fix (draft PR #5)
+
+- **Real developer validation:** Windows 11 PowerShell, `D:\\GitHub\\VirgoStars-Event-Ephemeris`, executed `py -3 tools\\validate_rust.py`. The contributor had first run `cargo fmt --all` locally after the initial format gate showed many rustfmt diffs. On the next run **`cargo fmt --all -- --check` PASSED locally**.
+- **Real Cargo/Clippy evidence:** Cargo fetched/locked dependencies and began checking all three crates; `cargo clippy --workspace --all-targets -- -D warnings` **FAILED** with `clippy::manual_range_contains` in `crates/events-p0/src/lib.rs`, `raw_len < 8 || raw_len > MAX_RAW`. This is a syntax/style diagnostic, not a reported astronomical discrepancy or confirmed passing Rust compilation.
+- **Code correction committed:** replaced the condition with semantically equivalent `!(8..=MAX_RAW).contains(&raw_len)` (commit `b5832baa16ea411651fcdaa90561ff14df92ebe1`). Source branch remains `feat/p0-2-rust-workspace`, PR #5 remains **draft**; no merge.
+- **Next:** on Windows, apply/sync the correction **without overwriting local rustfmt edits**, run `cargo fmt --all` then `py -3 tools\\validate_rust.py`. Share next failure, if any. `cargo test` and `cargo build --release` **NOT YET REACHED**. No assertion that Clippy now passes until Windows test is repeated.
+- **No GitHub Actions, production deployment, release or dataset modifications.**
+
 # Agent work log and handoffs
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
