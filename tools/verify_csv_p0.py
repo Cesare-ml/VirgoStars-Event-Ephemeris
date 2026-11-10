@@ -169,8 +169,11 @@ def verify(csv_dir: Path, archive_path: Path, expected_sha256: str | None = None
             with connection:
                 for family, (filename, columns) in HEADERS.items():
                     path = csv_dir / filename
+                    csv_hash = hashlib.sha256()
                     with path.open("rb") as binary:
-                        digests[filename] = hashlib.file_digest(binary, "sha256").hexdigest()
+                        for chunk in iter(lambda: binary.read(1024 * 1024), b""):
+                            csv_hash.update(chunk)
+                    digests[filename] = csv_hash.hexdigest()
                     with path.open(encoding="utf-8-sig", newline="") as src:
                         records = csv.DictReader(src)
                         if records.fieldnames != list(columns):
