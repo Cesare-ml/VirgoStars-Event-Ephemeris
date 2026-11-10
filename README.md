@@ -2,7 +2,7 @@
 
 **Independent, free/open-source, offline-first event ephemerides for astrology.**
 
-**Status: DESIGN / DOCUMENTATION ONLY.** This repository is being initialized. There is no implemented Rust reader, JavaScript/TypeScript or Python package, VSEPH binary, data exporter, published dataset, or production integration yet. API examples in this repository are *proposals*, not callable releases.
+**Status: EXPERIMENTAL RUST IMPLEMENTATION (draft PR #5).** This branch has an in-memory Rust event index and a separate experimental reader for the VSEPH-P0 archive. It does not yet contain a verified Rust VSEPH v1 reader, JS/TS or Python bindings, release packages or production integration. The historical dataset, binary and experimental Python reference are staged separately in [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6), not merged into this branch. API examples for unimplemented methods remain design proposals.
 
 ## Scope
 
@@ -60,3 +60,7 @@ No secret credentials, exported private DB copies, telemetry, interpretive horos
 **Next milestone:** approve public API, freeze a first **draft** format specification, build tiny synthetic fixtures, write an executable Rust reader prototype with strict error handling and tests, then implement a read-only exporter/validator that can prove exact parity on an *authorized* snapshot. This repository contains **specifications only** until these gates pass.
 
 For work opportunities and acceptance criteria, use [the roadmap](docs/ROADMAP.md); do not claim feature completion until code, tests and documentation are merged.
+
+### Rust prototype: recorded events and reviewed coverage
+
+The draft Rust branch provides `EventIndex` and `virgostars-events-p0`, including a SHA-256-bound `CoverageAwareP0` adapter. It distinguishes the last recorded ingress/station from a scientifically reviewed state; **no time intervals are approved for the real 2026-11-10 dataset**. See [the Rust coverage contract](docs/REVIEWED_COVERAGE_RUST.md) and [developer guide](docs/DEVELOPMENT.md). These changes are in [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) and are not merged into main.
