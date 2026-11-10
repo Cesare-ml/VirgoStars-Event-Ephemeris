@@ -21,8 +21,10 @@ The policy currently contains **zero reviewed windows**. This is intentional. Ev
 ## Python example (after assembling the dataset)
 
 ```python
-from prototype.virgostars_vseph_reader import VSEPHReader
-from prototype.coverage_policy import CoverageAwareReader, CoveragePolicy
+import sys
+sys.path.insert(0, "prototype")
+from virgostars_vseph_reader import VSEPHReader
+from coverage_policy import CoverageAwareReader, CoveragePolicy
 
 binary = "datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0"
 policy = CoveragePolicy.load("prototype/coverage-policy-20261110.json", binary)
@@ -33,7 +35,7 @@ assert result["status"] == "unknown_coverage"
 assert result["state"] is None
 ```
 
-If run from repository root, `prototype` should be importable as an implicit namespace package; existing prototype CLI invocations also work directly. No database or network is used.
+The snippet runs from the repository root. The current Python P0 prototype uses top-level imports; adding `prototype` to `sys.path` preserves that behavior until a package is defined. No database or network is used.
 
 For individual observed events:
 
