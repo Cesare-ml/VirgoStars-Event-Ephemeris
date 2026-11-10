@@ -5,6 +5,7 @@
 import base64
 import os
 import struct
+import zlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -57,13 +58,13 @@ class AuditP0BytesTest(unittest.TestCase):
     def test_compressed_block_corruption_detected(self):
         corrupted = bytearray(self.good)
         corrupted[-6] ^= 0x7f
-        with self.assertRaises(Exception):
+        with self.assertRaises((ValueError, zlib.error)):
             self.audit(corrupted)
 
     def test_appended_and_truncated_payload_rejected(self):
         with self.assertRaises(ValueError):
             self.audit(self.good + b'extra')
-        with self.assertRaises(Exception):
+        with self.assertRaises((ValueError, zlib.error)):
             self.audit(self.good[:-1])
 
     @unittest.skipUnless(os.environ.get('VSEPH_P0_PATH'), 'optional reconstructed public dataset')
