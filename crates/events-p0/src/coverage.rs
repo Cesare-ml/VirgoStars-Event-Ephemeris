@@ -10,7 +10,6 @@
 //! Compatible in intent with prototype/coverage_policy.py in dataset PR #6.
 //! Source records alone never certify missing intervals are complete.
 
-use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -111,10 +110,13 @@ impl P0Archive {
         path: impl AsRef<Path>,
     ) -> Result<CoverageAwareP0<'_>, P0Error> {
         let policy_path = path.as_ref();
-        if fs::metadata(policy_path)?.len() > MAX_POLICY_BYTES {
+        // Stream a bounded policy to avoid untrusted-file allocation races.
+        let mut policy_file = File::open(policy_path)?;
+        let mut data = Vec::new();
+        (&mut policy_file).take(MAX_POLICY_BYTES + 1).read_to_end(&mut data)?;
+        if data.len() as u64 > MAX_POLICY_BYTES {
             return Err(invalid("coverage policy exceeds maximum size"));
         }
-        let data = fs::read(policy_path)?;
         let document: Value = serde_json::from_slice(&data)
             .map_err(|error| invalid(format!("malformed coverage policy: {error}")))?;
         if required(&document, "schema")? != SCHEMA
