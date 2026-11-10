@@ -189,6 +189,34 @@ fn stale_or_out_of_interval_cursors_are_rejected() {
 }
 
 #[test]
+fn cursor_cannot_cross_independent_indices_with_identical_events() {
+    // Event equality is insufficient for safe cursor ownership. Both indices
+    // contain the same data and support the same interval, but were built
+    // independently.
+    let first_index = mixed_index();
+    let second_index = mixed_index();
+    let page = first_index
+        .chronological_between(time(-10), time(11), 1, None)
+        .unwrap();
+    let cursor = page.next_cursor.unwrap();
+
+    assert_eq!(
+        second_index
+            .chronological_between(time(-10), time(11), 1, Some(&cursor))
+            .unwrap_err(),
+        ChronologicalQueryError::InvalidCursor
+    );
+
+    // A clone is the same immutable logical index and retains its identity.
+    let clone = first_index.clone();
+    let next = clone
+        .chronological_between(time(-10), time(11), 1, Some(&cursor))
+        .unwrap();
+    assert_eq!(next.events.len(), 1);
+    assert_eq!(next.events[0].at(), time(0));
+}
+
+#[test]
 fn pagination_does_not_infer_missing_astronomical_events() {
     let index = EventIndex::from_events(vec![
         ingress("Moon", 0),
