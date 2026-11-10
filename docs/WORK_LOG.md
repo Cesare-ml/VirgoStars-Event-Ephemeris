@@ -1,3 +1,11 @@
+## 2026-11-10 — Second real Windows Cargo run: test fixture factory shadowing fixed (draft PR #5)
+
+- **Real Windows 11 validation:** the contributor executed `cargo fmt --all`, then `py -3 tools\\validate_rust.py`. **Format gate PASSED**; Clippy proceeded to check `virgostars-events-p0`, but during compilation of the `coverage_p0` integration test it failed twice with **E0618** ("expected function, found `TestFile`").
+- **Root cause and fix:** in `crates/events-p0/tests/coverage_p0.rs`, `unreviewed_or_overlapping_ranges_are_rejected` used `let policy_file = policy_file(GOLDEN_SHA256, bad)`, shadowing the `policy_file(...)` fixture factory needed by two subsequent calls. Renamed the local binding to `overlapping_policy` and adjusted its assertion; no change to the P0 decoder, algorithms or dataset. Commit `2e244db9d261e6a4a5aaf1694263a4331362df88`.
+- **Actual validation:** user-visible `cargo fmt --all -- --check` **PASSED** locally. `cargo clippy --workspace --all-targets -- -D warnings` **FAILED before the fix** with E0618; the fix was committed to draft PR #5 but **the corrected Clippy check, Cargo test suite and release build have NOT yet been run**. No passing Rust suite is claimed.
+- **Next on Windows:** preserve existing local `cargo fmt` changes, apply the two-line fixture-variable rename locally, run `cargo fmt --all` and `py -3 tools\\validate_rust.py` again; report the next actual result. Do not merge until all four gates are green and parity validation is performed.
+- **No merge, deploy, Actions, package publication or source-data changes.**
+
 ## 2026-11-10 — First actual Windows Cargo run: formatting gate then Clippy fix (draft PR #5)
 
 - **Real developer validation:** Windows 11 PowerShell, `D:\\GitHub\\VirgoStars-Event-Ephemeris`, executed `py -3 tools\\validate_rust.py`. The contributor had first run `cargo fmt --all` locally after the initial format gate showed many rustfmt diffs. On the next run **`cargo fmt --all -- --check` PASSED locally**.
