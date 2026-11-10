@@ -15,9 +15,9 @@ Page limits are `1..=MAX_CHRONOLOGICAL_PAGE_SIZE` (10,000); zero and larger page
 
 ## Cursor contract
 
-- Always use the cursor returned by the previous page of **the same index or archive** and the **exact same start/end interval**. Cursors retain their original interval bounds and reject their reuse if either bound changes, even when the cursor timestamp is still in range.
+- Always use the cursor returned by the previous page of **the same live index/archive instance** and the **exact same start/end interval**. Cursors retain a process-local reader identity and the original interval bounds: an independently created index with identical events, or a reopened P0 file containing identical bytes, is **not** permitted to reuse another reader's cursor. Clones of the same immutable in-memory index retain the same logical identity.
 - The file-backed P0 cursor retains the original source ID; each continuation verifies that its recorded event still exists at the expected instant.
-- Cursors are not serialized or cryptographically version-bound. Keep the dataset file immutable between pages. Verify its full SHA-256 against the separately trusted manifest using `P0Archive::verify_archive_sha256()` when authenticity matters. A matching hash is not evidence that missing historical events were calculated.
+- Identity tokens are process-local monotonically assigned values, **not** persisted cryptographic dataset hashes and not a security boundary. Cursors are not serialized or cryptographically version-bound. Keep the dataset file immutable between pages. Verify its full SHA-256 against the separately trusted manifest using `P0Archive::verify_archive_sha256()` when authenticity matters. A matching hash is not evidence that missing historical events were calculated.
 - `next_cursor = None` means no further *recorded* events inside the requested interval.
 
 ## Minimal file-backed usage
@@ -61,9 +61,9 @@ cargo test -p virgostars-events-core --test chronological_public_api
 cargo test -p virgostars-events-p0 --test chronological_p0
 ```
 
-- **6 in-memory integration tests**: tie ordering, stable cursor paging, historical and half-open boundaries, invalid limits, invalid/changed-interval cursor, sparse-gapped data.
-- **7 P0 file-backed integration tests**: sorted exact IDs for the independent synthetic golden file, page sizes 1/2/3/5/7/8, in-memory parity, boundaries/gaps, invalid limits/cursors, correct final-page detection, and two separate compressed blocks with an interleaved motion event.
-- **Results:** the maintainer reported all four Cargo gates passed on the *previous* Rust revision. The 13 new tests and file-backed chronological code are **NOT YET COMPILED OR EXECUTED** by the agent; static review cannot substitute for Cargo. P0.7 stays in progress until a successful rerun on this revision.
+- **7 in-memory integration tests**: tie ordering, stable cursor paging, historical and half-open boundaries, invalid limits, invalid/changed-interval or foreign-index cursor, legal same-data clone, sparse-gapped data.
+- **8 P0 file-backed integration tests**: sorted exact IDs for the independent synthetic golden file, page sizes 1/2/3/5/7/8, in-memory parity, boundaries/gaps, invalid limits/cursors including a reopened identical file, correct final-page detection, and two separate compressed blocks with an interleaved motion event.
+- **Results:** the maintainer reported all four Cargo gates passed on the *previous* Rust revision. The 15 new tests and file-backed chronological code are **NOT YET COMPILED OR EXECUTED** by the agent; static review cannot substitute for Cargo. P0.7 stays in progress until a successful rerun on this revision.
 
 Next: validate the combined draft PR checkout against the real 380,844-event archive; benchmark query memory/I/O; add filters and persistent cursors only after VSEPH v1 API stabilization. Dataset license, release authorization and review of missing lunar intervals are separate.
 
