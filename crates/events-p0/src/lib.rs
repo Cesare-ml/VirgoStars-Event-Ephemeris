@@ -202,7 +202,7 @@ impl P0Archive {
             let count = usize::try_from(unsigned(entry, "count")?)
                 .map_err(|_| invalid("block count overflow"))?;
             if start != expected_offset || len == 0 || len > MAX_BLOCK
-                || raw_len < 8 || raw_len > MAX_RAW
+                || !(8..=MAX_RAW).contains(&raw_len)
                 || count == 0 || count > MAX_RECORDS
             {
                 return Err(invalid("unsafe block offset, length or count"));
