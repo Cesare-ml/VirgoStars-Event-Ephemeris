@@ -162,3 +162,27 @@ python tools/verify_csv_p0.py datasets/2026-11-10 datasets/2026-11-10/_assembled
 The experimental P0 reader now rejects **zero original PostgreSQL row IDs**, repeated IDs within a decoded block, and repeated IDs across compressed blocks and celestial bodies *within the same family*. Family-specific identity sequences are independent: the same numeric ID in ingress vs motion or synod remains legitimate. The full-archive uniqueness scan is implemented in `P0Archive::verify_all()`, not in every targeted query, to avoid reading unrelated blocks.
 
 Run `python -m unittest discover -s tools -p test_audit_p0_bytes.py -v` and follow [P0_BYTE_AUDIT.md](P0_BYTE_AUDIT.md) for the 13-test independent Python oracle. **13/13 Python tests actually passed**, including the full real snapshot, with exact committed source/fixture Git SHA hashes checked. Rust has four additional identity tests defined in `crates/events-p0/tests/golden_p0.rs` but **they have not been run** because Cargo is unavailable. A new CSV or P0 snapshot must preserve legitimate original ID uniqueness for every source table or fail review.
+
+## Unified chronological event pages in Rust (P0.7, draft)
+
+The in-memory `virgostars-events-core::EventIndex` exposes the newly implemented `chronological_between(start, end, limit, after)` to combine **recorded** synod anchors, motion stations and zodiac ingresses into a single stable stream without loading all matching events.
+
+- **Order:** timestamp (signed POSIX UTC microseconds) ascending, then `EventFamily` (`Synod`, `Motion`, `Ingress`), then exact `BodyId` lexicographically. The current in-memory index rejects duplicate instants for the same family/body, so no record ordinal tie-break is needed here.
+- **Range:** half-open `[start, end)`; an event at `start` is included, one at `end` excluded. Pre-1970 timestamps retain full integer precision. Missing periods never produce invented events or certified state.
+- **Page:** `limit` in `1..=MAX_CHRONOLOGICAL_PAGE_SIZE` (10,000). A returned `ChronologicalPage.events` contains borrowed `&Event` references and `next_cursor` is `None` on the final page.
+- **Cursor:** pass a reference to the previous page's `ChronologicalCursor`; events tied at a single instant are never repeated or skipped. A cursor is valid only for the same immutable index and interval; cursors referring to missing events or outside the range return `ChronologicalQueryError::InvalidCursor`. This is **not** a persistent wire-format cursor or a data version token.
+- **Bounds:** rejects reversed intervals and zero or excessive limits. One active head per indexed body/family and at most one page are resident, rather than collecting the entire requested interval.
+
+Example (after creating an `EventIndex` from synthetic/precomputed events):
+```rust
+use virgostars_events_core::{EventIndex, TimestampMicros};
+let index = EventIndex::default();
+let start = TimestampMicros::new(-1_000_000);
+let end = TimestampMicros::new(1_000_000);
+let first = index.chronological_between(start, end, 200, None)?;
+let second = index.chronological_between(start, end, 200, first.next_cursor.as_ref())?;
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+The example is illustrative; the source is not yet a release-stable API.
+
+**Test status:** `crates/events-core/tests/chronological_public_api.rs` contains six new Rust integration tests for tie ordering, cursor pagination, signed and half-open boundaries, unsafe inputs, invalid cursors and fail-closed gaps. They are **committed but NOT YET RUN** after this code addition. The maintainer reports that the four local Cargo gates passed for the *prior* code revision, which is not evidence about this change. Run the gates again and report their complete output. P0.7 remains in progress because the P0 file-backed reader lacks the unified chronological page interface.
