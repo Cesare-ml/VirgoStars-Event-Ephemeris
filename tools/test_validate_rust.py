@@ -5,6 +5,7 @@
 """Local-only tests of validation orchestration (mock Cargo, never claim compilation)."""
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import unittest
@@ -78,8 +79,16 @@ class ValidateRustToolTest(unittest.TestCase):
 
     def test_archive_requires_python_audit_and_rust_cli_with_same_digest(self):
         calls = []
+        fields = {"sha256": DIGEST, "blocks": 4, "records": 8,
+                  "sections": {"ingress": 3, "motion": 2, "synod": 3}}
         def record(command, **kwargs):
             calls.append((command, kwargs))
+            if kwargs.get("capture_output"):
+                report = dict(fields)
+                if command[0] == "mock-cargo":
+                    report.update(sha256_checked_against_expected=True, coverage_certified=False)
+                return subprocess.CompletedProcess(command, 0, stdout=json.dumps(report))
+            return subprocess.CompletedProcess(command, 0)
         archive = validate_archive_options("fixture.p0", DIGEST, self.root)
         run_gates(
             root=self.root, archive=archive,
@@ -97,6 +106,39 @@ class ValidateRustToolTest(unittest.TestCase):
         ])
         self.assertEqual(rust_check[-3:], [str(archive), "--sha256", DIGEST])
         self.assertTrue(all(kwargs["check"] for _, kwargs in calls))
+        self.assertTrue(all(kwargs["capture_output"] and kwargs["text"] for _, kwargs in calls[-2:]))
+
+    def test_rejects_disagreement_between_python_and_rust_counts(self):
+        archive = validate_archive_options("fixture.p0", DIGEST, self.root)
+        def fake(command, **kwargs):
+            if kwargs.get("capture_output"):
+                report = {"sha256": DIGEST, "blocks": 4, "records": 8,
+                          "sections": {"ingress": 3, "motion": 2, "synod": 3}}
+                if command[0] == "mock-cargo":
+                    report["records"] = 7
+                    report.update(sha256_checked_against_expected=True, coverage_certified=False)
+                return subprocess.CompletedProcess(command, 0, stdout=json.dumps(report))
+            return subprocess.CompletedProcess(command, 0)
+        with self.assertRaisesRegex(RuntimeError, "mismatch in: records"):
+            run_gates(
+                root=self.root, archive=archive,
+                expected_sha256=DIGEST, cargo="mock-cargo", invoke=fake,
+            )
+
+    def test_rejects_missing_rust_archive_digest_verification(self):
+        archive = validate_archive_options("fixture.p0", DIGEST, self.root)
+        def fake(command, **kwargs):
+            if kwargs.get("capture_output"):
+                report = {"sha256": DIGEST, "blocks": 4, "records": 8, "sections": {}}
+                if command[0] == "mock-cargo":
+                    report.update(sha256_checked_against_expected=False, coverage_certified=False)
+                return subprocess.CompletedProcess(command, 0, stdout=json.dumps(report))
+            return subprocess.CompletedProcess(command, 0)
+        with self.assertRaisesRegex(RuntimeError, "trusted digest verification"):
+            run_gates(
+                root=self.root, archive=archive,
+                expected_sha256=DIGEST, cargo="mock-cargo", invoke=fake,
+            )
 
     def test_archive_without_trusted_hash_stops_before_validation(self):
         with self.assertRaisesRegex(ValueError, "trusted"):
