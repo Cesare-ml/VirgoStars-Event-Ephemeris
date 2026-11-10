@@ -66,3 +66,9 @@ python prototype/virgostars_vseph_reader.py datasets/2026-11-10/_assembled/virgo
 ```
 
 These are real queries against **precomputed records**. They do not infer astronomical events for gaps or perform actual calculations; inspect coverage before treating state lookups as valid.
+
+## Coverage-aware state queries (draft)
+
+Do **not** equate the latest indexed event with a verified historical state. The snapshot now includes a fail-closed Python adapter in [prototype/coverage_policy.py](../../prototype/coverage_policy.py) and a SHA-256 bound [coverage policy](../../prototype/coverage-policy-20261110.json). At this stage **no intervals have passed an independent completeness review**, so `sign_at()` and `direction_at()` return `unknown_coverage` rather than an invented continuous state. Raw event navigation remains available.
+
+Read [Coverage safety](../../docs/COVERAGE_SAFETY.md) for exact semantics and review requirements. Run `python prototype/test_coverage_policy.py` for the seven synthetic coverage tests.
