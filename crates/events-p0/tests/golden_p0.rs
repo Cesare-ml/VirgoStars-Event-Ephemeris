@@ -138,15 +138,18 @@ fn header_rejects_bad_magic_header_length_and_trailing_bytes() {
     let original = fixture();
     let mut bad_magic = original.clone();
     bad_magic[0] ^= 0xff;
-    assert!(P0Archive::open(TempFile::new(&bad_magic).0).is_err());
+    let bad_magic_file = TempFile::new(&bad_magic);
+    assert!(P0Archive::open(&bad_magic_file.0).is_err());
 
     let mut bad_length = original.clone();
     bad_length[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
-    assert!(P0Archive::open(TempFile::new(&bad_length).0).is_err());
+    let bad_length_file = TempFile::new(&bad_length);
+    assert!(P0Archive::open(&bad_length_file.0).is_err());
 
     let mut trailing = original;
     trailing.extend_from_slice(b"appended");
-    assert!(P0Archive::open(TempFile::new(&trailing).0).is_err());
+    let trailing_file = TempFile::new(&trailing);
+    assert!(P0Archive::open(&trailing_file.0).is_err());
 }
 
 #[test]
