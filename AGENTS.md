@@ -10,7 +10,7 @@ Applies to all human contributors and AI agents in the entire repository. The go
 4. `docs/ROADMAP.md`, `docs/WORK_LOG.md` and any relevant issue/PR already in progress.
 5. Recent commits, open issues, open draft PRs and project configuration; check whether another agent is working on the same deliverable.
 
-**Current status (2026-11-10):** the main branch initially contains docs and license only; [draft PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4) contains synthetic fixture tooling and [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) contains the initial typed Rust workspace. Neither is merged. PR #5 now contains an **in-memory recorded-event index** (not a binary reader); dataset PR #6 separately contains the published-on-branch 2026-11-10 scientific snapshot, experimental Python reader and draft coverage policy. No file-backed **Rust** VSEPH reader, exporter or bindings exist. Never infer functionality from design examples or an unmerged PR.
+**Current status (2026-11-10):** the main branch initially contains docs and license only; [draft PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4) contains synthetic fixture tooling and [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) contains the initial typed Rust workspace. Neither is merged. PR #5 now contains an **in-memory recorded-event index** (not a binary reader); dataset PR #6 separately contains the published-on-branch 2026-11-10 scientific snapshot, experimental Python reader and draft coverage policy. Draft PR #5 now includes a file-backed **experimental Rust VSEPH-P0** decoder, distinct from the future VSEPH v1 specification, but Rust compilation and tests remain unverified. No exporter or stable bindings exist. Never infer functionality from design examples or an unmerged PR.
 
 ## Task selection for each run
 
@@ -33,7 +33,7 @@ Applies to all human contributors and AI agents in the entire repository. The go
 - **Integrity first:** never silently round timestamps, invent missing events, interpolate an unverified event, silently replace an out-of-range result, or treat a missing phase as a successful full cycle. `EventIndex.at`/navigation returns **recorded evidence only**, never proof of a verified sign/direction state across data gaps. Check SHA-bound coverage and reviewer evidence before any state is labeled verified.
 - **Compatibility:** preserve legacy requirements deliberately, not legacy bugs. The concrete use-case map is in `docs/BACKEND_COMPATIBILITY.md`.
 - **Time:** UTC/POSIX timestamps, explicit offsets for ISO instants; document PostgreSQL timestamp semantics and local-date DST behavior. No host-local-time defaults in core.
-- **Performance:** profile before adding a compression/dependency layer; only decode requested indexed chunks and cap memory on corrupt inputs.
+- **Performance:** profile before adding a compression/dependency layer; only decode requested indexed chunks and cap memory on corrupt inputs. The isolated P0 adapter uses bounded zlib decompression and per-block hashes, not a certified production v1 decoder.
 
 ## Definition of done
 
