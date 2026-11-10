@@ -51,6 +51,33 @@ fn body(value: &str) -> BodyId {
 }
 
 #[test]
+fn exhaustive_audit_checks_every_golden_block_and_family_count() {
+    let file = TempFile::new(&fixture());
+    let archive = P0Archive::open(&file.0).unwrap();
+    let audit = archive.verify_all().unwrap();
+    assert_eq!(audit.records, 8);
+    assert_eq!(audit.blocks, 4);
+    assert_eq!(audit.by_family.get(&EventFamily::Ingress), Some(&3));
+    assert_eq!(audit.by_family.get(&EventFamily::Motion), Some(&2));
+    assert_eq!(audit.by_family.get(&EventFamily::Synod), Some(&3));
+}
+
+#[test]
+fn exhaustive_audit_detects_corruption_in_an_unqueried_block() {
+    let mut altered = fixture();
+    let header_length = u32::from_le_bytes(altered[8..12].try_into().unwrap()) as usize;
+    let first_compressed_byte = 12 + header_length;
+    // Damage a block that is unrelated to the subsequent Mercury query.
+    altered[first_compressed_byte] ^= 1;
+    let file = TempFile::new(&altered);
+    let archive = P0Archive::open(&file.0).unwrap();
+    let mercury = body("Mercury");
+    // A normal targeted query can still succeed while another block is corrupt.
+    assert!(archive.at(EventFamily::Synod, &mercury, stamp(2_000_000)).unwrap().is_some());
+    assert!(archive.verify_all().is_err());
+}
+
+#[test]
 fn opens_independent_python_generated_golden_bytes() {
     let file = TempFile::new(&fixture());
     let reader = P0Archive::open(&file.0).unwrap();
@@ -182,6 +209,12 @@ fn reads_real_snapshot_without_certifying_coverage() {
     let reader = P0Archive::open(path).unwrap();
     assert_eq!(reader.record_count(), 380_844);
     assert_eq!(reader.block_count(), 761);
+    let audit = reader.verify_all().unwrap();
+    assert_eq!(audit.blocks, 761);
+    assert_eq!(audit.records, 380_844);
+    assert_eq!(audit.by_family.get(&EventFamily::Synod), Some(&70_554));
+    assert_eq!(audit.by_family.get(&EventFamily::Motion), Some(&266_516));
+    assert_eq!(audit.by_family.get(&EventFamily::Ingress), Some(&43_774));
     let mercury = body("Mercury");
     let _ = reader.next(EventFamily::Synod, &mercury, stamp(0)).unwrap();
 }
