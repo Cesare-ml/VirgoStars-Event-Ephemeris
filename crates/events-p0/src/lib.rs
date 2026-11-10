@@ -135,6 +135,8 @@ pub struct P0AuditSummary {
 /// not a persistent cursor: preserve the source file and query interval.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct P0ChronologicalCursor {
+    start: TimestampMicros,
+    end: TimestampMicros,
     at: TimestampMicros,
     family: EventFamily,
     body: BodyId,
@@ -144,6 +146,14 @@ pub struct P0ChronologicalCursor {
 impl P0ChronologicalCursor {
     pub const fn at(&self) -> TimestampMicros {
         self.at
+    }
+
+    pub const fn interval_start(&self) -> TimestampMicros {
+        self.start
+    }
+
+    pub const fn interval_end(&self) -> TimestampMicros {
+        self.end
     }
 
     pub const fn family(&self) -> EventFamily {
@@ -485,7 +495,9 @@ impl P0Archive {
             return Err(invalid("chronological page size out of range"));
         }
         if let Some(cursor) = after {
-            if cursor.at < start || cursor.at >= end {
+            if cursor.start != start || cursor.end != end
+                || cursor.at < start || cursor.at >= end
+            {
                 return Err(invalid("chronological cursor outside interval"));
             }
             let record = self.at(cursor.family, &cursor.body, cursor.at)?;
@@ -572,6 +584,8 @@ impl P0Archive {
             None
         } else {
             events.last().map(|last| P0ChronologicalCursor {
+                start,
+                end,
                 at: last.at(),
                 family: last.event.family(),
                 body: last.event.body().clone(),
