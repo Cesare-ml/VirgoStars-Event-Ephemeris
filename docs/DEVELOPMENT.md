@@ -103,3 +103,14 @@ Shared `events-core` now defines validated `ReviewedWindow`, `CoveragePolicy` an
 New tests: five shared-core coverage cases in `crates/events-core/src/coverage.rs` and seven P0 cross-language-behavior cases in `crates/events-p0/tests/coverage_p0.rs`. **These Rust tests have not been compiled or executed here**; Cargo is unavailable. The reference Python decoder tests were actually executed in the local source directory with `python -m unittest -v test_vseph_prototype` and passed **6/6**. The real VSEPH-P0 file was inspected again with SHA-256 `c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e` and **380,844 source records / 761 blocks**.
 
 Full behavior, usage and hash caveats: [REVIEWED_COVERAGE_RUST.md](REVIEWED_COVERAGE_RUST.md). P0 currently re-hashes the complete archive for each coverage-aware query to detect changes; benchmark and replace with immutable verified file handles before performance-sensitive use. No production release or merge until Cargo checks and cross-language parity execute successfully.
+
+## Independent whole-archive P0 integrity audit (Python, actually executed)
+
+The added **`tools/audit_p0_bytes.py`** independently checks every compressed P0 block and every encoded record. Its **`tools/test_audit_p0_bytes.py`** regression suite uses the independently generated 8-event fixture and rejects corrupt headers, incorrect SHA-256, truncated/appended payloads and compressed-block corruption. Full instructions for Windows and macOS/Linux: [P0_BYTE_AUDIT.md](P0_BYTE_AUDIT.md).
+
+```sh
+python -m unittest discover -s tools -p 'test_audit_p0_bytes.py' -v
+python tools/audit_p0_bytes.py datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0 --sha256 c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e
+```
+
+**Actual execution on 2026-11-10:** **PASS 7/7** Python tests with the real-data optional test enabled; **PASS 761/761 zlib blocks and 380,844/380,844 encoded records**, with all per-block SHA-256 and complete-archive hash matching. The exact committed Python files were matched to locally executed copies via Git blob IDs. The dataset and tests remain in separate PR branches; a fresh checkout is not yet validated. Rust/Cargo tests are **NOT RUN** in this environment; do not infer Rust compilation from Python results.
