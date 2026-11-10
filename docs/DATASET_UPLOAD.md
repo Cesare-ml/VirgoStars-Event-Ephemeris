@@ -1,6 +1,6 @@
 # How the 2026-11-10 snapshot is stored on GitHub
 
-The author requested publication of all three scientific CSV tables and the experimental compressed VSEPH-P0 dataset in the public repository. The large-file GitHub integration cannot upload a ~4–12 MB file in one request, so it stores some files **byte-for-byte across ordered binary blobs**, with a verified reassembly tool.
+The author requested publication of all three scientific CSV tables and the experimental compressed VSEPH-P0 dataset in the public repository. Their **actual data blobs** have been attached to [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6), but remain unmerged pending review. The large-file GitHub integration cannot upload a ~4–12 MB file in one request, so it stores some files **byte-for-byte across ordered binary blobs**, with a verified reassembly tool.
 
 ## On-disk Git layout
 
