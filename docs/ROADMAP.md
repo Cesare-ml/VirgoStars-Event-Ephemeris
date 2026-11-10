@@ -21,6 +21,10 @@
 
 ## P1 — exporter, manifest and real-data validation
 
+- [~] **Snapshot publication via [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6)** — 380,844 owner-authorized scientific events committed as exact multipart blobs, three normalized CSVs, and per-year coverage inventory; verify on a fresh checkout before merge.
+- [ ] **Coverage audit [#7](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/7) / [#8](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/8)** — investigate lunar 1919/2018 synod intervals and 2099–4836 ingress discontinuity. New dates must be independently computed and versioned, not invented.
+- [ ] **Explicit data license [#9](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/9)** — confirm author choice for dataset reuse and attribution separately from CPAL source license.
+
 - [ ] **P1.1 — Source audit SQL (read-only).** Document queries producing counts per body, timestamp ranges, phase cardinality, duplicates, suspicious gaps and zone assumptions; test on synthetic PostgreSQL fixture. **Done when:** audit produces structured report without mutations.
 - [ ] **P1.2 — Streaming export tool.** Explicit read-only connection, repeatable snapshot, canonical normalization, deterministic serialization and manifest digest. **Done when:** synthetic DB -> VSEPH -> decoded equality holds.
 - [ ] **P1.3 — Independent validator / CLI.** Validate VSEPH headers/chunks/checksums, extract counts and sample events, report file and manifest integrity. **Done when:** bad file tests and golden round-trip pass.
