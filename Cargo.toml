@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/events-core", "crates/events-format"]
+members = ["crates/events-core", "crates/events-format", "crates/events-p0"]
 resolver = "2"
 
 [workspace.package]
