@@ -2,6 +2,17 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — Scientific CSV ↔ VSEPH-P0 exact record-field parity (draft PR #5)
+
+- **PR/branch:** existing [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`; dataset remains separate and unchanged on [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6). No new overlapping PR.
+- **Implementation:** `tools/verify_csv_p0.py` (Python 3.10+ stdlib) loads the owner-authorized **normalized/headered** public `sinodi.csv`, `moto_pianeti.csv`, `ingresso_segni.csv` into disposable SQLite keyed by (family, body, original source row ID), then compares **every scientific field** against the actual decoded P0 record (timestamps as signed UTC microseconds, NULL/empty/variable synod phases, motion direction, zodiac sign). First executes independent block/header/file-hash auditor; requires exact CSV headers, detects duplicates, source-only/archive-only records and corrupted or modified values; no database write/network access.
+- **Tests:** `tools/test_verify_csv_p0.py` 11 synthetic tests: exact event parity, year 0002 / negative POSIX time, altered ingress sign, motion direction, phase time, NULL↔[] change, missing or duplicate source row, corrupted P0 block, wrong expected SHA and wrong CSV headers.
+- **Actual execution (repeated after final code fix):** **11/11 synthetic tests PASS**. Real owner-approved public normalized CSVs from the 2026-11-10 publication bundle compared with `virgostars-events-20261110.vseph-p0`: **380,844/380,844 records** identical field by field, **761 blocks**; exact counts **synod 70,554, motion 266,516, ingress 43,774**; archive SHA `c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e`. All source tables and binary remain unchanged. Last authoring run uses a local API-compatible `audit_file` helper for initial framing verification; the combined draft checkout with the exact repo auditor must still be executed before merge.
+- **GitHub identity:** committed code Git blob SHA-1 `29c481f16ecd08fcf7adcdc5090f5cad3984d7d3` and 11-test source `cab363f6a1849ac2cfb2b60484d39350bf9d3605` match the executed local bytes exactly.
+- **Documentation:** `docs/CSV_P0_FIELD_PARITY.md` describes repeatable Windows/Linux steps, scientific limitations and instructions for contributors filling gaps; updated README, DEVELOPMENT, AGENTS and roadmap P1.3 (still in progress).
+- **Not claimed:** scientific correctness, completeness of calendar intervals or automatic backfill. Rust `cargo fmt`, `clippy`, `test`, `build` and Rust/Python runtime parity **NOT RUN** (no Rust toolchain in the current environment). No GitHub Actions, production changes, merge, release or dataset-license decision.
+- **Next:** rerun in temporary checkout joining PR #5+PR #6 with exact `tools/audit_p0_bytes.py`, run all Cargo gates on Rust-equipped machine, reconcile test results, and retain an immutable snapshot/digest when adding newly calculated events.
+
 ## 2026-11-10 — Local Rust gate runner with strict cross-language audit summary parity (draft PR #5)
 
 - **PR / branch:** [#5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`, updated in place; no merge or new PR. PR #6 still contains the separate public dataset.
