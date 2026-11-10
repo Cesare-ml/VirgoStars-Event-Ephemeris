@@ -156,3 +156,9 @@ python tools/verify_csv_p0.py datasets/2026-11-10 datasets/2026-11-10/_assembled
 ```
 
 **Verified on 2026-11-10:** 11/11 synthetic Python tests PASS; **380,844** normalized CSV rows compared field by field against the actual P0 archive with **no discrepancies**. Tested source and test file bytes match the current GitHub branch blobs. The local integration run used a compatible `audit_file` helper rather than the exact repo copy; a fresh checkout containing both PR #5 and PR #6 remains a necessary additional review step. Rust Cargo checks are still **NOT RUN**. More context: [CSV_P0_FIELD_PARITY.md](CSV_P0_FIELD_PARITY.md).
+
+## Identity checks across astronomical event series
+
+The experimental P0 reader now rejects **zero original PostgreSQL row IDs**, repeated IDs within a decoded block, and repeated IDs across compressed blocks and celestial bodies *within the same family*. Family-specific identity sequences are independent: the same numeric ID in ingress vs motion or synod remains legitimate. The full-archive uniqueness scan is implemented in `P0Archive::verify_all()`, not in every targeted query, to avoid reading unrelated blocks.
+
+Run `python -m unittest discover -s tools -p test_audit_p0_bytes.py -v` and follow [P0_BYTE_AUDIT.md](P0_BYTE_AUDIT.md) for the 13-test independent Python oracle. **13/13 Python tests actually passed**, including the full real snapshot, with exact committed source/fixture Git SHA hashes checked. Rust has four additional identity tests defined in `crates/events-p0/tests/golden_p0.rs` but **they have not been run** because Cargo is unavailable. A new CSV or P0 snapshot must preserve legitimate original ID uniqueness for every source table or fail review.
