@@ -2,6 +2,16 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — Whole-file SHA-256 verification and record-count overflow hardening (draft PR #5)
+
+- **PR/branch:** [draft #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`; no competing PR, no merge or changes to the dataset in [PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6).
+- **Implementation:** `crates/events-p0/src/lib.rs` now uses checked addition across family totals (malformed header cannot cause unchecked `sum()` overflow); exposes `archive_sha256()` (bounded-memory streaming file digest) and `verify_archive_sha256(expected)` (strict lowercase 64-digit hex and full-file comparison). The SHA-256 helper is reused by `crates/events-p0/src/coverage.rs`; previously the policy adapter duplicated hashing logic.
+- **CLI:** `crates/events-p0/src/bin/p0-verify.rs` accepts `--sha256 <trusted-manifest-digest>` and returns nonzero when it differs; JSON now includes the computed `sha256` and `sha256_checked_against_expected`. Without `--sha256`, the digest is informational only. Archive-wide block integrity checking remains `verify_all()`; neither form proves the dates have complete astronomical coverage.
+- **Tests:** three **new Rust golden tests written, NOT RUN**: matching whole-file digest, CLI correct digest, wrong/malformed CLI digest. Existing Rust golden CLI test now checks JSON SHA fields. Documented in `docs/DEVELOPMENT.md`, `docs/P0_BYTE_AUDIT.md`, `docs/REVIEWED_COVERAGE_RUST.md`, `AGENTS.md`, `README.md`.
+- **Executed evidence:** `VSEPH_P0_PATH=/mnt/data/virgostars-events-20261110.vseph-p0 python -m unittest discover -s /mnt/data/local_rust/tools -p test_audit_p0_bytes.py -v`: **8/8 PASS**; independent Python full-block auditor with trusted digest `c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e`: **761/761 blocks, 380,844/380,844 records**, matching whole-file SHA-256. These validate Python and the actual dataset, not Rust runtime behavior.
+- **Blocked verification:** no `rustc`/`cargo`; `curl https://static.rust-lang.org/...` fails DNS. Cargo fmt/clippy/test/release build **NOT RUN**. The new Rust code and CLI remain experimental, PR draft; do not merge as validated.
+- **Next:** execute full Cargo gates in a Rust-equipped checkout, fix compile/format issues, run CLI with `--sha256` on the reassembled PR #6 dataset, then continue byte-level VSEPH v1 format work (issue #3). No Actions, deploy, release or source data changes.
+
 ## 2026-11-10 — Rust P0 exhaustive verification and CLI (draft PR #5)
 
 - **PR/branch:** [#5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`; no new PR or merge.
