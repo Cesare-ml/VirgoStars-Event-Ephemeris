@@ -11,8 +11,13 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::{BodyId, Event, SynodEvent, TimestampMicros};
+
+// Process-local identity for immutable indices, including independent indices
+// with exactly the same event keys. Clones retain the identity of their source.
+static NEXT_INDEX_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum EventFamily {
@@ -79,6 +84,7 @@ impl Error for QueryError {}
 /// the same half-open query interval. It is not a serializable dataset ID.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChronologicalCursor {
+    index_id: u64,
     start: TimestampMicros,
     end: TimestampMicros,
     at: TimestampMicros,
@@ -156,9 +162,19 @@ pub const MAX_CHRONOLOGICAL_PAGE_SIZE: usize = 10_000;
 
 /// Sorted, immutable, per-family/body recorded event index.
 /// Queries do NOT infer continuity, completeness, or a scientifically valid state.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct EventIndex {
+    index_id: u64,
     series: BTreeMap<(EventFamily, BodyId), Vec<Event>>,
+}
+
+impl Default for EventIndex {
+    fn default() -> Self {
+        Self {
+            index_id: NEXT_INDEX_ID.fetch_add(1, Ordering::Relaxed),
+            series: BTreeMap::new(),
+        }
+    }
 }
 
 impl EventIndex {
@@ -181,7 +197,10 @@ impl EventIndex {
                 }
             }
         }
-        Ok(Self { series })
+        Ok(Self {
+            index_id: NEXT_INDEX_ID.fetch_add(1, Ordering::Relaxed),
+            series,
+        })
     }
 
     pub fn series(&self, family: EventFamily, body: &BodyId) -> Option<&[Event]> {
@@ -269,7 +288,8 @@ impl EventIndex {
             });
         }
         if let Some(cursor) = after {
-            let valid = cursor.start == start
+            let valid = cursor.index_id == self.index_id
+                && cursor.start == start
                 && cursor.end == end
                 && cursor.at >= start
                 && cursor.at < end
@@ -327,6 +347,7 @@ impl EventIndex {
             None
         } else {
             events.last().map(|event| ChronologicalCursor {
+                index_id: self.index_id,
                 start,
                 end,
                 at: event.at(),
