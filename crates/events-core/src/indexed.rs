@@ -79,6 +79,8 @@ impl Error for QueryError {}
 /// the same half-open query interval. It is not a serializable dataset ID.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChronologicalCursor {
+    start: TimestampMicros,
+    end: TimestampMicros,
     at: TimestampMicros,
     family: EventFamily,
     body: BodyId,
@@ -87,6 +89,14 @@ pub struct ChronologicalCursor {
 impl ChronologicalCursor {
     pub const fn at(&self) -> TimestampMicros {
         self.at
+    }
+
+    pub const fn interval_start(&self) -> TimestampMicros {
+        self.start
+    }
+
+    pub const fn interval_end(&self) -> TimestampMicros {
+        self.end
     }
 
     pub const fn family(&self) -> EventFamily {
@@ -259,7 +269,9 @@ impl EventIndex {
             });
         }
         if let Some(cursor) = after {
-            let valid = cursor.at >= start
+            let valid = cursor.start == start
+                && cursor.end == end
+                && cursor.at >= start
                 && cursor.at < end
                 && self.series(cursor.family, &cursor.body).is_some_and(|records| {
                     let pos = records.partition_point(|event| event.at() < cursor.at);
@@ -315,6 +327,8 @@ impl EventIndex {
             None
         } else {
             events.last().map(|event| ChronologicalCursor {
+                start,
+                end,
                 at: event.at(),
                 family: event.family(),
                 body: event.body().clone(),
