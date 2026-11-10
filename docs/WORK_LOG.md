@@ -2,6 +2,14 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — fail-closed coverage safety on dataset draft PR #6
+
+- **Existing PR / branch:** [#6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6), `data/2026-11-10-snapshot`; no duplicate PR.
+- **Change:** new `prototype/coverage_policy.py` with `CoveragePolicy` and `CoverageAwareReader`; `prototype/coverage-policy-20261110.json` bound to real P0 SHA-256, deliberately **zero approved intervals**; `prototype/test_coverage_policy.py` and `docs/COVERAGE_SAFETY.md`.
+- **Validated:** 7/7 synthetic tests passed with Python 3.13 (policy hash mismatch, empty intervals, boundary inclusivity, unknown initial state, body separation, invalid review evidence/overlap). Existing 6/6 P0 tests passed. Also loaded the actual 2026-11-10 4.14MB archive, verified policy SHA and showed Moon 3000, Moon 2099, Mercury 2026 return `unknown_coverage` instead of false state. GitHub copies of the policy source and test file matched local Git blob SHA-1 exactly.
+- **Not claimed:** proof of scientific completeness, valid windows for real dates, Rust VSEPH v1 support, or a fresh GitHub checkout execution.
+- **Next:** independently review coverage intervals (issues #7/#8); add Rust and cross-language parity for fail-closed states after P0.2/P0.3; decide data license (#9). No merge, package publication, deploy or GitHub Actions.
+
 ## 2026-11-10 — owner-authorized scientific dataset import (draft)
 
 - **Scope:** 2026-11-10 pgAdmin export supplied by maintainer; public release of scientific fields explicitly requested; 70,554 synods, 266,516 motion events, 43,774 sign ingresses.
