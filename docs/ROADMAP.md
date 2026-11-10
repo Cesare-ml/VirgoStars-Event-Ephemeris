@@ -1,6 +1,6 @@
 # Roadmap and agent task queue
 
-**Updated:** 2026-11-10. **Status:** planning / repo initialization, no code or dataset. This is the authoritative work queue. Tasks are intentionally small, ordered and verifiable.
+**Updated:** 2026-11-10. **Status:** initial work on multiple draft PRs; the dataset is under review, not merged. This is the authoritative work queue. Tasks are intentionally small, ordered and verifiable.
 
 ## Working conventions
 
@@ -22,7 +22,7 @@
 ## P1 — exporter, manifest and real-data validation
 
 - [~] **Snapshot publication via [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6)** — 380,844 owner-authorized scientific events committed as exact multipart blobs, three normalized CSVs, and per-year coverage inventory; verify on a fresh checkout before merge.
-- [ ] **Coverage audit [#7](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/7) / [#8](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/8)** — investigate lunar 1919/2018 synod intervals and 2099–4836 ingress discontinuity. New dates must be independently computed and versioned, not invented.
+- [~] **Coverage audit [#7](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/7) / [#8](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/8)** — investigate lunar 1919/2018 synod intervals and 2099–4836 ingress discontinuity. New dates must be independently computed and versioned, not invented. Fail-closed coverage policy prototype in [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6); no reviewed real-data intervals yet.
 - [ ] **Explicit data license [#9](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/9)** — confirm author choice for dataset reuse and attribution separately from CPAL source license.
 
 - [ ] **P1.1 — Source audit SQL (read-only).** Document queries producing counts per body, timestamp ranges, phase cardinality, duplicates, suspicious gaps and zone assumptions; test on synthetic PostgreSQL fixture. **Done when:** audit produces structured report without mutations.
