@@ -213,6 +213,31 @@ fn invalid_query_limits_and_cursor_ranges_fail_closed() {
 }
 
 #[test]
+fn cursor_from_reopened_identical_archive_is_rejected() {
+    let fixture = FixtureFile::new();
+    let first_archive = P0Archive::open(&fixture.0).unwrap();
+    let second_archive = P0Archive::open(&fixture.0).unwrap();
+    let start = time(-876_545);
+    let end = time(5_000_001);
+    let first_page = first_archive
+        .chronological_between(start, end, 1, None)
+        .unwrap();
+    let cursor = first_page.next_cursor.as_ref().unwrap();
+
+    // Same path, bytes, source row ID and query bounds, but a different
+    // instance: pagination must fail closed instead of silently continuing.
+    assert!(second_archive
+        .chronological_between(start, end, 1, Some(cursor))
+        .is_err());
+
+    let next = first_archive
+        .chronological_between(start, end, 1, Some(cursor))
+        .unwrap();
+    assert_eq!(next.events.len(), 1);
+    assert_eq!(next.events[0].source_id, 41);
+}
+
+#[test]
 fn pages_advance_across_compressed_blocks_and_interleaved_families() {
     use flate2::write::ZlibEncoder;
     use flate2::Compression;
