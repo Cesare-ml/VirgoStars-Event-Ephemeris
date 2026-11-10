@@ -1,6 +1,6 @@
 # Roadmap and agent task queue
 
-**Updated:** 2026-11-10. **Status:** planning / repo initialization, no code or dataset. This is the authoritative work queue. Tasks are intentionally small, ordered and verifiable.
+**Updated:** 2026-11-10. **Status:** development in draft PRs #4/#5/#6; no changes have been merged to main. Rust/Python experimental code and an owner-authorized dataset exist on separate branches. This is the authoritative work queue. Tasks are intentionally small, ordered and verifiable.
 
 ## Working conventions
 
