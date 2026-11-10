@@ -11,23 +11,31 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use virgostars_events_core::{BodyId, Event, TimestampMicros};
 use virgostars_events_p0::{CoveredState, P0Archive};
 
 const GOLDEN_SHA256: &str = "4b7dbe3171633402b76565df79a31066f58913b52b2839c735ea3e68cb413499";
+static NEXT_TEST_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
 struct TestFile(PathBuf);
 
 impl TestFile {
     fn new(name: &str, bytes: &[u8]) -> Self {
+        // Windows clock resolution is not unique for concurrently running tests.
+        // Combine process ID, clock tick and atomic counter, then create
+        // exclusively so one test cannot overwrite/delete another's fixture.
         let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let sequence = NEXT_TEST_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "vseph-coverage-{}-{nanos}-{name}", std::process::id()
+            "vseph-coverage-{}-{nanos}-{sequence}-{name}", std::process::id()
         ));
-        fs::write(&path, bytes).unwrap();
+        let mut file = OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
+        file.write_all(bytes).unwrap();
         Self(path)
     }
 }
@@ -35,6 +43,20 @@ impl TestFile {
 impl Drop for TestFile {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.0);
+    }
+}
+
+#[test]
+fn policy_and_archive_fixtures_do_not_collide_under_parallel_allocation() {
+    let bytes = STANDARD.decode(include_str!("fixtures/synthetic.p0.base64").trim()).unwrap();
+    let fixtures: Vec<_> = (0..64)
+        .map(|_| TestFile::new("synthetic.p0", &bytes))
+        .collect();
+    let paths: std::collections::HashSet<_> = fixtures.iter().map(|file| &file.0).collect();
+    assert_eq!(paths.len(), fixtures.len());
+    for file in &fixtures {
+        assert_eq!(fs::read(&file.0).unwrap(), bytes);
+        assert_eq!(P0Archive::open(&file.0).unwrap().record_count(), 8);
     }
 }
 
