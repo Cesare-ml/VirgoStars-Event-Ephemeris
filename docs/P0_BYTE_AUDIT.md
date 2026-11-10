@@ -67,4 +67,14 @@ The experimental Rust P0 reader on the same branch now has `P0Archive::verify_al
 cargo run -p virgostars-events-p0 --bin p0-verify -- datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0
 ```
 
-A correctly verified 2026-11-10 archive should report **761 blocks / 380,844 records** (ingress 43,774; motion 266,516; synod 70,554), with `coverage_certified:false`. An invalid input should cause a nonzero exit status. The CLI verifies **all P0 compressed blocks**, but an independent whole-file SHA-256 check against the manifest is still necessary. The Rust command has **NOT BEEN RUN** here: Rust/Cargo toolchain is unavailable. The corresponding independent Python audit is tested and passed **8/8**, including corruption of a block not accessed by a targeted Mercury query.
+A correctly verified 2026-11-10 archive should report **761 blocks / 380,844 records** (ingress 43,774; motion 266,516; synod 70,554), with `coverage_certified:false`. An invalid input should cause a nonzero exit status. The CLI verifies **all P0 compressed blocks**. With `--sha256 <expected>` it **also** validates the whole file against the separately trusted manifest digest; without that option it merely reports the computed SHA-256 and does not authenticate the snapshot. The Rust command has **NOT BEEN RUN** here: Rust/Cargo toolchain is unavailable. The corresponding independent Python audit is tested and passed **8/8**, including corruption of a block not accessed by a targeted Mercury query.
+
+## Optional trusted whole-file digest (Rust CLI)
+
+On the Rust draft branch, after Cargo is installed and the dataset is assembled, run:
+
+```sh
+cargo run -p virgostars-events-p0 --bin p0-verify -- datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0 --sha256 c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e
+```
+
+The command prints a lowercase `sha256`, `sha256_checked_against_expected: true`, counts and `coverage_certified: false`, then exits successfully only if **both** all blocks and the full-file digest match. It never declares unreviewed astronomical periods complete. The parser now uses checked arithmetic for the total record count. The Rust CLI and new tests **have not been compiled or executed** in this environment; use the already executed Python verifier for current confidence.
