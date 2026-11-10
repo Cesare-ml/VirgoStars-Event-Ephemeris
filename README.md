@@ -103,3 +103,7 @@ python tools/verify_csv_p0.py datasets/2026-11-10 datasets/2026-11-10/_assembled
 ```
 
 See [CSV ↔ P0 field parity](docs/CSV_P0_FIELD_PARITY.md). This is Python 3.10+ standard-library tooling, **not** evidence that the Rust parser has compiled or that historical coverage is complete.
+
+### PostgreSQL row identity checks
+
+The experimental P0 reader and independent Python byte auditor now reject **zero or reused original source row IDs in one event family**, even when duplicates occur in different compressed blocks or celestial bodies. IDs are allowed to coincide **across the three independent source tables**. The original 2026-11-10 archive passed all identity checks: **380,844 valid rows**, **761 indexed blocks**. See [P0 byte-audit guide](docs/P0_BYTE_AUDIT.md); the Python suite reports **13/13 PASS**, while Rust tests/compilation remain **NOT RUN** in the authoring environment.
