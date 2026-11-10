@@ -10,7 +10,7 @@ Applies to all human contributors and AI agents in the entire repository. The go
 4. `docs/ROADMAP.md`, `docs/WORK_LOG.md` and any relevant issue/PR already in progress.
 5. Recent commits, open issues, open draft PRs and project configuration; check whether another agent is working on the same deliverable.
 
-**Current status (2026-11-10):** initial documentation and license only; Rust engine, exporter, bindings and datasets are NOT yet implemented. Never infer functionality from design examples.
+**Current status (2026-11-10):** the main branch initially contains docs and license only; [draft PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4) contains synthetic fixture tooling and [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) contains the initial typed Rust workspace. Neither is merged. No file-backed VSEPH reader, exporter, bindings or real dataset exists. Never infer functionality from design examples or an unmerged PR.
 
 ## Task selection for each run
 
