@@ -536,7 +536,7 @@ impl P0Archive {
             }
         }
 
-        let mut events = Vec::with_capacity(limit.min(self.record_count as usize));
+        let mut events = Vec::with_capacity(limit);
         while events.len() < limit {
             let Some(((_, family, body), (records, position, block_index))) = heads.pop_first() else {
                 break;
