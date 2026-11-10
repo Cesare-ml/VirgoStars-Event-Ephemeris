@@ -87,12 +87,54 @@ fn offline_cli_verifies_all_blocks_and_emits_machine_readable_counts() {
     assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["format"], "VSEPH-P0-EXPERIMENTAL");
+    assert_eq!(value["sha256"], GOLDEN_SHA256);
+    assert_eq!(value["sha256_checked_against_expected"], false);
     assert_eq!(value["blocks"], 4);
     assert_eq!(value["records"], 8);
     assert_eq!(value["sections"]["ingress"], 3);
     assert_eq!(value["sections"]["motion"], 2);
     assert_eq!(value["sections"]["synod"], 3);
     assert_eq!(value["coverage_certified"], false);
+}
+
+#[test]
+fn offline_cli_accepts_trusted_whole_archive_digest() {
+    let file = TempFile::new(&fixture());
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_p0-verify"))
+        .arg(&file.0)
+        .arg("--sha256")
+        .arg(GOLDEN_SHA256)
+        .output()
+        .expect("Cargo should build P0 verification CLI");
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["sha256"], GOLDEN_SHA256);
+    assert_eq!(value["sha256_checked_against_expected"], true);
+    assert_eq!(value["coverage_certified"], false);
+}
+
+#[test]
+fn offline_cli_rejects_wrong_or_invalid_whole_file_digest() {
+    let file = TempFile::new(&fixture());
+    for bad in ["0".repeat(64), "ZZ".repeat(32), "abc".to_owned()] {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_p0-verify"))
+            .arg(&file.0)
+            .arg("--sha256")
+            .arg(&bad)
+            .output()
+            .expect("Cargo should build P0 verification CLI");
+        assert!(!output.status.success(), "wrong digest was unexpectedly accepted");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("verification failed"));
+    }
+}
+
+#[test]
+fn full_file_hash_matches_golden_fixture_even_without_loading_blocks() {
+    let file = TempFile::new(&fixture());
+    let reader = P0Archive::open(&file.0).unwrap();
+    assert_eq!(reader.archive_sha256().unwrap(), GOLDEN_SHA256);
+    assert_eq!(reader.verify_archive_sha256(GOLDEN_SHA256).unwrap(), GOLDEN_SHA256);
+    assert!(reader.verify_archive_sha256(&"0".repeat(64)).is_err());
 }
 
 #[test]
