@@ -2,6 +2,16 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — Rust fail-closed state coverage policy (draft PR #5)
+
+- **Task/branch/PR:** P0.6 preliminary Rust coverage semantics; `feat/p0-2-rust-workspace`, [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5). Existing PR #6 already contains the same experimental policy contract in Python and the scientific archive, so no competing PR created.
+- **Implementation:** `crates/events-core/src/coverage.rs` shared `CoveragePolicy`, `ReviewedWindow`, `CoverageAssessment`; explicit family/body [start,end) windows, nonempty human reviewer/evidence, no overlap. `crates/events-p0/src/coverage.rs` loads the JSON `virgostars-reviewed-coverage/v0` policy, verifies SHA-256 of the entire archive, prevents a mutated binary from inheriting a verified policy, and exposes `CoverageAwareP0.sign_at` / `direction_at` with `UnknownCoverage`, `UnknownInitialState` and `Reviewed`.
+- **Code/tests/docs:** 5 new core unit tests plus 7 P0 integration tests against the independently Python-generated P0 golden fixture; `docs/REVIEWED_COVERAGE_RUST.md` and this log. Tests cover pre-1970 moments, inclusive/exclusive bounds, previous-window state rejection, overlapping/invalid review metadata, independent motion/ingress coverage, wrong SHA, mutated archive and zero-window policy.
+- **Actual validation executed:** `cd /mnt/data && python -m unittest -v test_vseph_prototype`: **6/6 PASS**. Inspected original local binary SHA-256 `c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e`, file size 4,143,385 bytes, sections summing to 380,844, 761 blocks. A raw Moon ingress query for year 3000 returned its last **recorded** event in 2099; this demonstrates why fail-closed state classification is necessary.
+- **Not run:** Rust `cargo fmt`, `cargo clippy`, `cargo test`, `cargo build` — the container has no Rust compiler and GitHub cannot be cloned via DNS. Tests are written, NOT executed; no Rust compilation or Rust/Python behavioral parity is claimed.
+- **Known limitations:** policy contents are asserted by a reviewer, not independently proven by software. Real dataset policy on PR #6 still has zero approved intervals. Rehashing whole P0 file per covered query is correct but not optimized. Existing PR #5 is not merge-ready; PR #6 still separate; code and data licenses tracked separately.
+- **Next:** run Cargo checks on a real Rust checkout, fix any compiler/clippy/format issues, exercise the 2026-11-10 zero-window policy against the actual archive, then finalize a stable VSEPH v1 reader. No deploy, merge, data modifications or GitHub Actions.
+
 ## 2026-11-10 — P0 binary decoder in Rust (draft PR #5)
 
 - **Branch/PR:** feat/p0-2-rust-workspace / [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5). Existing PR reused; dataset and Python reference remain on separate PR #6.
