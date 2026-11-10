@@ -2,6 +2,15 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — Independent full-block P0 integrity audit (draft PR #5)
+
+- **Existing PR/branch:** [#5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`; no competing PR and no changes to the separate public snapshot on PR #6.
+- **Implementation:** `tools/audit_p0_bytes.py` independently decodes **all** P0 zlib blocks with strict limits and checks source ID varints, delta timestamps, phases, direction, sign, index ordering, header/section counts, block/file SHA-256; `tools/test_audit_p0_bytes.py` has 7 tests (one optional against real data). New `docs/P0_BYTE_AUDIT.md` includes reproducible commands and PowerShell instructions.
+- **Verification really executed:** in a local mirror of the exact file tree, `VSEPH_P0_PATH=/mnt/data/virgostars-events-20261110.vseph-p0 python -m unittest discover -s tools -p test_audit_p0_bytes.py -v`: **7/7 PASS**, including malicious/truncated tests; `python tools/audit_p0_bytes.py /mnt/data/virgostars-events-20261110.vseph-p0 --sha256 c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e`: **761 blocks / 380,844 records / all hashes PASS**; independently generated 1470-byte golden fixture **4 blocks / 8 events PASS**. Matched Git blobs of committed Python source with executed local files.
+- **Toolchain limitations:** `rustc` and `cargo` were not found; GitHub clone DNS unavailable. **Cargo fmt, clippy, test, release build remain NOT RUN.** Python byte audit validates file framing, **not** the Rust reader's compilation, cross-language runtime parity, or astronomical completeness.
+- **Next:** run Rust gates on a Rust-equipped checkout, compare actual Rust decoded events with Python reference against the full snapshot, improve the normative VSEPH v1 format, and preserve fail-closed reviewed coverage.
+- **No merge, deploy, GitHub Actions, package publication, or dataset modification.**
+
 ## 2026-11-10 — Rust fail-closed state coverage policy (draft PR #5)
 
 - **Task/branch/PR:** P0.6 preliminary Rust coverage semantics; `feat/p0-2-rust-workspace`, [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5). Existing PR #6 already contains the same experimental policy contract in Python and the scientific archive, so no competing PR created.
