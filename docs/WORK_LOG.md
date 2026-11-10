@@ -2,6 +2,16 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-10 — Local Rust gate runner with strict cross-language audit summary parity (draft PR #5)
+
+- **PR / branch:** [#5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`, updated in place; no merge or new PR. PR #6 still contains the separate public dataset.
+- **Code:** `tools/validate_rust.py` (Python 3.10+ stdlib, portable to Windows/Linux/macOS) provides deterministic, fail-fast execution of Cargo format, Clippy, all Rust tests and release build. Optional `--archive <path> --sha256 <digest>` additionally runs the independent Python full-block auditor and Rust `p0-verify` CLI on the **same immutable dataset** and enforces identical JSON `sha256/blocks/records/sections`, verified digest flag and `coverage_certified:false`. Never makes changes to Git branches, production services or scientific dataset; no GitHub Actions.
+- **Tests:** new `tools/test_validate_rust.py` with 9 cases covering missing Cargo, required digest, absolute/relative archive paths, malformed/uppercase SHA-256, ordered gates, immediate stop after a simulated Clippy failure, independent dual audit invocation, JSON parity and refusal to accept a Rust CLI report without the verified-digest flag. A mocked Cargo is used only to test orchestration; **does not compile Rust**.
+- **Execution verified:** `PYTHONPATH=/mnt/data/local_rust/tools python -m unittest discover -s /mnt/data/local_rust/tools -p test_validate_rust.py -v` → **9/9 PASS**. The executed scripts match their GitHub source blobs exactly (`validate_rust.py` git SHA-1 `a2945a108383ba17b896f612b4b18caed3890722`, `test_validate_rust.py` `15fbfc8e32a02c30b3d088f73c0bee56141d9614`). Running `python tools/validate_rust.py` in this environment fails with a clear Cargo-not-found message and nonzero exit, as intended.
+- **Independent real dataset recheck:** `python -m unittest discover -s /mnt/data/local_rust/tools -p test_audit_p0_bytes.py -q` with `VSEPH_P0_PATH=/mnt/data/virgostars-events-20261110.vseph-p0` → **8/8 PASS**. Full Python audit against trusted digest `c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e` → **761 blocks / 380,844 events / all block hashes PASS**.
+- **Still blocked:** `rustc` and `cargo` unavailable and cannot be fetched from external networks; Rust format, Clippy, tests, release build and Rust/Python runtime parity **NOT RUN**. Passing the new Python runner tests must not be represented as successful Rust compilation or full event-by-event scientific validation.
+- **Docs:** `docs/LOCAL_RUST_CHECKS.md` with beginner-friendly Windows PowerShell and Unix instructions, and developer/agent README updates. No dataset/license changes, GitHub Actions, merge, deploy or release.
+
 ## 2026-11-10 — Whole-file SHA-256 verification and record-count overflow hardening (draft PR #5)
 
 - **PR/branch:** [draft #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`; no competing PR, no merge or changes to the dataset in [PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6).
