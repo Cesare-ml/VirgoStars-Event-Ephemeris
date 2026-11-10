@@ -229,7 +229,7 @@ pub struct MotionEvent {
 }
 
 impl MotionEvent {
-    pub const fn new(
+    pub fn new(
         body: BodyId,
         at: TimestampMicros,
         direction: MotionDirection,
@@ -271,7 +271,7 @@ pub struct IngressEvent {
 }
 
 impl IngressEvent {
-    pub const fn new(body: BodyId, at: TimestampMicros, sign: ZodiacSign) -> Self {
+    pub fn new(body: BodyId, at: TimestampMicros, sign: ZodiacSign) -> Self {
         Self { body, at, sign }
     }
 
@@ -367,7 +367,7 @@ mod tests {
         let missing = SynodEvent::new(body("true Node"), TimestampMicros::new(0), None).unwrap();
         let empty = SynodEvent::new(body("Moon"), TimestampMicros::new(0), Some(vec![])).unwrap();
         assert_eq!(missing.phases(), None);
-        assert_eq!(empty.phases(), Some([].as_slice()));
+        assert!(empty.phases().expect("explicit empty phases").is_empty());
     }
 
     #[test]
