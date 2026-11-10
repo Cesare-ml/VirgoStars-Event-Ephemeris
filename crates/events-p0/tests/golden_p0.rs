@@ -7,14 +7,16 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use sha2::{Digest, Sha256};
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use virgostars_events_core::{BodyId, Event, EventFamily, TimestampMicros};
 use virgostars_events_p0::P0Archive;
 
 const GOLDEN_SHA256: &str = "4b7dbe3171633402b76565df79a31066f58913b52b2839c735ea3e68cb413499";
+static NEXT_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
 fn fixture() -> Vec<u8> {
     let bytes = STANDARD.decode(include_str!("fixtures/synthetic.p0.base64").trim())
@@ -28,11 +30,16 @@ struct TempFile(PathBuf);
 
 impl TempFile {
     fn new(bytes: &[u8]) -> Self {
+        // On Windows, multiple parallel tests can observe the same clock tick.
+        // Include an atomic sequence and create exclusively so a fixture cannot
+        // overwrite a live test's file and then delete it on Drop.
         let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let sequence = NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "virgostars-p0-fixture-{}-{nanos}.bin", std::process::id()
+            "virgostars-p0-fixture-{}-{nanos}-{sequence}.bin", std::process::id()
         ));
-        fs::write(&path, bytes).unwrap();
+        let mut file = OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
+        file.write_all(bytes).unwrap();
         Self(path)
     }
 }
@@ -40,6 +47,21 @@ impl TempFile {
 impl Drop for TempFile {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.0);
+    }
+}
+
+#[test]
+fn parallel_test_fixtures_have_distinct_live_paths() {
+    // Simulates concurrent allocations within one OS clock tick.
+    let bytes = fixture();
+    let fixtures: Vec<_> = (0..64).map(|_| TempFile::new(&bytes)).collect();
+    let paths: std::collections::HashSet<_> = fixtures.iter().map(|file| &file.0).collect();
+    assert_eq!(paths.len(), fixtures.len());
+    // None of the fixture paths may have been replaced or removed by a peer.
+    for file in &fixtures {
+        assert_eq!(fs::read(&file.0).unwrap(), bytes);
+        let archive = P0Archive::open(&file.0).unwrap();
+        assert_eq!(archive.record_count(), 8);
     }
 }
 
