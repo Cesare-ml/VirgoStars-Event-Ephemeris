@@ -116,6 +116,19 @@ impl P0Record {
     }
 }
 
+/// Full-block integrity result for an *experimental* P0 file.
+///
+/// It verifies the encoded events in every indexed compressed block, but does
+/// not establish astronomical event completeness or verify an external
+/// manifest's whole-file SHA-256. For archival validation, check that digest
+/// independently and use an immutable snapshot while auditing.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct P0AuditSummary {
+    pub blocks: usize,
+    pub records: u64,
+    pub by_family: BTreeMap<EventFamily, u64>,
+}
+
 /// A file-backed, immutable, indexed experimental archive.
 ///
 /// Open validates all header/index ranges and counts without allocating
@@ -237,6 +250,40 @@ impl P0Archive {
 
     pub fn block_count(&self) -> usize {
         self.blocks.values().map(Vec::len).sum()
+    }
+
+    /// Decode and validate **every** indexed compressed block, not only
+    /// blocks touched by a normal query. Counts are calculated from decoded
+    /// records and checked against the already validated header totals.
+    ///
+    /// Processes one block at a time; peak record allocation is capped at
+    /// MAX_RECORDS. The caller must separately compare the whole-file digest
+    /// to the dataset manifest and ensure the source file is not mutated while
+    /// auditing. Does not infer completeness across missing dates.
+    pub fn verify_all(&self) -> Result<P0AuditSummary, P0Error> {
+        let mut summary = P0AuditSummary {
+            blocks: 0,
+            records: 0,
+            by_family: BTreeMap::new(),
+        };
+        for ((family, body), blocks) in &self.blocks {
+            for block in blocks {
+                let decoded = self.load_block(*family, body, block)?;
+                let count = u64::try_from(decoded.len())
+                    .map_err(|_| invalid("decoded block record count overflows u64"))?;
+                summary.records = summary.records.checked_add(count)
+                    .ok_or_else(|| invalid("archive record count overflow"))?;
+                summary.blocks = summary.blocks.checked_add(1)
+                    .ok_or_else(|| invalid("archive block count overflow"))?;
+                let family_total = summary.by_family.entry(*family).or_default();
+                *family_total = family_total.checked_add(count)
+                    .ok_or_else(|| invalid("family record count overflow"))?;
+            }
+        }
+        if summary.records != self.record_count || summary.blocks != self.block_count() {
+            return Err(invalid("decoded totals disagree with archive index"));
+        }
+        Ok(summary)
     }
 
     fn load_block(&self, family: EventFamily, body: &BodyId, block: &Block) -> Result<Vec<P0Record>, P0Error> {
