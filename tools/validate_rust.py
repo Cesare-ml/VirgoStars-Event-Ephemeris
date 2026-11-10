@@ -12,6 +12,7 @@ build releases for publication, or modify the astronomical dataset.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -79,14 +80,39 @@ def run_gates(
             expected_sha256 or "",
         ]
         print("\n[Independent P0 byte audit]", flush=True)
-        invoke(python_cmd, cwd=root, check=True)
+        py_result = invoke(python_cmd, cwd=root, check=True, capture_output=True, text=True)
         # The Rust CLI performs complete block decoding AND full-file hashing.
         cli_cmd = [
             executable, "run", "-p", "virgostars-events-p0", "--bin",
             "p0-verify", "--", str(archive), "--sha256", expected_sha256 or "",
         ]
-        print("\n[Experimental Rust/Python P0 archive parity gate]", flush=True)
-        invoke(cli_cmd, cwd=root, check=True)
+        print("\n[Rust P0 complete archive audit]", flush=True)
+        rust_result = invoke(cli_cmd, cwd=root, check=True, capture_output=True, text=True)
+
+        try:
+            python_report = json.loads(py_result.stdout)
+            rust_report = json.loads(rust_result.stdout)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("P0 auditor did not produce valid JSON") from exc
+        if not isinstance(python_report, dict) or not isinstance(rust_report, dict):
+            raise RuntimeError("P0 auditors must each report a JSON object")
+        fields = ("sha256", "blocks", "records", "sections")
+        differences = [key for key in fields if python_report.get(key) != rust_report.get(key)]
+        if differences:
+            raise RuntimeError(
+                "Python/Rust archive audit mismatch in: " + ", ".join(differences)
+            )
+        if rust_report.get("sha256") != expected_sha256:
+            raise RuntimeError("Rust/Python digest differs from the trusted manifest")
+        if rust_report.get("sha256_checked_against_expected") is not True:
+            raise RuntimeError("Rust CLI did not confirm trusted digest verification")
+        if rust_report.get("coverage_certified") is not False:
+            raise RuntimeError("integrity audit must never claim astronomical coverage")
+        print(
+            "Rust/Python byte-audit parity: "
+            + json.dumps({field: rust_report[field] for field in fields}, sort_keys=True),
+            flush=True,
+        )
 
     print("\nAll requested commands completed successfully.", flush=True)
     print(
