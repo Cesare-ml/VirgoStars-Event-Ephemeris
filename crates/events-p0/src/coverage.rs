@@ -15,7 +15,6 @@ use std::io::Read;
 use std::path::Path;
 
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use virgostars_events_core::{
     BodyId, CoverageAssessment, CoveragePolicy, EventFamily, ReviewedWindow, TimestampMicros,
 };
@@ -40,20 +39,6 @@ fn instant(value: &Value, key: &str) -> Result<TimestampMicros, P0Error> {
     }
     text.parse::<i64>().map(TimestampMicros::new)
         .map_err(|_| invalid(format!("policy instant {key} out of i64 range")))
-}
-
-fn file_hash(path: &Path) -> Result<String, P0Error> {
-    let mut file = File::open(path)?;
-    let mut hash = Sha256::new();
-    let mut chunk = [0_u8; 64 * 1024];
-    loop {
-        let n = file.read(&mut chunk)?;
-        if n == 0 {
-            break;
-        }
-        hash.update(&chunk[..n]);
-    }
-    Ok(format!("{:x}", hash.finalize()))
 }
 
 fn parse_window(row: &Value) -> Result<ReviewedWindow, P0Error> {
@@ -130,10 +115,7 @@ impl P0Archive {
         {
             return Err(invalid("invalid lowercase archive SHA-256"));
         }
-        let actual = file_hash(&self.path)?;
-        if sha256 != actual {
-            return Err(invalid("coverage policy archive SHA-256 mismatch"));
-        }
+        let actual = self.verify_archive_sha256(sha256)?;
         let rows = document.get("reviewed_windows").and_then(Value::as_array)
             .ok_or_else(|| invalid("missing coverage reviewed_windows array"))?;
         // Bound the number of entries even though file size is capped.
@@ -170,7 +152,7 @@ impl CoverageAwareP0<'_> {
     ) -> Result<CoveredState, P0Error> {
         // Do not let a swapped/mutated file inherit the verification made at
         // construction. This costs a streamed hash for each state query in P0.
-        if file_hash(&self.archive.path)? != self.sha256 {
+        if self.archive.archive_sha256()? != self.sha256 {
             return Err(invalid("archive bytes changed since coverage policy verification"));
         }
         let last = self.archive.at(family, body, instant)?;
