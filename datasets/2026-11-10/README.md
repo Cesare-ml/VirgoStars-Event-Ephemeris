@@ -13,7 +13,7 @@ The dataset owner supplied the source PostgreSQL exports and explicitly requeste
 | Sign ingresses | `ingresso_segni` | 43,774 |
 | **Total** | | **380,844** |
 
-Files in the publication-ready package include a **VSEPH-P0 experimental zlib-compressed** archive and three scientific CSV projections, plus an annual event-count index. The package is available from the maintainer's ChatGPT working artifact; its GitHub upload will be marked complete **only** after actual archive/data blobs are present on the corresponding branch.
+Files in the publication-ready package include a **VSEPH-P0 experimental zlib-compressed** archive and three scientific CSV projections, plus an annual event-count index. The actual archive and CSV data blobs have been committed on [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6); they are **not yet merged to main**. Read the multipart storage instructions below.
 
 ## Canonical paths
 
@@ -50,3 +50,9 @@ Verify any files you receive by their exact SHA-256 before treating them as the 
 ## Getting the large files into GitHub
 
 The programmatic GitHub interface used for initialization can reject multi-megabyte requests. If the dataset is stored as `*.parts/part-NNN`, use the dedicated assembler described in [docs/DATASET_UPLOAD.md](../../docs/DATASET_UPLOAD.md) (after it is committed), verify checksum, then inspect normal CSVs. Git history should preserve immutable content, not imply all bodies have continuous scientific coverage.
+
+## Tracking work on missing intervals
+
+- [Issue #7](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/7) — two unusually long Moon synod intervals (candidate gaps, independent re-calculation needed).
+- [Issue #8](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/8) — Moon ingress discontinuity 2099–4836 and isolated Aries-only tail; ensure unknown coverage is surfaced to clients.
+- [Issue #9](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/9) — select a separate open-data reuse license; public repository visibility alone does not grant unrestricted reuse rights.
