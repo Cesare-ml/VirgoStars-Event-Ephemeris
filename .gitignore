@@ -32,4 +32,11 @@ Thumbs.db
 /data-private/
 /exports/
 /benchmarks/out/
-# Exception: fixture binaries can be explicitly added later via a documented allowlist.
+# Public owner-authorized and hash-verified event snapshots may be committed under datasets/.
+# Keep reconstructed local artifacts and private exports out of Git:
+/datasets/**/_assembled/
+/datasets/**/_assembled/**
+!datasets/2026-11-10/*.csv
+!datasets/2026-11-10/*.parts/
+!datasets/2026-11-10/*.parts/**
+# Immutable public data is documented in docs/DATASET_UPLOAD.md.
