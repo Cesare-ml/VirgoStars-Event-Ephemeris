@@ -26,6 +26,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use virgostars_events_core::{
     BodyId, Event, EventFamily, IngressEvent, MotionDirection, MotionEvent, SynodEvent,
     SynodPhase, TimestampMicros, ZodiacSign, MAX_CHRONOLOGICAL_PAGE_SIZE,
@@ -36,6 +37,10 @@ const MAX_HEADER: usize = 5_000_000;
 const MAX_BLOCK: usize = 5_000_000;
 const MAX_RAW: usize = 25_000_000;
 const MAX_RECORDS: usize = 512;
+
+// Independent opens of the same path are distinct snapshots for pagination.
+// A process-local token rejects a cursor from another P0Archive instance.
+static NEXT_ARCHIVE_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug)]
 pub enum P0Error {
@@ -135,6 +140,7 @@ pub struct P0AuditSummary {
 /// not a persistent cursor: preserve the source file and query interval.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct P0ChronologicalCursor {
+    archive_id: u64,
     start: TimestampMicros,
     end: TimestampMicros,
     at: TimestampMicros,
@@ -185,6 +191,7 @@ pub struct P0ChronologicalPage {
 /// decompressed dataset blocks. Each query reads, decompresses and verifies
 /// only the relevant block(s), bounded by explicit safety caps.
 pub struct P0Archive {
+    archive_id: u64,
     path: PathBuf,
     payload_start: u64,
     blocks: BTreeMap<(EventFamily, BodyId), Vec<Block>>,
@@ -294,7 +301,13 @@ impl P0Archive {
             acc.checked_add(*count)
                 .ok_or_else(|| invalid("archive record count overflow"))
         })?;
-        Ok(Self { path, payload_start, blocks, record_count })
+        Ok(Self {
+            archive_id: NEXT_ARCHIVE_ID.fetch_add(1, Ordering::Relaxed),
+            path,
+            payload_start,
+            blocks,
+            record_count,
+        })
     }
 
     pub fn record_count(&self) -> u64 {
@@ -495,7 +508,8 @@ impl P0Archive {
             return Err(invalid("chronological page size out of range"));
         }
         if let Some(cursor) = after {
-            if cursor.start != start || cursor.end != end
+            if cursor.archive_id != self.archive_id
+                || cursor.start != start || cursor.end != end
                 || cursor.at < start || cursor.at >= end
             {
                 return Err(invalid("chronological cursor outside interval"));
@@ -584,6 +598,7 @@ impl P0Archive {
             None
         } else {
             events.last().map(|last| P0ChronologicalCursor {
+                archive_id: self.archive_id,
                 start,
                 end,
                 at: last.at(),
