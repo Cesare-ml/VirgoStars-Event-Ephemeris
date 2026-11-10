@@ -2,7 +2,7 @@
 
 **Independent, free/open-source, offline-first event ephemerides for astrology.**
 
-**Status: DESIGN / DOCUMENTATION ONLY.** This repository is being initialized. There is no implemented Rust reader, JavaScript/TypeScript or Python package, VSEPH binary, data exporter, published dataset, or production integration yet. API examples in this repository are *proposals*, not callable releases.
+**Status: INITIAL IMPLEMENTATION / PUBLIC DATA SNAPSHOT DRAFT.** The dataset owner has authorized [a public snapshot of three scientific event tables](datasets/2026-11-10/README.md); its large files may be stored as exact, SHA-256 verified parts (see [reassembly instructions](docs/DATASET_UPLOAD.md)). The compressed archive is **VSEPH-P0 experimental**, not the still-unimplemented VSEPH v1 Rust reader. [Draft PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4) and [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) contain prototype fixtures and a Rust workspace, still subject to validation. JS/TS and Python bindings have not been released.
 
 ## Scope
 
@@ -41,7 +41,7 @@ A major goal is **behavioral parity** with the astronomical queries actually use
 
 ## Ownership, license and attribution
 
-The project maintainer states that the source dataset is **entirely their original work generated using their own algorithms**. This is a recorded authorship statement, not an independent audit. **No dataset files have been published here and no dataset redistribution license has yet been selected**; the source-code license must not be presumed to license later binary datasets. Document the exact dataset license before the first data release.
+The project maintainer states that the source dataset is **entirely their original work generated using their own algorithms**. This is a recorded authorship statement, not an independent audit. **The owner has requested publication of an immutable scientific event snapshot, but a separate dataset redistribution/reuse license has not yet been selected**; the source-code license must not be presumed to license the published binary or CSV datasets. Document the exact dataset license before the first data release.
 
 The **original source code** is licensed under [CPAL-1.0](LICENSE), following [VirgoStars-Ephemeris](https://github.com/Cesare-ml/VirgoStars-Ephemeris): completed Exhibits A/B include the original developer's attribution:
  
@@ -57,6 +57,10 @@ No secret credentials, exported private DB copies, telemetry, interpretive horos
 
 ## Development status and first deliverable
 
-**Next milestone:** approve public API, freeze a first **draft** format specification, build tiny synthetic fixtures, write an executable Rust reader prototype with strict error handling and tests, then implement a read-only exporter/validator that can prove exact parity on an *authorized* snapshot. This repository contains **specifications only** until these gates pass.
+**Next milestone:** approve public API, freeze a first **draft** format specification, build tiny synthetic fixtures, write an executable Rust reader prototype with strict error handling and tests, then implement a read-only exporter/validator that can prove exact parity on an *authorized* snapshot. Development code and a source-data snapshot may be available in draft PRs; the official VSEPH v1 parser and cross-language bindings are not yet implemented.
 
 For work opportunities and acceptance criteria, use [the roadmap](docs/ROADMAP.md); do not claim feature completion until code, tests and documentation are merged.
+
+## Data snapshot and coverage limitations
+
+See [snapshot 2026-11-10](datasets/2026-11-10/README.md), its [manifest](datasets/2026-11-10/manifest-publication.json), [candidate gaps](datasets/2026-11-10/candidate_large_intervals.csv), and [reassembly/verification guide](docs/DATASET_UPLOAD.md). The compressed P0 reader does **not** extrapolate missing events and its latest-sign/state lookups cannot establish continuity across unknown gaps. In particular the Moon ingress series ends in 2099 and resumes with Aries-only events in 4836. Existing data can still be queried for well-covered bodies and dates, subject to coverage checks.
