@@ -2,7 +2,7 @@
 
 **Independent, free/open-source, offline-first event ephemerides for astrology.**
 
-**Status: DESIGN / DOCUMENTATION ONLY.** This repository is being initialized. There is no implemented Rust reader, JavaScript/TypeScript or Python package, VSEPH binary, data exporter, published dataset, or production integration yet. API examples in this repository are *proposals*, not callable releases.
+**Status: EARLY BOOTSTRAP.** Test-only synthetic fixture generation/validation is now proposed in [draft PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4). There is no implemented Rust reader, JavaScript/TypeScript or Python package, VSEPH binary, data exporter, published dataset, or production integration yet. API examples remain *proposals*, not callable releases.
 
 ## Scope
 
@@ -57,6 +57,17 @@ No secret credentials, exported private DB copies, telemetry, interpretive horos
 
 ## Development status and first deliverable
 
-**Next milestone:** approve public API, freeze a first **draft** format specification, build tiny synthetic fixtures, write an executable Rust reader prototype with strict error handling and tests, then implement a read-only exporter/validator that can prove exact parity on an *authorized* snapshot. This repository contains **specifications only** until these gates pass.
+**Initial verification:** synthetic fixtures, schema, generator and tests are under review in [PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4). These are deliberately invented events; no real ephemeris data are included. Next: minimal Rust workspace, then a versioned binary format and reader with strict error handling. The real-data export/validator follows only on an *authorized* snapshot.
 
 For work opportunities and acceptance criteria, use [the roadmap](docs/ROADMAP.md); do not claim feature completion until code, tests and documentation are merged.
+
+### Synthetic fixture checks (draft PR #4)
+
+When the branch is checked out with Node.js 22+, verify the fabricated development fixtures:
+
+~~~sh
+node tools/generate-synthetic-fixtures.mjs
+node --test test/synthetic-fixtures.test.mjs
+~~~
+
+The fixture generator is **test tooling only**, not a production decoder or astronomy engine. See [fixture documentation](test/fixtures/README.md) and [schema](test/fixtures/schema-v0.json). The Node command has not yet been run in a checked-out repository; six assertion groups were exercised successfully against the committed fixture files in a V8 runtime.

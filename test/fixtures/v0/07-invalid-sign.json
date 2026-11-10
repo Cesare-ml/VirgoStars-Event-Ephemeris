@@ -1,0 +1,18 @@
+{
+  "schema": "vseph-synthetic-fixtures/v0",
+  "synthetic": true,
+  "id": "invalid-sign",
+  "expected": {
+    "valid": false,
+    "errorCode": "SIGN_RANGE"
+  },
+  "records": [
+    {
+      "family": "ingress",
+      "body": "Venus",
+      "at": "2050-01-01T00:00:00Z",
+      "atUs": "2524608000000000",
+      "sign": 12
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "schema": "vseph-synthetic-fixtures/v0",
+  "synthetic": true,
+  "id": "optional-and-historical",
+  "expected": {
+    "valid": true
+  },
+  "records": [
+    {
+      "family": "synod",
+      "body": "Mercury",
+      "at": "2026-10-01T00:00:00Z",
+      "atUs": "1790812800000000",
+      "phases": [
+        {
+          "name": "R2",
+          "at": "2026-10-05T00:00:00Z",
+          "atUs": "1791158400000000"
+        },
+        {
+          "name": "R3",
+          "at": "2026-10-10T00:00:00Z",
+          "atUs": "1791590400000000"
+        },
+        {
+          "name": "D4",
+          "at": "2026-10-15T00:00:00Z",
+          "atUs": "1792022400000000"
+        }
+      ]
+    },
+    {
+      "family": "synod",
+      "body": "osc. Apogee",
+      "at": "1969-12-31T23:59:59.123456Z",
+      "atUs": "-876544",
+      "phases": [
+        {
+          "name": "conjunction2",
+          "at": "1970-01-02T00:00:00Z",
+          "atUs": "86400000000"
+        },
+        {
+          "name": "conjunction3",
+          "at": "1970-01-03T00:00:00Z",
+          "atUs": "172800000000"
+        }
+      ]
+    },
+    {
+      "family": "synod",
+      "body": "true Node",
+      "at": "1900-01-01T00:00:00Z",
+      "atUs": "-2208988800000000",
+      "phases": null
+    }
+  ]
+}

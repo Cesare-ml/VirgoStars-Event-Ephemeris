@@ -1,0 +1,39 @@
+{
+  "schema": "vseph-synthetic-fixtures/v0",
+  "synthetic": true,
+  "id": "boundary-and-dst",
+  "expected": {
+    "valid": true
+  },
+  "records": [
+    {
+      "family": "ingress",
+      "body": "Moon",
+      "at": "2026-10-25T00:30:00Z",
+      "atUs": "1792888200000000",
+      "sign": 3
+    },
+    {
+      "family": "ingress",
+      "body": "Moon",
+      "at": "2026-10-25T01:30:00Z",
+      "atUs": "1792891800000000",
+      "sign": 4
+    },
+    {
+      "family": "motion",
+      "body": "Mercury",
+      "at": "2026-10-25T01:30:00Z",
+      "atUs": "1792891800000000",
+      "direction": "direct",
+      "sign": 4
+    },
+    {
+      "family": "synod",
+      "body": "Moon",
+      "at": "2026-10-25T01:30:00Z",
+      "atUs": "1792891800000000",
+      "phases": []
+    }
+  ]
+}
