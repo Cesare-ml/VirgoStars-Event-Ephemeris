@@ -21,6 +21,9 @@
 use std::error::Error;
 use std::fmt;
 
+pub mod indexed;
+pub use indexed::{EventFamily, EventIndex, IndexError, QueryError, SynodHandle};
+
 pub use virgostars_events_format::{probe_magic, FormatProbeError, VSEPH_MAGIC};
 
 /// A signed microsecond count from the Unix/POSIX UTC epoch.
