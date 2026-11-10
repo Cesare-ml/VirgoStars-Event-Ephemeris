@@ -78,6 +78,38 @@ fn exhaustive_audit_detects_corruption_in_an_unqueried_block() {
 }
 
 #[test]
+fn offline_cli_verifies_all_blocks_and_emits_machine_readable_counts() {
+    let file = TempFile::new(&fixture());
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_p0-verify"))
+        .arg(&file.0)
+        .output()
+        .expect("Cargo should build the experimental verification CLI");
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["format"], "VSEPH-P0-EXPERIMENTAL");
+    assert_eq!(value["blocks"], 4);
+    assert_eq!(value["records"], 8);
+    assert_eq!(value["sections"]["ingress"], 3);
+    assert_eq!(value["sections"]["motion"], 2);
+    assert_eq!(value["sections"]["synod"], 3);
+    assert_eq!(value["coverage_certified"], false);
+}
+
+#[test]
+fn offline_cli_exits_nonzero_on_corrupt_archive() {
+    let mut altered = fixture();
+    let header_length = u32::from_le_bytes(altered[8..12].try_into().unwrap()) as usize;
+    altered[12 + header_length] ^= 1;
+    let file = TempFile::new(&altered);
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_p0-verify"))
+        .arg(&file.0)
+        .output()
+        .expect("Cargo should build the experimental verification CLI");
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("verification failed"));
+}
+
+#[test]
 fn opens_independent_python_generated_golden_bytes() {
     let file = TempFile::new(&fixture());
     let reader = P0Archive::open(&file.0).unwrap();
