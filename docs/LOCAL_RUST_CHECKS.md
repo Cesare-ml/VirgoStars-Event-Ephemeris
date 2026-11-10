@@ -32,7 +32,7 @@ cargo build --workspace --release
 
 Any failed command stops the run and exits with status 1. There is no automatic merge, release, package upload, network service, GitHub Actions workflow or live database change. Cargo may need crates.io to install the explicitly declared development dependencies on the first build. No live backend is involved.
 
-## Full compressed-data parity, when both draft PRs are available in a local testing checkout
+## Full compressed-data audit and summary parity, when both draft PRs are available in a local testing checkout
 
 The experimental Rust P0 adapter and validation scripts live on PR #5, whereas **the complete 2026-11-10 dataset and `tools/assemble_dataset.py` are on separate draft PR #6**. Test in a temporary combined checkout: **do not merge either PR to `main` just to run the check**.
 
