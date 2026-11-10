@@ -88,14 +88,6 @@ fn family_from_name(value: &str) -> Result<EventFamily, P0Error> {
     }
 }
 
-fn family_name(value: EventFamily) -> &'static str {
-    match value {
-        EventFamily::Synod => "synod",
-        EventFamily::Motion => "motion",
-        EventFamily::Ingress => "ingress",
-    }
-}
-
 #[derive(Clone, Debug)]
 struct Block {
     start: u64,
