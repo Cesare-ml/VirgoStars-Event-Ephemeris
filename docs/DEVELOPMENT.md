@@ -125,6 +125,16 @@ For an offline CLI after reconstructing the snapshot in a combined checkout cont
 cargo run -p virgostars-events-p0 --bin p0-verify -- datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0
 ```
 
-The command prints JSON with `blocks`, `records`, `sections` and `coverage_certified: false`, and exits nonzero on corruption or invalid input. It **does not** certify continuous astronomical coverage or independently compare the whole-file SHA-256 with the dataset manifest. Keep using `tools/audit_p0_bytes.py --sha256 ...` or a trusted manifest/checksum for that separate requirement.
+The command prints JSON with `blocks`, `records`, `sections` and `coverage_certified: false`, and exits nonzero on corruption or invalid input. It **does not** certify continuous astronomical coverage. The new optional `--sha256` flag compares the **full archive file** to the expected digest supplied from a trusted manifest; without that flag the command computes and prints the digest but does not authenticate a snapshot.
 
 Two new golden tests cover all-block validation and corruption in a **nonqueried** series; two more exercise the CLI's successful JSON result and nonzero exit on corruption. The optional ignored integration test now requests a full Rust audit of all **761 indexed blocks / 380,844 records**, not merely a header inspection. These Rust tests and CLI are **COMMITTED BUT NOT EXECUTED**: there is no Cargo/rustc in the current environment. The independent Python regression suite, including a matching nonqueried-block corruption case, was executed on the real archive: **8/8 PASS**. See [byte audit instructions](P0_BYTE_AUDIT.md).
+
+## Trusted whole-file hash in Rust (new, requires Cargo)
+
+The P0 reader now exposes streaming `P0Archive::archive_sha256()` and `verify_archive_sha256(expected)`. The SHA verification implementation is shared by the experimental review-policy adapter and the offline CLI. The total record count from the JSON header is accumulated with overflow checks. `p0-verify` reports `sha256` and `sha256_checked_against_expected`; it exits nonzero on an incorrect/malformed expected digest.
+
+```sh
+cargo run -p virgostars-events-p0 --bin p0-verify -- datasets/2026-11-10/_assembled/virgostars-events-20261110.vseph-p0 --sha256 c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e
+```
+
+The expected digest above belongs **only** to the immutable 2026-11-10 dataset in draft PR #6; fetch the correct versioned manifest when verifying newer snapshots. Three new Rust golden regression tests cover full-file digest, CLI correct digest and CLI corrupt/invalid expected digest; **NOT RUN** here because Cargo is unavailable. The Python reference audit was rerun in this session: **8/8 PASS** and **761/761 blocks, 380,844/380,844 encoded events**, correct full-archive SHA-256. Rust build, Clippy and runtime parity are not yet verified.
