@@ -240,7 +240,10 @@ impl P0Archive {
                 return Err(invalid("section record count mismatch"));
             }
         }
-        let record_count = totals.values().copied().sum();
+        let record_count = totals.values().try_fold(0u64, |acc, count| {
+            acc.checked_add(*count)
+                .ok_or_else(|| invalid("archive record count overflow"))
+        })?;
         Ok(Self { path, payload_start, blocks, record_count })
     }
 
@@ -250,6 +253,42 @@ impl P0Archive {
 
     pub fn block_count(&self) -> usize {
         self.blocks.values().map(Vec::len).sum()
+    }
+
+    /// Stream SHA-256 of the **entire** experimental archive file.
+    ///
+    /// This digest is independent of the per-block SHA-256 values checked
+    /// during decoding. Callers should compare it with a separately trusted
+    /// versioned manifest before treating a snapshot as authentic.
+    pub fn archive_sha256(&self) -> Result<String, P0Error> {
+        let mut file = File::open(&self.path)?;
+        let mut hasher = Sha256::new();
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let read = file.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+        }
+        Ok(format!("{:x}", hasher.finalize()))
+    }
+
+    /// Require an exact lower-case SHA-256 from a trusted manifest.
+    ///
+    /// This checks bytes of the full archive and does not certify scientific
+    /// completeness of astronomical event dates.
+    pub fn verify_archive_sha256(&self, expected: &str) -> Result<String, P0Error> {
+        if expected.len() != 64
+            || !expected.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            return Err(invalid("expected archive SHA-256 must be 64 lower-case hex characters"));
+        }
+        let digest = self.archive_sha256()?;
+        if digest != expected {
+            return Err(invalid("whole-file archive SHA-256 mismatch"));
+        }
+        Ok(digest)
     }
 
     /// Decode and validate **every** indexed compressed block, not only
