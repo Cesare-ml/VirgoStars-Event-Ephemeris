@@ -34,6 +34,6 @@ The code does not use third-party crates. Core unit tests and a public integrati
 
 ## Follow-up
 
-Next: issue #3 must freeze byte-level VSEPH v1 metadata and golden bytes with corruption tests, then issue #4 on the roadmap implements a bounded binary reader. Issues #5–#7 add indexed query methods and navigation. Maintain the boundaries in [AGENTS.md](../AGENTS.md).
+Next: issue #3 must freeze byte-level VSEPH v1 metadata and golden bytes with corruption tests, then roadmap P0.4 implements a bounded binary reader. Issues #5–#7 add indexed query methods and navigation. Maintain the boundaries in [AGENTS.md](../AGENTS.md).
 
 Do not enable GitHub Actions, merge this draft PR, publish packages or access the production database without authorization.
