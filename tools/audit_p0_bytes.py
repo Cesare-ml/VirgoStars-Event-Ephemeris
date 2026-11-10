@@ -20,6 +20,7 @@ from pathlib import Path
 
 MAGIC = b"VSEPH-P0"
 MAX_HEADER = 5_000_000
+MAX_FILE = 256_000_000  # explicit prototype cap before allocating full archive
 MAX_BLOCK = 5_000_000
 MAX_RAW = 25_000_000
 MAX_COUNT = 512
@@ -88,6 +89,8 @@ def _decode(family: str, data: bytes, expected: int) -> tuple[int, int, int]:
 
 def audit_file(path: str | Path, expected_sha256: str | None = None) -> dict:
     path = Path(path)
+    if path.stat().st_size > MAX_FILE:
+        raise ValueError("P0 audit input exceeds maximum file size")
     raw_file = path.read_bytes()
     sha = hashlib.sha256(raw_file).hexdigest()
     if expected_sha256 is not None and sha != expected_sha256:
