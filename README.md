@@ -64,3 +64,7 @@ For work opportunities and acceptance criteria, use [the roadmap](docs/ROADMAP.m
 ### Rust prototype: recorded events and reviewed coverage
 
 The draft Rust branch provides `EventIndex` and `virgostars-events-p0`, including a SHA-256-bound `CoverageAwareP0` adapter. It distinguishes the last recorded ingress/station from a scientifically reviewed state; **no time intervals are approved for the real 2026-11-10 dataset**. See [the Rust coverage contract](docs/REVIEWED_COVERAGE_RUST.md) and [developer guide](docs/DEVELOPMENT.md). These changes are in [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) and are not merged into main.
+
+### Reproducible experimental byte integrity audit
+
+An independent Python test tool in draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) validates **all** P0 compressed blocks and encoded records, including file/block SHA-256 and corruption checks. The actual 2026-11-10 P0 file passed **761 block checks / 380,844 record decodes**; see [auditor instructions](docs/P0_BYTE_AUDIT.md). This is a check of source **bytes**, not missing astronomical events or the still-unverified Rust decoder; `cargo test` is not yet run.
