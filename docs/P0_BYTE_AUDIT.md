@@ -78,3 +78,24 @@ cargo run -p virgostars-events-p0 --bin p0-verify -- datasets/2026-11-10/_assemb
 ```
 
 The command prints a lowercase `sha256`, `sha256_checked_against_expected: true`, counts and `coverage_certified: false`, then exits successfully only if **both** all blocks and the full-file digest match. It never declares unreviewed astronomical periods complete. The parser now uses checked arithmetic for the total record count. The Rust CLI and new tests **have not been compiled or executed** in this environment; use the already executed Python verifier for current confidence.
+
+## Source-row identity integrity (additional 2026-11-10 hardening)
+
+The independent Python auditor now rejects **zero and reused PostgreSQL source row IDs**. A source ID is unique within its original table/event family across **all compressed blocks and all celestial bodies**; numerical IDs may coincide between different families because the source tables have separate identity sequences.
+
+The experimental Rust P0 decoder applies the same rule in two places:
+- `decode_records` rejects ID zero or repeated IDs *within a block*, so targeted lookups fail closed on malformed indexed data.
+- `P0Archive::verify_all()` additionally checks uniqueness *across all blocks and bodies within each family*. A targeted lookup cannot by itself verify a different, unqueried block.
+
+To prove the semantic check rather than merely checksum rejection, the regression tests generate synthetic archives with **valid compressed data and updated SHA-256 digests**, but intentionally duplicate an original ID. They cover zero IDs, duplicates inside one block, duplicates across separate blocks and across bodies, and legal reuse between independent families.
+
+```bash
+python -m unittest discover -s tools -p test_audit_p0_bytes.py -v
+python tools/audit_p0_bytes.py <archive.vseph-p0> --sha256 <trusted-manifest-digest>
+```
+
+**Actually executed:** **13/13 Python tests PASS**, including the real 2026-11-10 binary with **380,844 events**, **761 blocks**, no duplicate/zero IDs, and matching full-file SHA-256 `c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e`. The executed Python scripts and golden fixture match their committed GitHub blob SHA-1 values exactly.
+
+**Not yet executed:** the four new Rust golden tests for these identity rules (zero ID, duplicate in block, duplicate in separate blocks, duplicate across bodies) and the existing Rust workspace tests — no `rustc`/`cargo` on the authoring environment, and the Rust distribution host could not be resolved. These tests must be compiled and run before merge.
+
+This validates **dataset identity and serialization**, not the completeness or scientific correctness of historical astronomical events.
