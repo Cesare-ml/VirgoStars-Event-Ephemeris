@@ -28,7 +28,7 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use virgostars_events_core::{
     BodyId, Event, EventFamily, IngressEvent, MotionDirection, MotionEvent, SynodEvent,
-    SynodPhase, TimestampMicros, ZodiacSign,
+    SynodPhase, TimestampMicros, ZodiacSign, MAX_CHRONOLOGICAL_PAGE_SIZE,
 };
 
 const MAGIC: &[u8; 8] = b"VSEPH-P0";
@@ -127,6 +127,46 @@ pub struct P0AuditSummary {
     pub blocks: usize,
     pub records: u64,
     pub by_family: BTreeMap<EventFamily, u64>,
+}
+
+/// Cursor for an immutable experimental P0 archive page.
+///
+/// The original source row ID makes the selected event unambiguous. This is
+/// not a persistent cursor: preserve the source file and query interval.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct P0ChronologicalCursor {
+    at: TimestampMicros,
+    family: EventFamily,
+    body: BodyId,
+    source_id: u64,
+}
+
+impl P0ChronologicalCursor {
+    pub const fn at(&self) -> TimestampMicros {
+        self.at
+    }
+
+    pub const fn family(&self) -> EventFamily {
+        self.family
+    }
+
+    pub fn body(&self) -> &BodyId {
+        &self.body
+    }
+
+    pub const fn source_id(&self) -> u64 {
+        self.source_id
+    }
+}
+
+/// A bounded chronological page of decoded *recorded* P0 events.
+///
+/// Ownership differs from the in-memory `ChronologicalPage<'_>`: file-backed
+/// records are decoded on demand and must be owned by the returned page.
+#[derive(Clone, Debug)]
+pub struct P0ChronologicalPage {
+    pub events: Vec<P0Record>,
+    pub next_cursor: Option<P0ChronologicalCursor>,
 }
 
 /// A file-backed, immutable, indexed experimental archive.
@@ -423,6 +463,122 @@ impl P0Archive {
                 .into_iter().filter(|record| start <= record.at() && record.at() < end));
         }
         Ok(result)
+    }
+
+    /// One bounded chronological page of recorded P0 events in [start,end).
+    ///
+    /// Stable tie ordering is timestamp, EventFamily, BodyId, matching the
+    /// in-memory Rust EventIndex. Only the current compressed block for each
+    /// active family/body series is decoded; the complete archive is never
+    /// materialized. The cursor is specific to this immutable P0 snapshot.
+    pub fn chronological_between(
+        &self,
+        start: TimestampMicros,
+        end: TimestampMicros,
+        limit: usize,
+        after: Option<&P0ChronologicalCursor>,
+    ) -> Result<P0ChronologicalPage, P0Error> {
+        if end < start {
+            return Err(invalid("chronological query interval reversed"));
+        }
+        if limit == 0 || limit > MAX_CHRONOLOGICAL_PAGE_SIZE {
+            return Err(invalid("chronological page size out of range"));
+        }
+        if let Some(cursor) = after {
+            if cursor.at < start || cursor.at >= end {
+                return Err(invalid("chronological cursor outside interval"));
+            }
+            let record = self.at(cursor.family, &cursor.body, cursor.at)?;
+            if !record.is_some_and(|record| {
+                record.at() == cursor.at && record.source_id == cursor.source_id
+            }) {
+                return Err(invalid("chronological cursor missing from archive"));
+            }
+        }
+        if start == end {
+            return Ok(P0ChronologicalPage {
+                events: Vec::new(),
+                next_cursor: None,
+            });
+        }
+
+        // A single decoded block per active series and an ordered next-event
+        // head. A block contains at most MAX_RECORDS events (512 in P0).
+        let mut heads: BTreeMap<
+            (TimestampMicros, EventFamily, BodyId),
+            (Vec<P0Record>, usize, usize),
+        > = BTreeMap::new();
+        for ((family, body), series) in &self.blocks {
+            let threshold = after.map_or(start, |cursor| start.max(cursor.at));
+            let mut block_index = series.partition_point(|block| block.last < threshold);
+            while let Some(block) = series.get(block_index) {
+                if block.first >= end {
+                    break;
+                }
+                let records = self.load_block(*family, body, block)?;
+                let position = records.partition_point(|record| {
+                    record.at() < start || after.is_some_and(|cursor| {
+                        (record.at(), *family, body)
+                            <= (cursor.at, cursor.family, &cursor.body)
+                    })
+                });
+                let next_at = records.get(position).map(P0Record::at);
+                if let Some(next_at) = next_at {
+                    if next_at < end {
+                        heads.insert(
+                            (next_at, *family, body.clone()),
+                            (records, position, block_index),
+                        );
+                    }
+                    break;
+                }
+                block_index += 1;
+            }
+        }
+
+        let mut events = Vec::with_capacity(limit.min(self.record_count as usize));
+        while events.len() < limit {
+            let Some(((_, family, body), (records, position, block_index))) = heads.pop_first() else {
+                break;
+            };
+            events.push(records[position].clone());
+            let next_position = position + 1;
+            if let Some(next_at) = records.get(next_position).map(P0Record::at) {
+                if next_at < end {
+                    heads.insert(
+                        (next_at, family, body),
+                        (records, next_position, block_index),
+                    );
+                }
+            } else {
+                let series = self.blocks.get(&(family, body.clone()))
+                    .ok_or_else(|| invalid("chronological series disappeared"))?;
+                if let Some(next_block) = series.get(block_index + 1) {
+                    if next_block.first < end {
+                        let next_records = self.load_block(family, &body, next_block)?;
+                        let next_at = next_records.first()
+                            .ok_or_else(|| invalid("empty indexed P0 block"))?
+                            .at();
+                        heads.insert(
+                            (next_at, family, body),
+                            (next_records, 0, block_index + 1),
+                        );
+                    }
+                }
+            }
+        }
+
+        let next_cursor = if heads.is_empty() {
+            None
+        } else {
+            events.last().map(|last| P0ChronologicalCursor {
+                at: last.at(),
+                family: last.event.family(),
+                body: last.event.body().clone(),
+                source_id: last.source_id,
+            })
+        };
+        Ok(P0ChronologicalPage { events, next_cursor })
     }
 
     pub fn synod_at(&self, body: &BodyId, t: TimestampMicros) -> Result<Option<P0SynodHandle<'_>>, P0Error> {
