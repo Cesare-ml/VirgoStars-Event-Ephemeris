@@ -23,7 +23,10 @@ use std::fmt;
 
 pub mod indexed;
 pub mod coverage;
-pub use indexed::{EventFamily, EventIndex, IndexError, QueryError, SynodHandle};
+pub use indexed::{
+    ChronologicalCursor, ChronologicalPage, ChronologicalQueryError, EventFamily, EventIndex,
+    IndexError, QueryError, SynodHandle, MAX_CHRONOLOGICAL_PAGE_SIZE,
+};
 pub use coverage::{CoverageAssessment, CoverageError, CoveragePolicy, ReviewedWindow};
 
 pub use virgostars_events_format::{probe_magic, FormatProbeError, VSEPH_MAGIC};
