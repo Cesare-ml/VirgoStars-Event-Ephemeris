@@ -163,13 +163,14 @@ impl P0Archive {
         let mut blocks: BTreeMap<(EventFamily, BodyId), Vec<Block>> = BTreeMap::new();
         let mut expected_offset: u64 = 0;
         let mut totals: BTreeMap<EventFamily, u64> = BTreeMap::new();
-        let mut prior_key: Option<(EventFamily, BodyId)> = None;
+        let mut prior_key: Option<(String, String)> = None;
         for entry in entries {
             let family = family_from_name(string(entry, "family")?)?;
             let body = BodyId::try_from(string(entry, "body")?)
                 .map_err(|_| invalid("invalid body ID"))?;
+            let order_key = (string(entry, "family")?.to_owned(), string(entry, "body")?.to_owned());
             let key = (family, body);
-            if prior_key.as_ref().is_some_and(|prev| &key < prev) {
+            if prior_key.as_ref().is_some_and(|prev| &order_key < prev) {
                 return Err(invalid("table_of_contents key order is not canonical"));
             }
             let first = timestamp(entry, "min_us")?;
@@ -207,7 +208,7 @@ impl P0Archive {
             let total = totals.entry(family).or_default();
             *total = total.checked_add(count as u64)
                 .ok_or_else(|| invalid("section count overflow"))?;
-            prior_key = Some(key);
+            prior_key = Some(order_key);
         }
         if payload_start.checked_add(expected_offset) != Some(file_len) {
             return Err(invalid("header index does not cover the entire file"));
