@@ -1,0 +1,56 @@
+{
+  "schema": "vseph-synthetic-fixtures/v0",
+  "synthetic": true,
+  "id": "lunar-cycles",
+  "expected": {
+    "valid": true
+  },
+  "records": [
+    {
+      "family": "synod",
+      "body": "Moon",
+      "at": "2030-03-25T00:00:00.123456Z",
+      "atUs": "1900627200123456",
+      "phases": [
+        {
+          "name": "firstQuarter",
+          "at": "2030-04-01T00:00:00Z",
+          "atUs": "1901232000000000"
+        },
+        {
+          "name": "fullMoon",
+          "at": "2030-04-08T00:00:00Z",
+          "atUs": "1901836800000000"
+        },
+        {
+          "name": "lastQuarter",
+          "at": "2030-04-15T00:00:00Z",
+          "atUs": "1902441600000000"
+        }
+      ]
+    },
+    {
+      "family": "synod",
+      "body": "Moon",
+      "at": "2030-04-23T00:00:00Z",
+      "atUs": "1903132800000000",
+      "phases": [
+        {
+          "name": "firstQuarter",
+          "at": "2030-04-30T00:00:00Z",
+          "atUs": "1903737600000000"
+        },
+        {
+          "name": "fullMoon",
+          "at": "2030-05-07T00:00:00Z",
+          "atUs": "1904342400000000"
+        },
+        {
+          "name": "lastQuarter",
+          "at": "2030-05-14T00:00:00Z",
+          "atUs": "1904947200000000"
+        }
+      ]
+    }
+  ]
+}
