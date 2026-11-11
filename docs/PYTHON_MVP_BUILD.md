@@ -42,6 +42,20 @@ For editable source development:
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
+## 3a. Mandatory synthetic native end-to-end gate (no owner dataset needed)
+
+Once `pip install .` succeeds, run:
+
+```powershell
+.\.venv\Scripts\python.exe tools\validate_python_mvp.py
+```
+
+This gate runs the **8 pure-Python tests** and **5 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
+
+**Unlike standard `unittest`, the validator exits with failure if a native test is skipped**, if the compiled `virgostars_events._native` module cannot be imported, or if fewer than the expected cases are discovered. An `OK (skipped=5)` from a basic unittest run is **not** a successful native gate.
+
+The synthetic fixture is deliberately independent of the separate 380,844-event owner dataset and never requires a secret or network connection.
+
 ## 4. Verify against an independently trusted local snapshot
 
 The user-authorized historical data are held separately in draft PR #6, not packaged inside the wheel. After assembling the dataset on a **read-only/disposable checkout** and verifying its SHA-256, set:
@@ -49,7 +63,7 @@ The user-authorized historical data are held separately in draft PR #6, not pack
 ```powershell
 $env:VSEPH_P0_PATH = "D:\\GitHub\\VirgoStars-Event-Ephemeris\\datasets\\2026-11-10\\_assembled\\virgostars-events-20261110.vseph-p0"
 $env:VSEPH_P0_SHA256 = "c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e"
-.\.venv\Scripts\python.exe -m unittest discover -s python\tests -p "test_native_smoke.py" -v
+.\.venv\Scripts\python.exe tools\validate_python_mvp.py --archive $env:VSEPH_P0_PATH --sha256 $env:VSEPH_P0_SHA256
 .\.venv\Scripts\python.exe examples\python_synods.py $env:VSEPH_P0_PATH "2026-11-11T12:00:00Z" --sha256 $env:VSEPH_P0_SHA256
 ```
 
@@ -72,6 +86,7 @@ Wheel installation with `--no-index` proves it can install without downloading/b
 | Check | Status as documented here |
 | --- | --- |
 | Pure Python UTC microseconds + dictionary projection, 8 tests | **PASS 8/8** on locally reconstructed files verified byte-for-byte against GitHub blob SHA-1 |
+| Synthetic native P0 fixture + PyO3 binding, 5 tests | **WRITTEN, NOT RUN** — `tools/validate_python_mvp.py` fails on a skip |
 | Rust synod phase classifier, 5 new tests | **NOT RUN** |
 | Rust latest-synods P0 batch query, 4 new tests | **NOT RUN** |
 | Rust/PyO3 extension build, Clippy, workspace tests | **NOT RUN** on new commits |
