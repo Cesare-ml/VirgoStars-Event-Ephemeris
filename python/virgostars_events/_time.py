@@ -10,14 +10,25 @@ from datetime import datetime, timedelta, timezone
 import re
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
-_OFFSET_RE = re.compile(r"(?:Z|[+-][0-9]{2}:[0-9]{2})$")
+# fromisoformat() is intentionally more permissive: on some Python versions
+# sub-microsecond digits are truncated without an error. The P0 source stores
+# integer microseconds, so never silently change the instant at the boundary.
+_ISO_INSTANT_RE = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+    r"[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\\.[0-9]{1,6})?"
+    r"(?:Z|[+-][0-9]{2}:[0-9]{2})"
+)
 
 
 def to_utc_microseconds(instant: datetime | str) -> int:
     """Reject naive instants; avoid floating-point timestamp rounding."""
     if isinstance(instant, str):
-        if "T" not in instant or not _OFFSET_RE.search(instant):
-            raise ValueError("instant must be ISO-8601 with explicit Z or offset")
+        if _ISO_INSTANT_RE.fullmatch(instant) is None:
+            raise ValueError(
+                "instant must be YYYY-MM-DDTHH:MM:SS with up to 6 fractional "
+                "digits and an explicit Z or ±HH:MM UTC offset"
+            )
         try:
             instant = datetime.fromisoformat(instant.replace("Z", "+00:00"))
         except ValueError as exc:
