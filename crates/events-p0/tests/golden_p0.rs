@@ -31,7 +31,6 @@ struct TempFile(PathBuf);
 
 impl TempFile {
     fn new(bytes: &[u8]) -> Self {
-<<<<<<< Updated upstream
         // On Windows, multiple parallel tests can observe the same clock tick.
         // Include an atomic sequence and create exclusively so a fixture cannot
         // overwrite a live test's file and then delete it on Drop.
@@ -39,15 +38,6 @@ impl TempFile {
         let sequence = NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "virgostars-p0-fixture-{}-{nanos}-{sequence}.bin", std::process::id()
-=======
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "virgostars-p0-fixture-{}-{nanos}.bin",
-            std::process::id()
->>>>>>> Stashed changes
         ));
         let mut file = OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
         file.write_all(bytes).unwrap();
