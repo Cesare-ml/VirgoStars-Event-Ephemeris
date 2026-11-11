@@ -28,6 +28,10 @@ from verify_csv_p0 import HEADERS, normalized_row
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 PLANETARY_STAGES = ("D1", "R2", "R3", "D4")
 MOON_STAGES = ("CRESC1", "CRESC2", "CAL1", "CAL2")
+# Conservative source-data discontinuity flag, not a predictive astronomy rule.
+# Across the current 37,054 recorded lunar anchors, only two gaps exceed this
+# bound (383 and 413 days); all other consecutive spans are below 30 days.
+MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_US = 45 * 86_400 * 1_000_000
 PLANET_BODIES = frozenset(
     ("Sun", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto")
 )
@@ -94,6 +98,17 @@ def expected_row(series: list[SourceSynod], instant: int) -> tuple[SourceSynod |
     return selected, following
 
 
+def has_moon_source_gap(
+    body: str, event: SourceSynod | None, next_event: SourceSynod | None,
+) -> bool:
+    return (
+        body == "Moon"
+        and event is not None
+        and next_event is not None
+        and next_event.at - event.at > MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_US
+    )
+
+
 def expected_phase(
     body: str, event: SourceSynod | None, next_event: SourceSynod | None, instant: int,
 ) -> tuple[str | None, str | None, str]:
@@ -117,6 +132,8 @@ def expected_phase(
     else:
         if next_event is None:
             return None, None, "unknown_open_ended_cycle"
+        if has_moon_source_gap(body, event, next_event):
+            return None, None, "unknown_discontinuous_moon_anchors"
         index, since = 3, c
     stages = MOON_STAGES if body == "Moon" else PLANETARY_STAGES
     return stages[index], iso_utc(since), "derived_from_recorded_thresholds"
@@ -216,6 +233,16 @@ def assert_parity(
                     )
             if row["coverage"]["status"] != "unreviewed":
                 raise ValueError("unreviewed coverage was not surfaced")
+            warnings = row["coverage"].get("warnings")
+            if not isinstance(warnings, list) or "no_reviewed_coverage_policy" not in warnings:
+                raise ValueError(f"missing unreviewed coverage warning for {body}")
+            suspect = has_moon_source_gap(body, previous, upcoming)
+            flagged = "moon_recorded_cycle_gap_over_45_days" in warnings
+            if flagged != suspect:
+                raise ValueError(
+                    f"incorrect Moon source-discontinuity warning for {body} "
+                    f"at {iso_utc(instant)}"
+                )
             comparison_count += 1
         expected_moon = actual.get("Moon")
         if expected_moon is None or expected_moon["cycle_start_utc"] is None:
