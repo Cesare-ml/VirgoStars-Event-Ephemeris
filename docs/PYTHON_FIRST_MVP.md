@@ -1,6 +1,6 @@
 # Python-first MVP — latest synods, previous new moon and cycle phases
 
-**Priority: FIRST USER-EXECUTABLE MILESTONE.** This is the implementation contract and acceptance plan, **not a claim that a Python package exists today**. Work on draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5); data snapshot is separately staged on draft [PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6). No changes to production/backend or historical records.
+**Priority: FIRST USER-EXECUTABLE MILESTONE.** Rust synod stage + batch query and Python PyO3/maturin package **source now exist** on draft PR #5, but **the native wheel has not yet been built or installed**. This remains an implementation/acceptance contract, not a claim that the Python package is currently usable. Work on draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5); data snapshot is separately staged on draft [PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6). No changes to production/backend or historical records.
 
 ## User story
 
@@ -132,6 +132,14 @@ The sample uses placeholders and fabricated IDs; **it is not a real ephemeris re
 - [ ] **PY-MVP.3: local pip installation and offline example**, `pyproject.toml` build system, importable `virgostars_events` module, `pip install .` and `pip install -e .`, reproducible wheel build and installation into a fresh virtual environment. Explicit file path; no automatic network or dataset download.
 - [ ] **PY-MVP.4: test and accept the user story**, compare same instant/body/phase against PostgreSQL's `getSinodiPerDataoraUtc` and `getMotiSinodiciPianetiPerDataoraUtc` on agreed reviewed samples. Run edge cases: X at/before/after anchor and each of three phase boundaries; Moon new moon; body with NULL vs []; no preceding/new cycle; gaps 1919/2018; pre-1970; offset-aware datetime; invalid dates; whole-file digest mismatch; JSON serializability. Maintain deliberate improvements separately from legacy bugs.
 - [ ] **PY-MVP.5: deliver a reproducible user-ready artifact**, wheel for target CPython/Windows, a 10-line script example, README quick start, example expected fixture output (synthetic clearly labeled), version and visible credits, validated install and smoke test by maintainer. **This acceptance milestone is the first usable Python MVP**. Keep PR draft until review and approval; public PyPI release is a separate decision.
+
+## Implementation checkpoint — 2026-11-11
+
+- **Written:** `crates/events-core/src/synod_stage.rs` (`assess_synod_stage` and 5 Rust unit tests); `P0Archive::synods_at(X)` returning a record and phase assessment per synod-indexed body (4 Rust integration tests); `crates/python-bindings` PyO3 native extension; root `pyproject.toml`; `python/virgostars_events` Python API with microsecond-precise aware date-time conversion and JSON-ready projection; `examples/python_synods.py`; native smoke suite `python/tests/test_native_smoke.py`.
+- **Actually run:** 8/8 pure-Python tests PASS using the exact GitHub-committed files (verified `git hash-object`). They test the conversion and wrapper against an explicitly mocked native reader; they do **not** validate the Rust extension.
+- **Not yet run:** compilation of the new Rust crate, rustfmt/Clippy/test/build of the current branch, maturin/pip install or wheel, real snapshot smoke test or backend SQL parity. **All M0 boxes remain incomplete until their actual acceptance criteria pass.**
+- **Build/test instructions:** [PYTHON_MVP_BUILD.md](PYTHON_MVP_BUILD.md).
+- No source scientific events modified, no PyPI release, no merge or GitHub Actions.
 
 ## Definition of first MVP DONE
 
