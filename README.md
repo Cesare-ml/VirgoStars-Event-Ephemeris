@@ -29,6 +29,8 @@ python -m virgostars_events "local-events.vseph-p0" "2026-11-11T12:00:00Z" --sha
 
 Both commands return JSON from the same Rust-backed API, require a user-provided local archive and trusted checksum, and never download or bundle the dataset. Input timestamps must contain an explicit UTC offset with **at most six fractional-second digits**; submicrosecond timestamps are rejected rather than silently truncated.
 
+Input validation now fails early on a malformed SHA-256, an impossible local DST datetime or a malformed CLI instant, without opening the archive on invalid input. The expanded **34-test** acceptance suite still requires a compiled PyO3 wheel; its native checks have **NOT RUN** on this branch.
+
 See [Python-first MVP specification and acceptance tests](docs/PYTHON_FIRST_MVP.md), [delivery milestones M0–M5](docs/DELIVERY_MILESTONES.md), [roadmap](docs/ROADMAP.md) and [backend compatibility](docs/BACKEND_COMPATIBILITY.md). Public PyPI publication and redistribution of the separately licensed dataset are **not approved yet**.
 
 ## Scope
