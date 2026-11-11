@@ -1,0 +1,27 @@
+[build-system]
+requires = ["maturin>=1.8,<2"]
+build-backend = "maturin"
+
+[project]
+name = "virgostars-event-ephemeris"
+version = "0.1.0"
+description = "Offline precomputed synod and event-ephemeris reader (experimental)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+keywords = ["astronomy", "astrology", "ephemeris", "synod", "moon"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Rust",
+  "Operating System :: OS Independent",
+]
+
+[tool.maturin]
+manifest-path = "crates/python-bindings/Cargo.toml"
+python-source = "python"
+module-name = "virgostars_events._native"
+bindings = "pyo3"
