@@ -169,11 +169,28 @@ def select_probes(source: dict[str, list[SourceSynod]], baseline: str) -> list[i
     moon = source.get("Moon")
     if moon:
         probes.add(moon[0].at - 1)
+        # Inspect source gaps directly, not just fixed civil dates. Query
+        # mid-gap and the instant before the next recorded new moon: this
+        # catches an incorrectly extended CAL2 phase for a whole missing year.
+        suspicious = 0
+        for preceding, following in zip(moon, moon[1:]):
+            if has_moon_source_gap("Moon", preceding, following):
+                probes.update((
+                    (preceding.at + following.at) // 2,
+                    following.at - 1,
+                ))
+                suspicious += 1
+                if suspicious >= 8:
+                    break
 
-    # Known candidates for missing lunar synods. These demonstrate recorded
-    # evidence only; a successful parity test cannot certify completeness.
-    probes.add(instant_us("1919-01-01T00:00:00Z"))
-    probes.add(instant_us("2018-01-01T00:00:00Z"))
+    # Explicit historical regression dates from the authorized 2026 snapshot.
+    # Jan 2018 still has stored early-Moon thresholds, while June 2018 must
+    # NOT be mislabelled as CAL2 after the final recorded 2017 Moon phase.
+    for instant in (
+        "1919-01-01T00:00:00Z", "1919-06-01T00:00:00Z",
+        "2018-01-01T00:00:00Z", "2018-06-01T00:00:00Z",
+    ):
+        probes.add(instant_us(instant))
     return sorted(probes)
 
 
