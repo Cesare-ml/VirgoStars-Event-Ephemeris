@@ -185,6 +185,11 @@ class SourceCsvTests(unittest.TestCase):
         after_gap = SourceSynod(100 + 413 * day_us, 44935, (140, 150, 160))
         moon = [last, after_gap]
         source = {"Moon": moon}
+        probes = select_probes(source, "1970-01-01T00:00:00.000131Z")
+        self.assertIn((last.at + after_gap.at) // 2, probes)
+        self.assertIn(after_gap.at - 1, probes)
+        self.assertIn(instant_us("1919-06-01T00:00:00Z"), probes)
+        self.assertIn(instant_us("2018-06-01T00:00:00Z"), probes)
         self.assertTrue(has_moon_source_gap("Moon", last, after_gap))
         self.assertFalse(has_moon_source_gap("Mars", last, after_gap))
         self.assertEqual(expected_phase("Moon", last, after_gap, 120)[0], "CAL1")
