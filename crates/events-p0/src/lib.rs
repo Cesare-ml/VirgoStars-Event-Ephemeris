@@ -28,8 +28,9 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use virgostars_events_core::{
-    BodyId, Event, EventFamily, IngressEvent, MotionDirection, MotionEvent, SynodEvent,
-    SynodPhase, TimestampMicros, ZodiacSign, MAX_CHRONOLOGICAL_PAGE_SIZE,
+    assess_synod_stage, BodyId, Event, EventFamily, IngressEvent, MotionDirection, MotionEvent,
+    SynodEvent, SynodPhase, SynodStageAssessment, TimestampMicros, ZodiacSign,
+    MAX_CHRONOLOGICAL_PAGE_SIZE,
 };
 
 const MAGIC: &[u8; 8] = b"VSEPH-P0";
@@ -186,6 +187,19 @@ impl P0ChronologicalCursor {
 pub struct P0ChronologicalPage {
     pub events: Vec<P0Record>,
     pub next_cursor: Option<P0ChronologicalCursor>,
+}
+
+/// Latest *recorded* synod for one body at a requested instant.
+///
+/// An indexed body with no earlier event is retained with `record: None`.
+/// `next_recorded_start` is the next stored anchor, NOT coverage proof.
+/// `phase` is a source-threshold assessment; it may be unknown or a stage
+/// derived from stored extras. Neither represents independent astronomy.
+#[derive(Clone, Debug)]
+pub struct P0SynodSnapshot {
+    pub record: Option<P0Record>,
+    pub next_recorded_start: Option<TimestampMicros>,
+    pub phase: Option<SynodStageAssessment>,
 }
 
 /// A file-backed, immutable, indexed experimental archive.
@@ -690,6 +704,47 @@ impl P0Archive {
             })
         };
         Ok(P0ChronologicalPage { events, next_cursor })
+    }
+
+    /// One latest recorded synod anchor for every body actually present in
+    /// the archive's synod TOC, at or before the supplied POSIX UTC instant.
+    ///
+    /// Uses indexed `at`/`next` lookups per body; it never loads the full
+    /// source archive. Includes bodies with no preceding anchor as None.
+    /// A phase derived from source extras is NOT scientifically certified
+    /// without separately reviewed family/body coverage.
+    pub fn synods_at(
+        &self,
+        requested_at: TimestampMicros,
+    ) -> Result<BTreeMap<BodyId, P0SynodSnapshot>, P0Error> {
+        let mut snapshots = BTreeMap::new();
+        for (family, body) in self.blocks.keys() {
+            if *family != EventFamily::Synod {
+                continue;
+            }
+            let record = self.at(EventFamily::Synod, body, requested_at)?;
+            let (next_recorded_start, phase) = if let Some(current) = &record {
+                let next = self
+                    .next(EventFamily::Synod, body, current.at())?
+                    .map(|event| event.at());
+                let assessment = match &current.event {
+                    Event::Synod(event) => assess_synod_stage(event, next, requested_at),
+                    _ => return Err(invalid("indexed synod family decoded non-synod event")),
+                };
+                (next, Some(assessment))
+            } else {
+                (None, None)
+            };
+            snapshots.insert(
+                body.clone(),
+                P0SynodSnapshot {
+                    record,
+                    next_recorded_start,
+                    phase,
+                },
+            );
+        }
+        Ok(snapshots)
     }
 
     pub fn synod_at(
