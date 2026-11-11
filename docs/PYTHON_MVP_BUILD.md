@@ -126,6 +126,31 @@ py -3 -m venv .venv-wheel-test
 
 Wheel installation with `--no-index` proves it can install without downloading/building Rust dependencies (provided the target Python ABI and platform match). Real P0 smoke should also run in this second virtual environment.
 
+## 6. One-command verification of a prebuilt wheel in an isolated offline environment
+
+After `maturin build --release --out dist` succeeds, select the wheel that matches the host Python ABI/platform, then run the new **local installation gate** (no GitHub Actions, network, PyPI publishing or dataset downloads):
+
+```powershell
+$wheel = (Get-ChildItem .\dist\*.whl | Select-Object -Last 1).FullName
+py -3 tools\verify_python_wheel.py --wheel $wheel
+```
+
+This creates and deletes a temporary virtual environment, performs `pip install --no-index --no-deps` on the **actual wheel**, runs isolated package/native import and CLI checks, and invokes `tools/validate_python_mvp.py` with its mandatory 34 non-skipped checks (12 Python API, 6 CLI, 10 CSV-oracle, 6 native fixture). Invalid inputs and subprocess failures return nonzero. This requires a **prebuilt wheel**; it does not compile Rust or certify scientific completeness.
+
+When the owner-authorized separate archive and normalized source CSV have been assembled and verified, the stricter read-only comparison is:
+
+```powershell
+py -3 tools\verify_python_wheel.py --wheel $wheel --archive $env:VSEPH_P0_PATH --sha256 $env:VSEPH_P0_SHA256 --synods-csv "D:\path\to\sinodi.csv"
+```
+
+Unit tests for the *orchestrator* (subprocess calls are mocked, not a substitute for a real wheel):
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_verify_python_wheel.py" -v
+```
+
+**As of this change:** 5/5 wheel-gate orchestration tests were executed successfully under Python 3.13, with repository blobs SHA-verified against the locally tested files. **No Rust wheel was built or installed here** because Cargo/maturin are unavailable; the complete native gate remains pending on a developer machine. Other Python/platform versions need their own matching wheels.
+
 ## Validation matrix and scope
 
 | Check | Status as documented here |
