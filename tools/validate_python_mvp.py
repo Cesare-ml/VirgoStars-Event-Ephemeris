@@ -19,11 +19,12 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / "python" / "tests"
+TOOLS_TESTS = ROOT / "tools"
 
 
-def run_tests(pattern: str, minimum_tests: int) -> bool:
+def run_tests(pattern: str, minimum_tests: int, test_dir: Path = TESTS) -> bool:
     suite = unittest.defaultTestLoader.discover(
-        start_dir=str(TESTS),
+        start_dir=str(test_dir),
         pattern=pattern,
     )
     count = suite.countTestCases()
@@ -71,6 +72,11 @@ def main() -> int:
         return 1
 
     if not run_tests("test_python_api.py", 8):
+        return 1
+    # This suite independently checks original source-CSV normalization,
+    # exact phase boundaries, duplicate IDs and rejection of altered API
+    # results. It needs neither owner data nor a network connection.
+    if not run_tests("test_verify_python_synods.py", 9, TOOLS_TESTS):
         return 1
     if not run_tests("test_native_fixture.py", 5):
         return 1
