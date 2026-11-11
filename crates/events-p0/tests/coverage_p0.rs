@@ -26,7 +26,6 @@ struct TestFile(PathBuf);
 
 impl TestFile {
     fn new(name: &str, bytes: &[u8]) -> Self {
-<<<<<<< Updated upstream
         // Windows clock resolution is not unique for concurrently running tests.
         // Combine process ID, clock tick and atomic counter, then create
         // exclusively so one test cannot overwrite/delete another's fixture.
@@ -34,15 +33,6 @@ impl TestFile {
         let sequence = NEXT_TEST_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "vseph-coverage-{}-{nanos}-{sequence}-{name}", std::process::id()
-=======
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "vseph-coverage-{}-{nanos}-{name}",
-            std::process::id()
->>>>>>> Stashed changes
         ));
         let mut file = OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
         file.write_all(bytes).unwrap();
