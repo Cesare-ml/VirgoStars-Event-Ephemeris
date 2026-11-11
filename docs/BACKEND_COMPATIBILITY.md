@@ -12,6 +12,18 @@
 - [Calendar generator](https://github.com/Cesare-ml/virgo-stars/blob/master/backend/routines/calcolo-calendario-eventi-astrologici.js)
 - [Synodic motion repository](https://github.com/Cesare-ml/virgo-stars/blob/master/backend/infrastructure/astrology-knowledge/legacySynodicMotionRepository.js)
 
+## First user deliverable: Python latest synods + latest new moon
+
+**M0 is the immediate priority, ahead of the full backend migration.** See [PYTHON_FIRST_MVP.md](PYTHON_FIRST_MVP.md) and [DELIVERY_MILESTONES.md](DELIVERY_MILESTONES.md). The first locally pip-installable Python package must accept a single UTC/offset-aware datetime and return:
+- The most recent **recorded** `sinodi` row per indexed `elemento` with `dataora <= request`, including original `id` and `dataora_extra` semantics (aligned with `TabellaSinodo.getSinodiPerDataoraUtc`).
+- The immediately preceding (inclusive on equality) **recorded Moon new moon** as a convenience alias for the Moon cycle, not an arbitrary synod from any planet.
+- Current D1/R2/R3/D4 or CRESC1/CRESC2/CAL1/CAL2 **cycle-stage code** derived from the three original ordered phase thresholds (aligned with `getMotiSinodiciPianetiPerDataoraUtc` and the legacy synodic-motion repository), or explicit unknown if source extras are insufficient / coverage is unreviewed.
+- Stable JSON-compatible dictionary output, exact UTC instants, data snapshot/hash and source/coverage warnings; no PostgreSQL runtime dependency.
+
+In M0 only, comparisons target the **synod** backend methods; motion station state, ingress sign, local civil-day queries, Moon monthly collections and calendar aggregation follow in M1. The latest synod stage is **not** the same as the latest direct/retrograde station. Preserve known source bugs as documented differences rather than reproducing them.
+
+**Status:** documented target only. The Rust P0 parser/index exists on draft PR #5, but `get_synods_at`, its Python PyO3 binding and pip wheel do **not** exist yet. Do not mark backend compatibility complete from these design documents.
+
 ## Required query parity
 
 | Legacy usage | Existing behavior | Reader target / parity test |
