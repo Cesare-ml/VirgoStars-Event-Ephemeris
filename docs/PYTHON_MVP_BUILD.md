@@ -50,11 +50,22 @@ Once `pip install .` succeeds, run:
 .\.venv\Scripts\python.exe tools\validate_python_mvp.py
 ```
 
-This gate runs the **8 pure-Python tests** and **5 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
+This gate now requires **10 pure-Python API/time tests, 5 CLI tests, 9 independent CSV-oracle tests and 5 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
 
 **Unlike standard `unittest`, the validator exits with failure if a native test is skipped**, if the compiled `virgostars_events._native` module cannot be imported, or if fewer than the expected cases are discovered. An `OK (skipped=5)` from a basic unittest run is **not** a successful native gate.
 
 The synthetic fixture is deliberately independent of the separate 380,844-event owner dataset and never requires a secret or network connection.
+
+## 3b. Offline installed command-line usage
+
+After `pip install .`, the same Rust-backed query can be issued without writing a Python script:
+
+```powershell
+.\\.venv\\Scripts\\python.exe -m virgostars_events "D:\\path\\to\\authorized\\events.vseph-p0" "2026-11-11T12:00:00Z" --sha256 "<trusted whole-file SHA-256>"
+.\\.venv\\Scripts\\virgostars-events.exe --version
+```
+
+A standard `[project.scripts]` console entry point (`virgostars-events`) is included in the package metadata. The CLI prints JSON to stdout, reports errors to stderr and requires an independently trusted digest and explicit local file path. Use `--compact` for one-line JSON. ISO strings use **up to six** fractional-second digits and an explicit `Z` or numeric `±HH:MM` offset; more precision is rejected, never silently rounded or truncated. **The console command still requires wheel-build validation on Windows.**
 
 ## 4. Verify against an independently trusted local snapshot
 
@@ -95,7 +106,7 @@ The new test-only oracle's unit tests are in `tools/test_verify_python_synods.py
 py -3 -m unittest discover -s tools -p "test_verify_python_synods.py" -v
 ```
 
-**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **9 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 9 tests as a third suite, in addition to 8 pure-Python API tests and 5 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
+**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **9 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 9 tests as a third suite, in addition to 10 pure-Python API/time tests, 5 CLI tests and 5 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
 
 ## 5. Produce a local wheel and reinstall it without build dependencies
 
@@ -113,7 +124,7 @@ Wheel installation with `--no-index` proves it can install without downloading/b
 
 | Check | Status as documented here |
 | --- | --- |
-| Pure Python UTC microseconds + dictionary projection, 8 tests | **PASS 8/8** on locally reconstructed files verified byte-for-byte against GitHub blob SHA-1 |
+| Python UTC microseconds + dictionary projection, now 10 tests | **8/8 passed on an earlier revision**; two new precision/strict-ISO tests **NOT RUN** on the current branch |\n| Python CLI JSON/exit behavior, 5 tests | **WRITTEN, NOT RUN** — requires no native extension for these mocked tests |
 | Synthetic native P0 fixture + PyO3 binding, 5 tests | **WRITTEN, NOT RUN** — `tools/validate_python_mvp.py` fails on a skip |
 | Rust synod phase classifier, 5 new tests | **NOT RUN** |
 | Rust latest-synods P0 batch query, 4 new tests | **NOT RUN** |
