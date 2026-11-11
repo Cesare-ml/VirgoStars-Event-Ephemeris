@@ -11,7 +11,9 @@
 use pyo3::exceptions::{PyOSError, PyValueError};
 use pyo3::prelude::*;
 use serde_json::{json, Map, Value};
-use virgostars_events_core::{Event, TimestampMicros};
+use virgostars_events_core::{
+    Event, TimestampMicros, MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_MICROS,
+};
 use virgostars_events_p0::{P0Archive, P0Error};
 
 fn as_py_error(err: P0Error) -> PyErr {
@@ -48,6 +50,20 @@ impl NativeReader {
         let mut entries = Map::new();
 
         for (body, snapshot) in snapshots {
+            // The P0 archive is immutable for pagination but may contain
+            // scientifically missing lunar cycles. Retain its last recorded
+            // new moon without claiming CAL2 across a year-long gap.
+            let has_moon_gap = body.as_str() == "Moon"
+                && snapshot.record.as_ref().is_some_and(|record| {
+                    snapshot.next_recorded_start.is_some_and(|next| {
+                        next.as_i64().saturating_sub(record.at().as_i64())
+                            > MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_MICROS
+                    })
+                });
+            let mut warnings = vec!["no_reviewed_coverage_policy"];
+            if has_moon_gap {
+                warnings.push("moon_recorded_cycle_gap_over_45_days");
+            }
             let (source_id, cycle_start_us, phase_thresholds_us) = match snapshot.record {
                 Some(record) => match record.event {
                     Event::Synod(synod) => (
@@ -86,7 +102,7 @@ impl NativeReader {
                     },
                     "coverage": {
                         "status": "unreviewed",
-                        "warnings": ["no_reviewed_coverage_policy"]
+                        "warnings": warnings
                     }
                 }),
             );
