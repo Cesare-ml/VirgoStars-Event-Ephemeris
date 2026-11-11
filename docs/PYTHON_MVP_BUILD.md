@@ -79,7 +79,7 @@ After successfully compiling/installing the wheel and assembling the **owner-aut
 
 This is a **read-only, fail-closed** compatibility check of the *real installed native Python API*: it **loads and validates all 70,554 original normalized `sinodi.csv` rows** to build an independent reference index, then compares the API at a bounded set of deterministic test instants. It does **not** execute an API lookup for every original row. The script does **not** contain a second P0 binary decoder or astronomical engine; it reuses the independent CSV normalization from `tools/verify_csv_p0.py`, selects the last recorded anchor `<= instant` using the source CSV, and compares all bodies' source IDs, exact starts, next recorded anchors, `NULL` vs `[]` vs phase thresholds, derived phase code/status and the `new_moon` alias.
 
-Default probes include `2026-11-11T12:00:00Z`, exact Moon/Mercury anchors, one microsecond before/after, each of the three original phase thresholds where available, and just before the first recorded Moon anchor. It rejects missing/extra bodies, false scientific coverage claims, wrong archive hash or first unexpected output. **This test compares recorded data and the API, not astronomical completeness.** All local CSV/P0 paths are explicit; neither original CSV nor P0 data are committed in the code PR.
+Default probes include `2026-11-11T12:00:00Z`, the latest selected anchor **for every indexed synod body**, one microsecond before/at/after each anchor and up to three phase thresholds per selected body, just before the first recorded Moon anchor, and representative dates `1919-01-01` and `2018-01-01` for known candidate Moon gaps. These remain **sampled queries** across the independently loaded full CSV, not exhaustive per-row API execution or scientific coverage certification. It rejects missing/extra bodies, false scientific coverage claims, wrong archive hash or first unexpected output. **This test compares recorded data and the API, not astronomical completeness.** All local CSV/P0 paths are explicit; neither original CSV nor P0 data are committed in the code PR.
 
 For a **single fail-closed validation command** (pure Python unit tests, synthetic native fixture, owner-data smoke and CSV source parity), supply the optional `--synods-csv` argument to the M0 validator:
 
@@ -95,7 +95,7 @@ The new test-only oracle's unit tests are in `tools/test_verify_python_synods.py
 py -3 -m unittest discover -s tools -p "test_verify_python_synods.py" -v
 ```
 
-**Status as written:** independent user-provided normalized CSV files have been inspected (70,554 synod rows across 11 source bodies), but the new parity tool's tests and live Rust-backed parity **have not yet been executed** on the full patched checkout. Do not report the gate green until it runs on the installed wheel.
+**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **9 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 9 tests as a third suite, in addition to 8 pure-Python API tests and 5 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
 
 ## 5. Produce a local wheel and reinstall it without build dependencies
 
