@@ -1,3 +1,13 @@
+## 2026-11-11 — First Python MVP implementation on draft PR #5
+
+- Fixed six accidentally committed Git conflict sections across four Rust files (`events-core/src/lib.rs`, `events-p0/src/lib.rs`, `events-p0/tests/{coverage_p0,golden_p0}.rs`), keeping chronology exports and unique Windows test filenames.
+- Rust `events-core/src/synod_stage.rs`: source-threshold D1/R2/R3/D4 and Moon CRESC1/CRESC2/CAL1/CAL2, with conservative unknown statuses; **5 new Rust tests NOT RUN**.
+- Rust `P0Archive::synods_at(X)`: latest recorded synod <= X across all indexed bodies with original PostgreSQL IDs, next anchor and assessed stage, without full-file materialization; **4 new Rust tests NOT RUN**.
+- Rust-backed Python source: PyO3 `crates/python-bindings` crate, maturin `pyproject.toml`, UTC-safe `python/virgostars_events` package with `VirgoStarsEvents.open(path, expected_sha256).get_synods_at(X)`, JSON-compatible results and `new_moon` alias. `examples/python_synods.py` and two native smoke tests added; no dataset bundled or downloaded.
+- **Actually verified: 8/8 Python unit tests PASS** on three files reconstructed exactly from their GitHub blobs: `_time.py` SHA-1 `8960ef96afd290553a5c3d635addb6e9aa95d1d5`, `__init__.py` `293c821936677cf0c133f16f7a5646de1a58afec`, `test_python_api.py` `4d463f6d0b44b7978d56c431067eda4ec48a1825`. Tests simulate the native reader; they do NOT prove the Rust/PyO3 extension works.
+- **Not yet run:** Cargo fmt/Clippy/tests/release on new Rust commits, pip/maturin wheel build, installation in a fresh Windows venv, native smoke against the authorized immutable P0 file and SQL parity. The environment lacks Rust. Do not mark any M0 milestone as finished.
+- README, ROADMAP, DELIVERY_MILESTONES, PYTHON_FIRST_MVP, AGENTS and new `docs/PYTHON_MVP_BUILD.md` describe current progress and PowerShell acceptance commands. Remains on draft PR #5; PR #6 data untouched. No merge, deploy, Actions or PyPI publication. Coverage windows unreviewed; Moon gaps (#7/#8) and dataset rights (#9) remain open.
+
 ## 2026-11-11 — Product priority revised: pip-installable Python synods + new-moon first
 
 - **User requirement / first real deliverable:** install the standalone library easily from Python (initially local `pip install .` / built Windows wheel), give an offset-aware date-time X, receive a dictionary with the **latest recorded synod anchor <= X for every available body**, the **latest Moon new-moon anchor <= X**, and the cycle's phase from the real three thresholds when known. No query may manufacture an astronomical event, assume complete source coverage, or confuse a synodic D1/R2/R3/D4 phase with the separate retrograde-station table.
