@@ -2,7 +2,7 @@
 
 **Independent, free/open-source, offline-first event ephemerides for astrology.**
 
-**Status: EXPERIMENTAL RUST IMPLEMENTATION (draft PR #5).** This branch has an in-memory Rust event index and a separate experimental reader for the VSEPH-P0 archive. It does not yet contain a verified Rust VSEPH v1 reader, JS/TS or Python bindings, release packages or production integration. The historical dataset, binary and experimental Python reference are staged separately in [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6), not merged into this branch. API examples for unimplemented methods remain design proposals.
+**Status: EXPERIMENTAL RUST IMPLEMENTATION (draft PR #5).** This branch has an in-memory Rust event index and a separate experimental reader for the VSEPH-P0 archive. It does not yet contain a verified Rust VSEPH v1 reader, JS/TS bindings, a tested/installed Python wheel, release packages or production integration. Experimental PyO3 and Python binding **source** exists but is not yet proven to compile end-to-end. The historical dataset, binary and experimental Python reference are staged separately in [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6), not merged into this branch. API examples for unimplemented methods remain design proposals.
 
 ## First product milestone: Python synods, Moon new moon and current cycle phase
 
@@ -17,7 +17,17 @@ print(result["synods"]["Mercury"]["phase"]["code"])
 print(result["new_moon"]["cycle_start_utc"])
 ```
 
-**The Python package source is now on draft PR #5, but this example is NOT YET VALIDATED against a compiled Rust wheel.** Before running it, build/install the local package using [PYTHON_MVP_BUILD.md](docs/PYTHON_MVP_BUILD.md) and supply an independently trusted local P0 archive. The 8 pure-Python wrapper tests passed; Rust native compilation and pip installation remain unverified. Implement the same Rust reader via PyO3/maturin, package as a locally installable wheel (`pip install .` after a build backend is added), and require explicit caller-supplied local data plus a trusted digest. The result is a JSON-compatible dictionary of latest **recorded** cycle anchors `<= X`, Moon's latest recorded new moon and source-threshold-derived D1/R2/R3/D4 or Moon quarter-stage code, with transparent unknowns/coverage warnings. No interpolation or scientific completeness guarantees.
+**The Python package source is now on draft PR #5, but this example is NOT YET VALIDATED against a compiled Rust wheel.** Before running it, build/install the local package using [PYTHON_MVP_BUILD.md](docs/PYTHON_MVP_BUILD.md) and supply an independently trusted local P0 archive. An earlier set of 8 pure-Python wrapper tests passed; newly expanded timestamp and CLI tests still require execution. Rust native compilation and pip installation remain unverified. Implement the same Rust reader via PyO3/maturin, package as a locally installable wheel (`pip install .` after a build backend is added), and require explicit caller-supplied local data plus a trusted digest. The result is a JSON-compatible dictionary of latest **recorded** cycle anchors `<= X`, Moon's latest recorded new moon and source-threshold-derived D1/R2/R3/D4 or Moon quarter-stage code, with transparent unknowns/coverage warnings. No interpolation or scientific completeness guarantees.
+
+A local command-line entry point has also been written (but is not yet tested with a built wheel):
+
+```powershell
+# After local wheel installation:
+python -m virgostars_events "local-events.vseph-p0" "2026-11-11T12:00:00Z" --sha256 "<trusted SHA-256>"
+# The identical command is registered as "virgostars-events" by pip.
+```
+
+Both commands return JSON from the same Rust-backed API, require a user-provided local archive and trusted checksum, and never download or bundle the dataset. Input timestamps must contain an explicit UTC offset with **at most six fractional-second digits**; submicrosecond timestamps are rejected rather than silently truncated.
 
 See [Python-first MVP specification and acceptance tests](docs/PYTHON_FIRST_MVP.md), [delivery milestones M0–M5](docs/DELIVERY_MILESTONES.md), [roadmap](docs/ROADMAP.md) and [backend compatibility](docs/BACKEND_COMPATIBILITY.md). Public PyPI publication and redistribution of the separately licensed dataset are **not approved yet**.
 
