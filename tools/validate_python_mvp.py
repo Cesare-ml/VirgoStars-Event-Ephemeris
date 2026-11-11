@@ -71,11 +71,11 @@ def main() -> int:
         )
         return 1
 
-    if not run_tests("test_python_api.py", 10):
+    if not run_tests("test_python_api.py", 12):
         return 1
     # CLI source tests validate safe JSON output, required trusted digest,
     # timestamp precision and usable nonzero exit status for invalid input.
-    if not run_tests("test_cli.py", 5):
+    if not run_tests("test_cli.py", 6):
         return 1
     # This suite independently checks original source-CSV normalization,
     # exact phase boundaries, duplicate IDs and rejection of altered API
