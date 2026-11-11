@@ -14,7 +14,7 @@ import tempfile
 import unittest
 
 from verify_python_synods import (
-    SourceSynod, assert_parity, expected_phase, expected_row,
+    SourceSynod, assert_parity, expected_phase, expected_row, has_moon_source_gap,
     instant_us, iso_utc, load_synod_csv, select_probes,
 )
 
@@ -46,6 +46,9 @@ class OracleReader:
         for body, series in self.data.items():
             previous, following = expected_row(series, t)
             code, started_at, status = expected_phase(body, previous, following, t)
+            warnings = ["no_reviewed_coverage_policy"]
+            if has_moon_source_gap(body, previous, following):
+                warnings.append("moon_recorded_cycle_gap_over_45_days")
             rows[body] = {
                 "body": body,
                 "source_id": previous.source_id if previous else None,
@@ -59,7 +62,7 @@ class OracleReader:
                 "phase": {
                     "code": code, "started_at_utc": started_at, "status": status
                 },
-                "coverage": {"status": "unreviewed", "warnings": []},
+                "coverage": {"status": "unreviewed", "warnings": warnings},
             }
         moon = rows.get("Moon")
         result = {
@@ -175,6 +178,44 @@ class SourceCsvTests(unittest.TestCase):
         self.assertIn(instant_us("1919-01-01T00:00:00Z"), probes)
         self.assertIn(instant_us("2018-01-01T00:00:00Z"), probes)
         self.assertEqual(probes, sorted(set(probes)))
+
+    def test_lunar_1919_2018_style_gap_is_unknown_not_year_long_cal2(self):
+        day_us = 86_400_000_000
+        last = SourceSynod(100, 44934, (110, 120, 130))
+        after_gap = SourceSynod(100 + 413 * day_us, 44935, (140, 150, 160))
+        moon = [last, after_gap]
+        source = {"Moon": moon}
+        self.assertTrue(has_moon_source_gap("Moon", last, after_gap))
+        self.assertFalse(has_moon_source_gap("Mars", last, after_gap))
+        self.assertEqual(expected_phase("Moon", last, after_gap, 120)[0], "CAL1")
+        self.assertEqual(
+            expected_phase("Moon", last, after_gap, 131),
+            (None, None, "unknown_discontinuous_moon_anchors"),
+        )
+        self.assertEqual(
+            expected_phase("Moon", last, after_gap, 100 + 200 * day_us)[2],
+            "unknown_discontinuous_moon_anchors",
+        )
+        self.assertEqual(
+            expected_phase("Moon", last, SourceSynod(100 + 30 * day_us, 44935, ()), 131)[0],
+            "CAL2",
+        )
+        for when in (120, 131, 100 + 200 * day_us):
+            report = assert_parity(OracleReader(source), source, [when], "a" * 64)
+            self.assertEqual(report["checked_body_instants"], 1)
+
+        def strip_warning(result):
+            result["synods"]["Moon"]["coverage"]["warnings"] = [
+                "no_reviewed_coverage_policy"
+            ]
+
+        with self.assertRaisesRegex(ValueError, "discontinuity warning"):
+            assert_parity(
+                OracleReader(source, strip_warning),
+                source,
+                [100 + 200 * day_us],
+                "a" * 64,
+            )
 
     def test_probes_include_non_moon_planets_and_reject_empty_series(self):
         source = {"Mars": [SourceSynod(700, 901, (710, 720, 730))]}
