@@ -32,6 +32,7 @@ pub use indexed::{
 
 pub use synod_stage::{
     assess_synod_stage, SynodStage, SynodStageAssessment, SynodStageStatus,
+    MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_MICROS,
 };
 
 pub use virgostars_events_format::{probe_magic, FormatProbeError, VSEPH_MAGIC};
