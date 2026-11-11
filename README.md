@@ -4,6 +4,23 @@
 
 **Status: EXPERIMENTAL RUST IMPLEMENTATION (draft PR #5).** This branch has an in-memory Rust event index and a separate experimental reader for the VSEPH-P0 archive. It does not yet contain a verified Rust VSEPH v1 reader, JS/TS or Python bindings, release packages or production integration. The historical dataset, binary and experimental Python reference are staged separately in [draft PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6), not merged into this branch. API examples for unimplemented methods remain design proposals.
 
+## First product milestone: Python synods, Moon new moon and current cycle phase
+
+**The first usable MVP is a locally pip-installable Python library**, ahead of WASM, a stable VSEPH v1 format, and production replacement. The planned API is:
+
+```python
+from virgostars_events import VirgoStarsEvents
+
+events = VirgoStarsEvents.open("local-events.vseph-p0", expected_sha256="<trusted dataset SHA-256>")
+result = events.get_synods_at("2026-11-11T12:00:00Z")
+print(result["synods"]["Mercury"]["phase"]["code"])
+print(result["new_moon"]["cycle_start_utc"])
+```
+
+**These Python commands are a target contract, NOT executable yet.** Implement the same Rust reader via PyO3/maturin, package as a locally installable wheel (`pip install .` after a build backend is added), and require explicit caller-supplied local data plus a trusted digest. The result is a JSON-compatible dictionary of latest **recorded** cycle anchors `<= X`, Moon's latest recorded new moon and source-threshold-derived D1/R2/R3/D4 or Moon quarter-stage code, with transparent unknowns/coverage warnings. No interpolation or scientific completeness guarantees.
+
+See [Python-first MVP specification and acceptance tests](docs/PYTHON_FIRST_MVP.md), [delivery milestones M0–M5](docs/DELIVERY_MILESTONES.md), [roadmap](docs/ROADMAP.md) and [backend compatibility](docs/BACKEND_COMPATIBILITY.md). Public PyPI publication and redistribution of the separately licensed dataset are **not approved yet**.
+
 ## Scope
 
 One portable, indexed, versioned dataset format (**VSEPH**, proposed) with three astronomical event families:
