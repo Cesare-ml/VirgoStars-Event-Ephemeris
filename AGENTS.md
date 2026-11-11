@@ -25,6 +25,10 @@ Applies to all human contributors and AI agents in the entire repository. The go
 
 Input integrity checkpoint (2026-11-11): validate exactly 64 hex SHA-256 characters before invoking native code; require timezone-aware datetimes to round-trip their local wall clock (reject spring-forward imaginary hours); and validate CLI instants before file I/O. Three Python regressions are committed in PR #5 but are not proof of an installed/compiled wheel. Base gate now requires **34 non-skipped tests**.
 
+## Wheel acceptance gate added 2026-11-12
+
+The existing draft PR #5 now includes `tools/verify_python_wheel.py`, a stdlib-only checker for **prebuilt** wheels. After Cargo, maturin and `pip install .` pass locally, run `py -3 tools\verify_python_wheel.py --wheel <matching .whl>`; it creates a clean temp venv, installs `--no-index --no-deps`, checks installed Python/native imports and CLI, and invokes the full non-skipping `validate_python_mvp.py`. Add `--archive`, trusted `--sha256` and `--synods-csv` for authorized snapshot parity. Orchestrator unit tests: `python -m unittest discover -s tools -p test_verify_python_wheel.py -v`. **5/5 mocked subprocess unit tests ran**; **real built wheel/native integration NOT RUN** in the agent container. Never equate subprocess mocks with Rust/PyO3 binary validation, and keep draft status pending real checks.
+
 ## Task selection for each run
 
 1. Inspect the repo, issues, PRs, branches, tests, and roadmap status first.
