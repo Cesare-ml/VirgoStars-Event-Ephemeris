@@ -159,12 +159,31 @@ class SourceCsvTests(unittest.TestCase):
             assert_parity(OracleReader(synthetic_source(), overclaimed),
                           synthetic_source(), [150], "a" * 64)
 
-    def test_deterministic_probes_include_exact_lunar_thresholds(self):
+    def test_deterministic_probes_cover_all_bodies_and_adjacent_boundaries(self):
         source = synthetic_source()
         probes = select_probes(source, "1970-01-01T00:00:00.000160Z")
-        for t in (150, 160, 170, 180):
-            self.assertIn(t, probes)
-        self.assertIn(49, probes)
+        # Moon, Mercury and true Node: one recorded anchor per indexed body.
+        for t in (50, 100, 150):
+            for near in (t - 1, t, t + 1):
+                self.assertIn(near, probes)
+        # Exactly at, immediately before, and immediately after each threshold
+        # of the selected Moon/Mercury cycle.
+        for t in (110, 120, 130, 160, 170, 180):
+            for near in (t - 1, t, t + 1):
+                self.assertIn(near, probes)
+        self.assertIn(49, probes)  # before first Moon
+        self.assertIn(instant_us("1919-01-01T00:00:00Z"), probes)
+        self.assertIn(instant_us("2018-01-01T00:00:00Z"), probes)
+        self.assertEqual(probes, sorted(set(probes)))
+
+    def test_probes_include_non_moon_planets_and_reject_empty_series(self):
+        source = {"Mars": [SourceSynod(700, 901, (710, 720, 730))]}
+        probes = select_probes(source, "1970-01-01T00:00:00.000705Z")
+        for t in (700, 710, 720, 730):
+            for near in (t - 1, t, t + 1):
+                self.assertIn(near, probes)
+        with self.assertRaisesRegex(ValueError, "empty indexed body series"):
+            select_probes({"Mars": []}, "1970-01-01T00:00:00Z")
 
 
 if __name__ == "__main__":
