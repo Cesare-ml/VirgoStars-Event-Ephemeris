@@ -20,6 +20,9 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 
+[project.scripts]
+virgostars-events = "virgostars_events.__main__:run"
+
 [tool.maturin]
 manifest-path = "crates/python-bindings/Cargo.toml"
 python-source = "python"
