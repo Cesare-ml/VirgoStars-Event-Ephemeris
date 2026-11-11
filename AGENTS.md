@@ -12,6 +12,17 @@ Applies to all human contributors and AI agents in the entire repository. The go
 
 **Current status (2026-11-10):** the main branch initially contains docs and license only; [draft PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4) contains synthetic fixture tooling and [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) contains the initial typed Rust workspace. Neither is merged. PR #5 contains an **in-memory recorded-event index**, a file-backed **experimental Rust VSEPH-P0** decoder, and a newly added SHA-256-bound Rust coverage adapter. Dataset PR #6 separately contains the 2026-11-10 scientific snapshot, experimental Python reader and reference coverage policy. The Rust VSEPH v1 format, compilation, and parity tests remain unverified. No exporter or stable bindings exist. Never infer functionality from design examples or an unmerged PR.
 
+## User-prioritized first deliverable (2026-11-11)
+
+**Python FIRST, not JS/WASM first.** The maintainer requires an actually usable, easily pip-installable Python MVP accepting an offset-aware instant X and returning the **most recent recorded synod for each body**, **last recorded Moon new moon** and **current cycle stage** when safely derivable from stored phases. Follow [PYTHON_FIRST_MVP.md](docs/PYTHON_FIRST_MVP.md) and [DELIVERY_MILESTONES.md](docs/DELIVERY_MILESTONES.md), with M0 first. Explicit user story and acceptance checklist are binding for future agent work.
+
+- First validate the current Rust/P0 branch against synthetic and authorized real-file golden data. Then implement batched synod anchor/phase semantics **in Rust** (not an independent Python scientific port).
+- Build a minimal PyO3/maturin package, locally test `pip install .` and `pip install -e .`, create/install a Windows wheel in a fresh venv and verify `VirgoStarsEvents.open(...).get_synods_at(...)` end-to-end.
+- Must preserve source row IDs, UTC microseconds, SQL `NULL` vs `[]`, exact phase threshold equality, dataset identity and known gap warnings. Do not claim scientifically verified phase/current state solely from historical recorded data. Moon synod anchors represent recorded new moon according to the source convention, not newly calculated events.
+- No PyPI publication, permanent dataset bundling or automatic download until dataset distribution rights are explicitly approved. Package source follows CPAL-1.0 with visible VirgoStars credits.
+- Add regression tests and update README, ROADMAP and WORK_LOG for every small milestone. Avoid competing PRs; existing draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) houses Rust/Python work. The user has NOT asked to merge or deploy.
+- **Documentation of a planned API is not code.** Current PyO3 binding, pip wheel and Python `get_synods_at()` are not yet implemented. Never describe their examples as executable until built and tested.
+
 ## Task selection for each run
 
 1. Inspect the repo, issues, PRs, branches, tests, and roadmap status first.
@@ -53,4 +64,4 @@ Each agent handoff/PR must include: `task / issue`, `base commit and branch`, `s
 
 ## Priority queue
 
-Use `docs/ROADMAP.md` for exact acceptance criteria and `docs/WORK_LOG.md` for latest handoffs. Start with P0 fixture schema + strict Rust query model, followed by minimal file parsing and edge-case tests. Data export requires authorized database access; without it, work on synthetic fixtures and validation tooling, not fake real data.
+Use `docs/ROADMAP.md` for exact acceptance criteria and `docs/WORK_LOG.md` for latest handoffs. Follow the **M0 Python-first MVP** in `docs/ROADMAP.md` and `docs/PYTHON_FIRST_MVP.md`: validate the existing experimental Rust reader, implement latest synods/new-moon/phase in Rust, then a pip-installable Python PyO3/maturin binding with a real Windows smoke test. After M0, progress toward full backend query parity, scientific coverage review, VSEPH v1 and JS/WASM. Data export requires authorized database access; without it, work on synthetic fixtures and validation tooling, not fake real data.
