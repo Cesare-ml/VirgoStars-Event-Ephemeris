@@ -5,7 +5,7 @@ import json
 import sys
 import types
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from unittest.mock import patch
 
 from virgostars_events import VirgoStarsEvents
@@ -13,6 +13,29 @@ from virgostars_events._time import (
     iso_utc_from_microseconds,
     to_utc_microseconds,
 )
+
+
+class SyntheticSpringForward(tzinfo):
+    """Portable fake +01/+02 DST jump (no OS tzdata needed on Windows)."""
+
+    def utcoffset(self, dt):
+        if dt is None:
+            return None
+        return timedelta(
+            hours=2
+            if (dt.year, dt.month, dt.day, dt.hour) >= (2026, 3, 29, 3)
+            else 1
+        )
+
+    def dst(self, dt):
+        return self.utcoffset(dt) - timedelta(hours=1)
+
+    def fromutc(self, dt):
+        if dt.tzinfo is not self:
+            raise ValueError("foreign timezone")
+        utc = dt.replace(tzinfo=None)
+        offset = timedelta(hours=2 if utc >= datetime(2026, 3, 29, 1) else 1)
+        return (utc + offset).replace(tzinfo=self)
 
 
 class TimestampTests(unittest.TestCase):
@@ -75,6 +98,19 @@ class TimestampTests(unittest.TestCase):
         self.assertEqual(
             to_utc_microseconds("1970-01-01T00:00:00.1Z"),
             100_000,
+        )
+
+    def test_nonexistent_dst_local_hour_is_rejected_not_moved(self):
+        zone = SyntheticSpringForward()
+        with self.assertRaisesRegex(ValueError, "nonexistent local time"):
+            to_utc_microseconds(datetime(2026, 3, 29, 2, 30, tzinfo=zone))
+        self.assertEqual(
+            to_utc_microseconds(datetime(2026, 3, 29, 1, 30, tzinfo=zone)),
+            to_utc_microseconds("2026-03-29T00:30:00Z"),
+        )
+        self.assertEqual(
+            to_utc_microseconds(datetime(2026, 3, 29, 3, 30, tzinfo=zone)),
+            to_utc_microseconds("2026-03-29T01:30:00Z"),
         )
 
     def test_no_float_timestamp_precision_loss_for_year_0002(self):
@@ -156,6 +192,20 @@ class PythonApiTests(unittest.TestCase):
             data["synods"]["Moon"]["status"], "no_preceding_recorded_cycle"
         )
 
+    def test_invalid_sha256_never_constructs_a_native_reader(self):
+        class FakeReader:
+            def __init__(self, *_args):
+                raise AssertionError("native file I/O must not start")
+
+        module = types.ModuleType("virgostars_events._native")
+        module.NativeReader = FakeReader
+        with patch.dict(sys.modules, {"virgostars_events._native": module}):
+            for digest in (None, "", "abc", "g" * 64, "f" * 63, "f" * 65):
+                with self.subTest(digest=digest), self.assertRaisesRegex(
+                    ValueError, "64-digit hexadecimal"
+                ):
+                    VirgoStarsEvents.open("missing.p0", expected_sha256=digest)
+
     def test_open_forwards_path_and_digest_to_native_extension(self):
         requests = []
 
@@ -169,6 +219,9 @@ class PythonApiTests(unittest.TestCase):
             reader = VirgoStarsEvents.open("local.p0", expected_sha256="b" * 64)
         self.assertIsInstance(reader._reader, FakeReader)
         self.assertEqual(requests, [("local.p0", "b" * 64)])
+        with patch.dict(sys.modules, {"virgostars_events._native": module}):
+            VirgoStarsEvents.open("upper.p0", expected_sha256="A" * 64)
+        self.assertEqual(requests[-1], ("upper.p0", "a" * 64))
 
 
 if __name__ == "__main__":
