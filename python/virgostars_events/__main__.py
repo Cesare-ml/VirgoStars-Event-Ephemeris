@@ -15,6 +15,7 @@ import sys
 from typing import Sequence
 
 from . import VirgoStarsEvents, __version__
+from ._time import to_utc_microseconds
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -36,6 +37,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        # Fail before hashing/opening a potentially large archive on invalid input.
+        to_utc_microseconds(args.instant)
         reader = VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256)
         result = reader.get_synods_at(args.instant)
         output = json.dumps(
