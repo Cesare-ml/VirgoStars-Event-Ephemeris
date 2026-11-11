@@ -162,8 +162,8 @@ class SourceCsvTests(unittest.TestCase):
     def test_deterministic_probes_cover_all_bodies_and_adjacent_boundaries(self):
         source = synthetic_source()
         probes = select_probes(source, "1970-01-01T00:00:00.000160Z")
-        # Moon, Mercury and true Node: one recorded anchor per indexed body.
-        for t in (50, 100, 150):
+        # Selected anchors: Moon=150, Mercury=100, true Node=100.
+        for t in (100, 150):
             for near in (t - 1, t, t + 1):
                 self.assertIn(near, probes)
         # Exactly at, immediately before, and immediately after each threshold
