@@ -81,6 +81,14 @@ This is a **read-only, fail-closed** compatibility check of the *real installed 
 
 Default probes include `2026-11-11T12:00:00Z`, exact Moon/Mercury anchors, one microsecond before/after, each of the three original phase thresholds where available, and just before the first recorded Moon anchor. It rejects missing/extra bodies, false scientific coverage claims, wrong archive hash or first unexpected output. **This test compares recorded data and the API, not astronomical completeness.** All local CSV/P0 paths are explicit; neither original CSV nor P0 data are committed in the code PR.
 
+For a **single fail-closed validation command** (pure Python unit tests, synthetic native fixture, owner-data smoke and CSV source parity), supply the optional `--synods-csv` argument to the M0 validator:
+
+```powershell
+.\\.venv\\Scripts\\python.exe tools\\validate_python_mvp.py --archive $env:VSEPH_P0_PATH --sha256 $env:VSEPH_P0_SHA256 --synods-csv "D:\\path\\to\\authorized\\sinodi.csv"
+```
+
+The `--synods-csv` flag is rejected unless the archive and trusted SHA are also supplied. All comparisons are read-only. A missing native binding, skipped test, wrong CSV source ID, different phase threshold, missing body or falsely certified coverage produces a nonzero exit status.
+
 The new test-only oracle's unit tests are in `tools/test_verify_python_synods.py`:
 
 ```powershell
