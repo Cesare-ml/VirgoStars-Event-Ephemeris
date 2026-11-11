@@ -80,7 +80,7 @@ def main() -> int:
     # This suite independently checks original source-CSV normalization,
     # exact phase boundaries, duplicate IDs and rejection of altered API
     # results. It needs neither owner data nor a network connection.
-    if not run_tests("test_verify_python_synods.py", 9, TOOLS_TESTS):
+    if not run_tests("test_verify_python_synods.py", 10, TOOLS_TESTS):
         return 1
     if not run_tests("test_native_fixture.py", 6):
         return 1
@@ -91,7 +91,7 @@ def main() -> int:
             return 1
         os.environ["VSEPH_P0_PATH"] = str(Path(args.archive).resolve())
         os.environ["VSEPH_P0_SHA256"] = args.sha256
-        if not run_tests("test_native_smoke.py", 2):
+        if not run_tests("test_native_smoke.py", 3):
             return 1
 
     if args.synods_csv:
