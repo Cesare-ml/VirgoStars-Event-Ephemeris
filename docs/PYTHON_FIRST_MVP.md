@@ -92,11 +92,26 @@ All dictionaries, timestamps and primitive fields must be JSON serializable with
       }
     }
   },
-  "new_moon": "<same object data as synods.Moon, or null>"
+  "new_moon": {
+    "body": "Moon",
+    "source_id": 456,
+    "cycle_start_utc": "<recorded last new moon at or before request>",
+    "next_cycle_start_utc": null,
+    "phase_thresholds_utc": [],
+    "phase": {
+      "code": null,
+      "started_at_utc": null,
+      "status": "unknown_missing_phase_thresholds"
+    },
+    "coverage": {
+      "status": "unreviewed",
+      "warnings": ["example_warning_if_manifest_indicates_a_gap"]
+    }
+  }
 }
 ```
 
-The sample uses placeholders and fabricated IDs; **it is not a real ephemeris result**. The implementation should return the complete body map found in the dataset (not silently hardcode a smaller planet list), with a deterministic key order. Missing bodies or no predecessor: return a structured `None`/missing-data status, not a fictional anchor.
+The sample uses placeholders and fabricated IDs; **it is not a real ephemeris result**. The implementation should return the complete body map found in the dataset (not silently hardcode a smaller planet list), with a deterministic key order. For a body indexed in the archive but without any preceding anchor at X, keep that body in `synods` with `status="no_preceding_recorded_cycle"`, `source_id=None`, `cycle_start_utc=None` and `phase.code=None`; `new_moon=None` if Moon has no predecessor. No fictional anchor or fallback to the next event. The `new_moon` object must compare equal in value to `synods["Moon"]` whenever a Moon anchor exists.
 
 ## Required query and phase rules
 
