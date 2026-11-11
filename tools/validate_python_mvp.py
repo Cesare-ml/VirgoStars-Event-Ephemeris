@@ -94,7 +94,7 @@ def main() -> int:
             probes = select_probes(source, "2026-11-11T12:00:00Z")
             report = assert_parity(reader, source, probes, args.sha256)
             print(
-                "\\n[Python MVP source parity] "
+                "\n[Python MVP source parity] "
                 f"{report['checked_body_instants']} body/instant checks PASS"
             )
         except (OSError, ValueError, TypeError, KeyError, OverflowError) as exc:
