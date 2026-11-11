@@ -38,6 +38,13 @@ def to_utc_microseconds(instant: datetime | str) -> int:
     if instant.tzinfo is None or instant.utcoffset() is None:
         raise ValueError("naive datetime is not allowed; supply an explicit timezone")
     utc = instant.astimezone(timezone.utc)
+    # A timezone-aware datetime can still represent an impossible local wall
+    # time in a DST spring-forward gap. Python otherwise silently maps it to
+    # a different real instant. Reject such values without guessing a fold.
+    if utc.astimezone(instant.tzinfo).replace(tzinfo=None) != instant.replace(
+        tzinfo=None
+    ):
+        raise ValueError("nonexistent local time in supplied timezone")
     delta = utc - _EPOCH
     micros = (delta.days * 86400 + delta.seconds) * 1_000_000 + delta.microseconds
     if not -(2**63) <= micros < 2**63:
