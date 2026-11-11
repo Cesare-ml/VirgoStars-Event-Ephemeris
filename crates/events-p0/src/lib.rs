@@ -28,13 +28,8 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use virgostars_events_core::{
-<<<<<<< Updated upstream
     BodyId, Event, EventFamily, IngressEvent, MotionDirection, MotionEvent, SynodEvent,
     SynodPhase, TimestampMicros, ZodiacSign, MAX_CHRONOLOGICAL_PAGE_SIZE,
-=======
-    BodyId, Event, EventFamily, IngressEvent, MotionDirection, MotionEvent, SynodEvent, SynodPhase,
-    TimestampMicros, ZodiacSign,
->>>>>>> Stashed changes
 };
 
 const MAGIC: &[u8; 8] = b"VSEPH-P0";
@@ -275,18 +270,12 @@ impl P0Archive {
                 .map_err(|_| invalid("raw block length overflow"))?;
             let count = usize::try_from(unsigned(entry, "count")?)
                 .map_err(|_| invalid("block count overflow"))?;
-<<<<<<< Updated upstream
-            if start != expected_offset || len == 0 || len > MAX_BLOCK
-                || !(8..=MAX_RAW).contains(&raw_len)
-                || count == 0 || count > MAX_RECORDS
-=======
             if start != expected_offset
                 || len == 0
                 || len > MAX_BLOCK
                 || !(8..=MAX_RAW).contains(&raw_len)
                 || count == 0
                 || count > MAX_RECORDS
->>>>>>> Stashed changes
             {
                 return Err(invalid("unsafe block offset, length or count"));
             }
@@ -338,10 +327,7 @@ impl P0Archive {
                 .ok_or_else(|| invalid("archive record count overflow"))
         })?;
         Ok(Self {
-<<<<<<< Updated upstream
             archive_id: NEXT_ARCHIVE_ID.fetch_add(1, Ordering::Relaxed),
-=======
->>>>>>> Stashed changes
             path,
             payload_start,
             blocks,
@@ -584,7 +570,6 @@ impl P0Archive {
         Ok(result)
     }
 
-<<<<<<< Updated upstream
     /// One bounded chronological page of recorded P0 events in [start,end).
     ///
     /// Stable tie ordering is timestamp, EventFamily, BodyId, matching the
@@ -707,14 +692,11 @@ impl P0Archive {
         Ok(P0ChronologicalPage { events, next_cursor })
     }
 
-    pub fn synod_at(&self, body: &BodyId, t: TimestampMicros) -> Result<Option<P0SynodHandle<'_>>, P0Error> {
-=======
     pub fn synod_at(
         &self,
         body: &BodyId,
         t: TimestampMicros,
     ) -> Result<Option<P0SynodHandle<'_>>, P0Error> {
->>>>>>> Stashed changes
         let record = self.at(EventFamily::Synod, body, t)?;
         Ok(record.map(|record| P0SynodHandle {
             archive: self,
