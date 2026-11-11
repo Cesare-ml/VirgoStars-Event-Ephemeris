@@ -23,10 +23,15 @@ use std::fmt;
 
 pub mod coverage;
 pub mod indexed;
+pub mod synod_stage;
 pub use coverage::{CoverageAssessment, CoverageError, CoveragePolicy, ReviewedWindow};
 pub use indexed::{
     ChronologicalCursor, ChronologicalPage, ChronologicalQueryError, EventFamily, EventIndex,
     IndexError, QueryError, SynodHandle, MAX_CHRONOLOGICAL_PAGE_SIZE,
+};
+
+pub use synod_stage::{
+    assess_synod_stage, SynodStage, SynodStageAssessment, SynodStageStatus,
 };
 
 pub use virgostars_events_format::{probe_magic, FormatProbeError, VSEPH_MAGIC};
