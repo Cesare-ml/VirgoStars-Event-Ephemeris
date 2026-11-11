@@ -22,16 +22,12 @@ use std::error::Error;
 use std::fmt;
 
 pub mod coverage;
-<<<<<<< Updated upstream
+pub mod indexed;
+pub use coverage::{CoverageAssessment, CoverageError, CoveragePolicy, ReviewedWindow};
 pub use indexed::{
     ChronologicalCursor, ChronologicalPage, ChronologicalQueryError, EventFamily, EventIndex,
     IndexError, QueryError, SynodHandle, MAX_CHRONOLOGICAL_PAGE_SIZE,
 };
-=======
-pub mod indexed;
->>>>>>> Stashed changes
-pub use coverage::{CoverageAssessment, CoverageError, CoveragePolicy, ReviewedWindow};
-pub use indexed::{EventFamily, EventIndex, IndexError, QueryError, SynodHandle};
 
 pub use virgostars_events_format::{probe_magic, FormatProbeError, VSEPH_MAGIC};
 
