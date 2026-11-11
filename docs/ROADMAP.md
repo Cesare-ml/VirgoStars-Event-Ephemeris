@@ -1,6 +1,6 @@
 # Roadmap and agent task queue
 
-**Updated:** 2026-11-10. **Status:** development in draft PRs #4/#5/#6; no changes have been merged to main. Rust/Python experimental code and an owner-authorized dataset exist on separate branches. This is the authoritative work queue. Tasks are intentionally small, ordered and verifiable.
+**Updated:** 2026-11-11. **Status:** development in draft PRs #4/#5/#6; no changes have been merged to main. Rust/Python experimental code and an owner-authorized dataset exist on separate branches. This is the authoritative work queue. Tasks are intentionally small, ordered and verifiable.
 
 ## Working conventions
 
@@ -8,6 +8,20 @@
 - Agent: read AGENTS.md and **all open PRs/issues** before selecting a task; avoid concurrent duplicate changes.
 - Every deliverable includes relevant code, tests, docs, validation outcomes and a *draft PR*; do not deploy/merge without explicit authorization.
 - No GitHub Actions automation. Run explicit checks locally or through available tools.
+
+## M0 — FIRST user-facing deliverable: installable Python synod MVP
+
+**Deliver this BEFORE JS/TS WASM, production backend migration or frozen VSEPH v1.** Full acceptance criteria and proposed dictionary API: [Python-first MVP](PYTHON_FIRST_MVP.md). End-to-end delivery order including post-MVP features: [Delivery milestones M0–M5](DELIVERY_MILESTONES.md).
+
+User story: from a Python installation, pass a timezone-aware date/instant X to `VirgoStarsEvents.get_synods_at(X)`; receive the **latest recorded synod start <= X for each available celestial body**, the **last recorded new moon** as a convenience field, and the **current Moon/planetary cycle phase** only when original three phase boundaries justify it. Include source IDs, cycle anchor timestamps, dataset identity and missing/coverage-warning status. **Do not** infer missing cycles or misrepresent the latest recorded event as scientific completeness.
+
+- [ ] **M0.0 — Current Rust and authorized snapshot validated.** Finish current Cargo fmt/Clippy/tests/release on Windows, independent `p0-verify` / Python audit using exact SHA-256 and all 380,844 records on a disposable combined PR checkout.
+- [ ] **M0.1 — Rust aggregated synod query and phase classification.** Batch last-anchor `<= X` by all indexed synod bodies; Moon new moon and D1/R2/R3/D4 / CRESC1/CRESC2/CAL1/CAL2 threshold handling, NULL vs empty/partial extras, exact equality, missing coverage.
+- [ ] **M0.2 — Rust-backed Python interface.** Add dedicated PyO3/maturin binding; planned import `virgostars_events` and methods `VirgoStarsEvents.open(local_archive, expected_sha256=...)`, `get_synods_at(offset_aware_instant)`, returning a JSON-serializable dictionary. Rust stays the only data reader.
+- [ ] **M0.3 — Local pip installation and Windows wheel.** Implement `pyproject.toml`, prove `pip install .`, `pip install -e .`, create/install a local compiled wheel in a fresh venv, no compiler needed to install the wheel itself. Archive supplied separately, no automatic download.
+- [ ] **M0.4 — Python acceptance and SQL parity.** Unit, boundary/phase and real-source golden tests; compare `TabellaSinodo.getSinodiPerDataoraUtc` and `getMotiSinodiciPianetiPerDataoraUtc`; show an executable 10-line example; obtain maintainer smoke-test on Windows. **First usable MVP DONE only when all boxes pass.**
+
+**Immediate blockers:** no PyO3 package/`pyproject.toml` or built pip wheel exists yet. New Rust chrono tests need a fresh Cargo run; the separate dataset reuse license is unresolved. Local developer pip installs are permitted without pretending that a public PyPI release is approved. Keep M0 in progress only once corresponding implementation/tests exist; mark boxes completed only after real validation.
 
 ## P0 — first executable and reproducible core
 
@@ -27,10 +41,10 @@
 - [ ] **P1.4 — Authenticated owner dataset audit.** With explicit access, audit reported 380,844-row baseline, bodies, coverage/holes and ownership terms. **Done when:** owner-reviewed report and zero unexplained loss. **Blocked:** authorized source export and dataset licensing decision.
 - [ ] **P1.5 — Compression benchmarks.** Compare fixed-width vs varints vs block Zstd. **Done when:** size/latency/memory tradeoff documented with reproducible commands.
 
-## P2 — language bindings and ecosystem
+## P2 — language bindings and ecosystem (Python takes priority)
 
-- [ ] **P2.1 — wasm-bindgen JS/TS** with Node/browser loading and types; test shared Rust fixtures.
-- [ ] **P2.2 — PyO3/maturin Python wheels** with explicit UTC datetimes and same fixtures/results.
+- [ ] **P2.1 — PyO3/maturin Python MVP first (M0).** Implement the minimum Rust-backed Python reader, latest synod/new-moon query and phases, local `pip install .` / editable build / Windows wheel before starting browser bindings. Later expand Python to full API with UTC date and time zones.
+- [ ] **P2.2 — wasm-bindgen JS/TS after initial Python usage** with Node/browser loading and types; test shared Rust fixtures.
 - [ ] **P2.3 — Cross-language parity harness** for every required API/query and error category.
 - [ ] **P2.4 — Optional VirgoStars backend adapter**, read-only, with exact query compatibility and documented intentional fixes; **no production replacement** without review.
 - [ ] **P2.5 — Documentation, CLI examples, benchmarks, memory/bundle-size limits** and release gates.
@@ -47,8 +61,8 @@
 - Rust format/index agent: P0.2–P0.4.
 - Rust query/API agent: P0.5–P0.7.
 - Data quality/export agent: P1.1–P1.3, synthetic tests only until authorized.
-- JS/WASM agent: P2.1 after shared Rust types settle.
-- Python agent: P2.2 after shared Rust types settle.
+- JS/WASM agent: P2.2 after successful installable Python MVP and shared Rust types settle.
+- Python agent: M0.1–M0.4 / P2.1 immediately after Rust snapshot gate (first user-facing priority).
 - Backend parity agent: P2.3–P2.4, no production changes.
 
 **Never mark a task done from a draft, speculation or a successful generation of docs alone.** Link PR and tests in WORK_LOG.
