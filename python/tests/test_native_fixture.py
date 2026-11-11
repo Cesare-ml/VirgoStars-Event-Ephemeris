@@ -102,6 +102,37 @@ class GoldenNativeIntegrationTests(unittest.TestCase):
         self.assertIsNone(mercury["phase"]["code"])
         self.assertEqual(mercury["phase"]["status"], "unknown_incomplete_phase_thresholds")
 
+    def test_python_module_cli_queries_the_real_native_golden_reader(self) -> None:
+        import subprocess
+        import sys
+
+        command = [
+            sys.executable,
+            "-m",
+            "virgostars_events",
+            str(self.path),
+            "1970-01-01T00:00:01.700000Z",
+            "--sha256",
+            FIXTURE_SHA256,
+            "--compact",
+        ]
+        completed = subprocess.run(
+            command, capture_output=True, text=True, check=False
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(len(completed.stdout.splitlines()), 1)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["new_moon"]["source_id"], 12)
+        self.assertEqual(result["new_moon"]["phase"]["code"], "CRESC2")
+        self.assertFalse(result["dataset"]["coverage_certified"])
+
+        wrong_sha = command.copy()
+        wrong_sha[wrong_sha.index(FIXTURE_SHA256)] = "0" * 64
+        bad = subprocess.run(wrong_sha, capture_output=True, text=True, check=False)
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertEqual(bad.stdout, "")
+        self.assertIn("sha", bad.stderr.lower())
+
     def test_offset_equivalence_and_digest_mismatch_fail_closed(self) -> None:
         zulu = self.reader.get_synods_at("1970-01-01T00:00:01.700000Z")
         offset = self.reader.get_synods_at("1970-01-01T01:00:01.700000+01:00")
