@@ -50,7 +50,7 @@ Once `pip install .` succeeds, run:
 .\.venv\Scripts\python.exe tools\validate_python_mvp.py
 ```
 
-This gate now requires **10 pure-Python API/time tests, 5 CLI tests, 10 independent CSV-oracle tests and 6 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
+This gate now requires **12 pure-Python API/time tests, 6 CLI tests, 10 independent CSV-oracle tests and 6 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
 
 **Unlike standard `unittest`, the validator exits with failure if a native test is skipped**, if the compiled `virgostars_events._native` module cannot be imported, or if fewer than the expected cases are discovered. An `OK (skipped=5)` from a basic unittest run is **not** a successful native gate.
 
@@ -84,7 +84,7 @@ The smoke tests must **run**, not skip, and return source IDs/recorded phases pl
 
 The real-data smoke suite now contains **3 owner-snapshot tests**, including the two source gaps (1919 and 2018). Using the owner-approved 2026-11-10 P0 snapshot, the smoke test must prove that `get_synods_at("1919-06-01T00:00:00Z")` and `get_synods_at("2018-06-01T00:00:00Z")` retain recorded Moon source IDs **44934** and **46146**, report `phase.code=None` / `phase.status="unknown_discontinuous_moon_anchors"`, and include the `moon_recorded_cycle_gap_over_45_days` warning. Normal Moon cycles must still classify their source thresholds. A gap guard is not scientific completeness certification; see [Moon gaps](MOON_SYNOD_SOURCE_GAPS.md).
 
-The independent CSV oracle contains **10 tests** (including a year-long gap regression); the mandatory base Python/PyO3 suite contains **31 non-skipped tests** (10 API/time + 5 CLI + 10 oracle + 6 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
+The independent CSV oracle contains **10 tests** (including a year-long gap regression); the mandatory base Python/PyO3 suite contains **34 non-skipped tests** (10 API/time + 5 CLI + 10 oracle + 6 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
 
 ## 4a. Independent source-CSV parity of the installed Python API
 
@@ -112,7 +112,7 @@ The new test-only oracle's unit tests are in `tools/test_verify_python_synods.py
 py -3 -m unittest discover -s tools -p "test_verify_python_synods.py" -v
 ```
 
-**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **10 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 10 tests as a third suite, in addition to 10 pure-Python API/time tests, 5 CLI tests and 6 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
+**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **10 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 10 tests as a third suite, in addition to 12 pure-Python API/time tests, 6 CLI tests and 6 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
 
 ## 5. Produce a local wheel and reinstall it without build dependencies
 
@@ -141,3 +141,7 @@ Wheel installation with `--no-index` proves it can install without downloading/b
 | PostgreSQL backend parity and coverage review | **NOT RUN** |
 
 The Python surface is a prototype **for precomputed recorded events**, not a new astronomy engine. Before a public PyPI `pip install virgostars-event-ephemeris` is advertised, obtain a separate package release authorization and the dataset license decision ([issue #9](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/9)). Maintain CPAL-1.0 source licensing and visible **Powered by VirgoStars — https://www.virgostars.it/** credits.
+
+### Input checks before archive I/O (2026-11-11)
+
+`VirgoStarsEvents.open(..., expected_sha256=...)` validates exactly 64 hexadecimal SHA-256 characters **before importing the Rust extension**, then forwards a lowercase digest for the native whole-file check. Invalid instants on the CLI are rejected before opening/hashing the archive. For aware Python datetimes using a DST timezone, nonexistent local spring-forward wall times raise `ValueError` rather than converting silently. These boundary guards have three new tests, using a synthetic timezone so Windows does not require system timezone data. Run the expanded **34-test** native gate after installing the local wheel; this is not evidence of a successful wheel build.
