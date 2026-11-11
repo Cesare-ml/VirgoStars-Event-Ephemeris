@@ -208,14 +208,24 @@ impl EventIndex {
     }
 
     /// Latest recorded event at or before the instant.
-    pub fn at(&self, family: EventFamily, body: &BodyId, instant: TimestampMicros) -> Option<&Event> {
+    pub fn at(
+        &self,
+        family: EventFamily,
+        body: &BodyId,
+        instant: TimestampMicros,
+    ) -> Option<&Event> {
         let events = self.series(family, body)?;
         let end = events.partition_point(|event| event.at() <= instant);
         end.checked_sub(1).map(|position| &events[position])
     }
 
     /// First recorded event strictly later than the instant.
-    pub fn next(&self, family: EventFamily, body: &BodyId, instant: TimestampMicros) -> Option<&Event> {
+    pub fn next(
+        &self,
+        family: EventFamily,
+        body: &BodyId,
+        instant: TimestampMicros,
+    ) -> Option<&Event> {
         let events = self.series(family, body)?;
         events.get(events.partition_point(|event| event.at() <= instant))
     }
@@ -377,7 +387,9 @@ pub struct SynodHandle<'a> {
 
 impl<'a> SynodHandle<'a> {
     pub fn event(&self) -> &SynodEvent {
-        let events = self.index.series(EventFamily::Synod, &self.body)
+        let events = self
+            .index
+            .series(EventFamily::Synod, &self.body)
             .expect("handle references an indexed series");
         match &events[self.position] {
             Event::Synod(event) => event,
@@ -429,9 +441,7 @@ mod tests {
     }
 
     fn synod(name: &str, time: i64) -> Event {
-        Event::Synod(
-            SynodEvent::new(body(name), TimestampMicros::new(time), None).unwrap()
-        )
+        Event::Synod(SynodEvent::new(body(name), TimestampMicros::new(time), None).unwrap())
     }
 
     #[test]
@@ -439,9 +449,15 @@ mod tests {
         let index = EventIndex::default();
         let moon = body("Moon");
         assert!(index.is_empty());
-        assert!(index.at(EventFamily::Ingress, &moon, TimestampMicros::new(0)).is_none());
-        assert!(index.next(EventFamily::Ingress, &moon, TimestampMicros::new(0)).is_none());
-        assert!(index.previous(EventFamily::Ingress, &moon, TimestampMicros::new(0)).is_none());
+        assert!(index
+            .at(EventFamily::Ingress, &moon, TimestampMicros::new(0))
+            .is_none());
+        assert!(index
+            .next(EventFamily::Ingress, &moon, TimestampMicros::new(0))
+            .is_none());
+        assert!(index
+            .previous(EventFamily::Ingress, &moon, TimestampMicros::new(0))
+            .is_none());
         assert!(index.synod_at(&moon, TimestampMicros::new(0)).is_none());
     }
 
@@ -452,13 +468,39 @@ mod tests {
             ingress("Moon", 20, 1),
             ingress("Moon", 0, 0),
             ingress("Moon", 10, 11),
-        ]).unwrap();
+        ])
+        .unwrap();
         assert_eq!(index.len(), 3);
-        assert_eq!(index.at(EventFamily::Ingress, &moon, TimestampMicros::new(10)).unwrap().at().as_i64(), 10);
-        assert_eq!(index.next(EventFamily::Ingress, &moon, TimestampMicros::new(10)).unwrap().at().as_i64(), 20);
-        assert_eq!(index.previous(EventFamily::Ingress, &moon, TimestampMicros::new(10)).unwrap().at().as_i64(), 0);
-        assert!(index.next(EventFamily::Ingress, &moon, TimestampMicros::new(20)).is_none());
-        assert!(index.previous(EventFamily::Ingress, &moon, TimestampMicros::new(0)).is_none());
+        assert_eq!(
+            index
+                .at(EventFamily::Ingress, &moon, TimestampMicros::new(10))
+                .unwrap()
+                .at()
+                .as_i64(),
+            10
+        );
+        assert_eq!(
+            index
+                .next(EventFamily::Ingress, &moon, TimestampMicros::new(10))
+                .unwrap()
+                .at()
+                .as_i64(),
+            20
+        );
+        assert_eq!(
+            index
+                .previous(EventFamily::Ingress, &moon, TimestampMicros::new(10))
+                .unwrap()
+                .at()
+                .as_i64(),
+            0
+        );
+        assert!(index
+            .next(EventFamily::Ingress, &moon, TimestampMicros::new(20))
+            .is_none());
+        assert!(index
+            .previous(EventFamily::Ingress, &moon, TimestampMicros::new(0))
+            .is_none());
     }
 
     #[test]
@@ -468,28 +510,65 @@ mod tests {
             ingress("Moon", 0, 0),
             ingress("Moon", 10, 11),
             ingress("Moon", 20, 0),
-        ]).unwrap();
-        let selected = index.between(EventFamily::Ingress, &moon, TimestampMicros::new(10), TimestampMicros::new(20)).unwrap();
+        ])
+        .unwrap();
+        let selected = index
+            .between(
+                EventFamily::Ingress,
+                &moon,
+                TimestampMicros::new(10),
+                TimestampMicros::new(20),
+            )
+            .unwrap();
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].at().as_i64(), 10);
-        assert!(index.between(EventFamily::Ingress, &moon, TimestampMicros::new(10), TimestampMicros::new(10)).unwrap().is_empty());
+        assert!(index
+            .between(
+                EventFamily::Ingress,
+                &moon,
+                TimestampMicros::new(10),
+                TimestampMicros::new(10)
+            )
+            .unwrap()
+            .is_empty());
         assert_eq!(
-            index.between(EventFamily::Ingress, &moon, TimestampMicros::new(20), TimestampMicros::new(10)),
-            Err(QueryError::ReversedRange { start: TimestampMicros::new(20), end: TimestampMicros::new(10) }),
+            index.between(
+                EventFamily::Ingress,
+                &moon,
+                TimestampMicros::new(20),
+                TimestampMicros::new(10)
+            ),
+            Err(QueryError::ReversedRange {
+                start: TimestampMicros::new(20),
+                end: TimestampMicros::new(10)
+            }),
         );
     }
 
     #[test]
     fn reject_same_family_body_instant_but_not_cross_family() {
-        let error = EventIndex::from_events(vec![ingress("Moon", 10, 0), ingress("Moon", 10, 1)]).unwrap_err();
-        assert_eq!(error, IndexError::DuplicateInstant {
-            family: EventFamily::Ingress, body: body("Moon"), at: TimestampMicros::new(10),
-        });
+        let error = EventIndex::from_events(vec![ingress("Moon", 10, 0), ingress("Moon", 10, 1)])
+            .unwrap_err();
+        assert_eq!(
+            error,
+            IndexError::DuplicateInstant {
+                family: EventFamily::Ingress,
+                body: body("Moon"),
+                at: TimestampMicros::new(10),
+            }
+        );
         let other = Event::Motion(MotionEvent::new(
-            body("Moon"), TimestampMicros::new(10),
-            MotionDirection::Direct, ZodiacSign::try_from(0_i32).unwrap(),
+            body("Moon"),
+            TimestampMicros::new(10),
+            MotionDirection::Direct,
+            ZodiacSign::try_from(0_i32).unwrap(),
         ));
-        assert_eq!(EventIndex::from_events(vec![ingress("Moon", 10, 0), other]).unwrap().len(), 2);
+        assert_eq!(
+            EventIndex::from_events(vec![ingress("Moon", 10, 0), other])
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     #[test]
@@ -500,23 +579,42 @@ mod tests {
             synod("Moon", 150),
             synod("Mercury", -876_544),
             synod("Mercury", 300),
-        ]).unwrap();
+        ])
+        .unwrap();
         let current = index.synod_at(&mercury, TimestampMicros::new(100)).unwrap();
-        assert_eq!(current.previous().unwrap().event().start().as_i64(), -876_544);
+        assert_eq!(
+            current.previous().unwrap().event().start().as_i64(),
+            -876_544
+        );
         assert_eq!(current.next().unwrap().event().start().as_i64(), 300);
         assert_eq!(current.next_recorded_start().unwrap().as_i64(), 300);
         assert!(current.next().unwrap().next().is_none());
-        assert!(index.synod_at(&mercury, TimestampMicros::new(-876_545)).is_none());
+        assert!(index
+            .synod_at(&mercury, TimestampMicros::new(-876_545))
+            .is_none());
     }
 
     #[test]
     fn gap_query_returns_recorded_event_without_verifying_sign() {
         let moon = body("Moon");
-        let index = EventIndex::from_events(vec![
-            ingress("Moon", 0, 1),
-            ingress("Moon", 10_000_000, 0),
-        ]).unwrap();
-        assert_eq!(index.at(EventFamily::Ingress, &moon, TimestampMicros::new(5_000_000)).unwrap().at().as_i64(), 0);
-        assert_eq!(index.next(EventFamily::Ingress, &moon, TimestampMicros::new(5_000_000)).unwrap().at().as_i64(), 10_000_000);
+        let index =
+            EventIndex::from_events(vec![ingress("Moon", 0, 1), ingress("Moon", 10_000_000, 0)])
+                .unwrap();
+        assert_eq!(
+            index
+                .at(EventFamily::Ingress, &moon, TimestampMicros::new(5_000_000))
+                .unwrap()
+                .at()
+                .as_i64(),
+            0
+        );
+        assert_eq!(
+            index
+                .next(EventFamily::Ingress, &moon, TimestampMicros::new(5_000_000))
+                .unwrap()
+                .at()
+                .as_i64(),
+            10_000_000
+        );
     }
 }

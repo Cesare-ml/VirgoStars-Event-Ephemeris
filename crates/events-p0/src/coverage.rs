@@ -25,19 +25,24 @@ const SCHEMA: &str = "virgostars-reviewed-coverage/v0";
 const MAX_POLICY_BYTES: u64 = 1_000_000;
 
 fn required<'a>(value: &'a Value, key: &str) -> Result<&'a str, P0Error> {
-    value.get(key).and_then(Value::as_str)
+    value
+        .get(key)
+        .and_then(Value::as_str)
         .ok_or_else(|| invalid(format!("missing or non-string coverage policy field {key}")))
 }
 
 fn instant(value: &Value, key: &str) -> Result<TimestampMicros, P0Error> {
     let text = required(value, key)?;
     let digits = text.strip_prefix('-').unwrap_or(text);
-    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit())
-        || (digits.len() > 1 && digits.starts_with('0')) || text.starts_with('+')
+    if digits.is_empty()
+        || !digits.bytes().all(|b| b.is_ascii_digit())
+        || (digits.len() > 1 && digits.starts_with('0'))
+        || text.starts_with('+')
     {
         return Err(invalid(format!("invalid policy instant {key}")));
     }
-    text.parse::<i64>().map(TimestampMicros::new)
+    text.parse::<i64>()
+        .map(TimestampMicros::new)
         .map_err(|_| invalid(format!("policy instant {key} out of i64 range")))
 }
 
@@ -47,8 +52,8 @@ fn parse_window(row: &Value) -> Result<ReviewedWindow, P0Error> {
         "motion" => EventFamily::Motion,
         _ => return Err(invalid("unsupported coverage family")),
     };
-    let body = BodyId::try_from(required(row, "body")?)
-        .map_err(|error| invalid(error.to_string()))?;
+    let body =
+        BodyId::try_from(required(row, "body")?).map_err(|error| invalid(error.to_string()))?;
     let reviewer = required(row, "reviewer")?;
     let evidence = required(row, "evidence")?;
     ReviewedWindow::new(
@@ -58,15 +63,20 @@ fn parse_window(row: &Value) -> Result<ReviewedWindow, P0Error> {
         instant(row, "end_us_exclusive")?,
         reviewer.to_owned(),
         evidence.to_owned(),
-    ).map_err(|error| invalid(error.to_string()))
+    )
+    .map_err(|error| invalid(error.to_string()))
 }
 
 /// A state query outcome. The last recorded event is useful diagnostic
 /// evidence even when coverage is not approved, but cannot certify a sign.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CoveredState {
-    UnknownCoverage { last_recorded: Option<P0Record> },
-    UnknownInitialState { last_recorded: Option<P0Record> },
+    UnknownCoverage {
+        last_recorded: Option<P0Record>,
+    },
+    UnknownInitialState {
+        last_recorded: Option<P0Record>,
+    },
     Reviewed {
         record: P0Record,
         reviewer: String,
@@ -98,7 +108,9 @@ impl P0Archive {
         // Stream a bounded policy to avoid untrusted-file allocation races.
         let mut policy_file = File::open(policy_path)?;
         let mut data = Vec::new();
-        (&mut policy_file).take(MAX_POLICY_BYTES + 1).read_to_end(&mut data)?;
+        (&mut policy_file)
+            .take(MAX_POLICY_BYTES + 1)
+            .read_to_end(&mut data)?;
         if data.len() as u64 > MAX_POLICY_BYTES {
             return Err(invalid("coverage policy exceeds maximum size"));
         }
@@ -107,25 +119,32 @@ impl P0Archive {
         if required(&document, "schema")? != SCHEMA
             || required(&document, "verification")? != "human-reviewed-only"
         {
-            return Err(invalid("unsupported coverage policy schema or verification mode"));
+            return Err(invalid(
+                "unsupported coverage policy schema or verification mode",
+            ));
         }
         let sha256 = required(&document, "archive_sha256")?;
         if sha256.len() != 64
-            || !sha256.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            || !sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
         {
             return Err(invalid("invalid lowercase archive SHA-256"));
         }
         let actual = self.verify_archive_sha256(sha256)?;
-        let rows = document.get("reviewed_windows").and_then(Value::as_array)
+        let rows = document
+            .get("reviewed_windows")
+            .and_then(Value::as_array)
             .ok_or_else(|| invalid("missing coverage reviewed_windows array"))?;
         // Bound the number of entries even though file size is capped.
         if rows.len() > 4096 {
             return Err(invalid("too many coverage windows"));
         }
-        let windows = rows.iter().map(parse_window)
+        let windows = rows
+            .iter()
+            .map(parse_window)
             .collect::<Result<Vec<_>, _>>()?;
-        let policy = CoveragePolicy::new(windows)
-            .map_err(|error| invalid(error.to_string()))?;
+        let policy = CoveragePolicy::new(windows).map_err(|error| invalid(error.to_string()))?;
         Ok(CoverageAwareP0 {
             archive: self,
             policy,
@@ -153,32 +172,46 @@ impl CoverageAwareP0<'_> {
         // Do not let a swapped/mutated file inherit the verification made at
         // construction. This costs a streamed hash for each state query in P0.
         if self.archive.archive_sha256()? != self.sha256 {
-            return Err(invalid("archive bytes changed since coverage policy verification"));
+            return Err(invalid(
+                "archive bytes changed since coverage policy verification",
+            ));
         }
         let last = self.archive.at(family, body, instant)?;
-        match self.policy.assess(family, body, instant, last.as_ref().map(P0Record::at)) {
-            CoverageAssessment::UnknownCoverage =>
-                Ok(CoveredState::UnknownCoverage { last_recorded: last }),
-            CoverageAssessment::UnknownInitialState =>
-                Ok(CoveredState::UnknownInitialState { last_recorded: last }),
-            CoverageAssessment::Reviewed(window) =>
-                Ok(CoveredState::Reviewed {
-                    record: last.expect("reviewed window requires initial recorded event"),
-                    reviewer: window.reviewer().to_owned(),
-                    evidence: window.evidence().to_owned(),
-                    window_start: window.start(),
-                    window_end_exclusive: window.end_exclusive(),
-                }),
+        match self
+            .policy
+            .assess(family, body, instant, last.as_ref().map(P0Record::at))
+        {
+            CoverageAssessment::UnknownCoverage => Ok(CoveredState::UnknownCoverage {
+                last_recorded: last,
+            }),
+            CoverageAssessment::UnknownInitialState => Ok(CoveredState::UnknownInitialState {
+                last_recorded: last,
+            }),
+            CoverageAssessment::Reviewed(window) => Ok(CoveredState::Reviewed {
+                record: last.expect("reviewed window requires initial recorded event"),
+                reviewer: window.reviewer().to_owned(),
+                evidence: window.evidence().to_owned(),
+                window_start: window.start(),
+                window_end_exclusive: window.end_exclusive(),
+            }),
         }
     }
 
     /// Reviewed sign state from the ingress family only.
-    pub fn sign_at(&self, body: &BodyId, instant: TimestampMicros) -> Result<CoveredState, P0Error> {
+    pub fn sign_at(
+        &self,
+        body: &BodyId,
+        instant: TimestampMicros,
+    ) -> Result<CoveredState, P0Error> {
         self.state(EventFamily::Ingress, body, instant)
     }
 
     /// Reviewed direct/retrograde state from the motion family only.
-    pub fn direction_at(&self, body: &BodyId, instant: TimestampMicros) -> Result<CoveredState, P0Error> {
+    pub fn direction_at(
+        &self,
+        body: &BodyId,
+        instant: TimestampMicros,
+    ) -> Result<CoveredState, P0Error> {
         self.state(EventFamily::Motion, body, instant)
     }
 }

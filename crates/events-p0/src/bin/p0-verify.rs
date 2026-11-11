@@ -29,9 +29,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let expected = match args.next() {
         None => None,
-        Some(flag) if flag.to_str() == Some("--sha256") => {
-            Some(args.next().ok_or_else(usage)?)
-        }
+        Some(flag) if flag.to_str() == Some("--sha256") => Some(args.next().ok_or_else(usage)?),
         Some(_) => return Err(usage().into()),
     };
     if args.next().is_some() {
@@ -41,9 +39,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let archive = P0Archive::open(std::path::Path::new(&path))?;
     let result = archive.verify_all()?;
     let sha256 = match expected.as_ref() {
-        Some(expected) => archive.verify_archive_sha256(
-            expected.to_str().ok_or_else(usage)?
-        )?,
+        Some(expected) => archive.verify_archive_sha256(expected.to_str().ok_or_else(usage)?)?,
         None => archive.archive_sha256()?,
     };
     let count = |family| result.by_family.get(&family).copied().unwrap_or(0);

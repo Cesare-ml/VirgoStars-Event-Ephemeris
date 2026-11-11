@@ -32,7 +32,8 @@ fn public_index_api_can_navigate_without_loading_a_database() {
         Event::Synod(SynodEvent::new(body("Moon"), stamp(10), None).unwrap()),
         ingress(-876_544, 0),
         ingress(30, 1),
-    ]).unwrap();
+    ])
+    .unwrap();
     let moon = body("Moon");
 
     let synod = index.synod_at(&moon, stamp(10)).unwrap();
@@ -42,7 +43,14 @@ fn public_index_api_can_navigate_without_loading_a_database() {
 
     let recorded = index.at(EventFamily::Ingress, &moon, stamp(0)).unwrap();
     assert_eq!(recorded.at().as_i64(), -876_544);
-    assert_eq!(index.next(EventFamily::Ingress, &moon, stamp(0)).unwrap().at().as_i64(), 30);
+    assert_eq!(
+        index
+            .next(EventFamily::Ingress, &moon, stamp(0))
+            .unwrap()
+            .at()
+            .as_i64(),
+        30
+    );
 }
 
 #[test]
@@ -50,5 +58,8 @@ fn missing_body_is_not_a_reason_to_infer_an_event() {
     let index = EventIndex::from_events(vec![ingress(10, 0)]).unwrap();
     let mars = body("Mars");
     assert!(index.at(EventFamily::Ingress, &mars, stamp(100)).is_none());
-    assert!(index.between(EventFamily::Ingress, &mars, stamp(0), stamp(100)).unwrap().is_empty());
+    assert!(index
+        .between(EventFamily::Ingress, &mars, stamp(0), stamp(100))
+        .unwrap()
+        .is_empty());
 }

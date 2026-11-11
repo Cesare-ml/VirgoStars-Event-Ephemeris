@@ -28,8 +28,13 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use virgostars_events_core::{
+<<<<<<< Updated upstream
     BodyId, Event, EventFamily, IngressEvent, MotionDirection, MotionEvent, SynodEvent,
     SynodPhase, TimestampMicros, ZodiacSign, MAX_CHRONOLOGICAL_PAGE_SIZE,
+=======
+    BodyId, Event, EventFamily, IngressEvent, MotionDirection, MotionEvent, SynodEvent, SynodPhase,
+    TimestampMicros, ZodiacSign,
+>>>>>>> Stashed changes
 };
 
 const MAGIC: &[u8; 8] = b"VSEPH-P0";
@@ -72,17 +77,20 @@ fn invalid(message: impl Into<String>) -> P0Error {
 }
 
 fn string<'a>(item: &'a Value, key: &str) -> Result<&'a str, P0Error> {
-    item.get(key).and_then(Value::as_str)
+    item.get(key)
+        .and_then(Value::as_str)
         .ok_or_else(|| invalid(format!("missing or invalid {key}")))
 }
 
 fn unsigned(item: &Value, key: &str) -> Result<u64, P0Error> {
-    item.get(key).and_then(Value::as_u64)
+    item.get(key)
+        .and_then(Value::as_u64)
         .ok_or_else(|| invalid(format!("missing or invalid {key}")))
 }
 
 fn timestamp(item: &Value, key: &str) -> Result<TimestampMicros, P0Error> {
-    string(item, key)?.parse::<i64>()
+    string(item, key)?
+        .parse::<i64>()
         .map(TimestampMicros::new)
         .map_err(|_| invalid(format!("invalid i64 timestamp in {key}")))
 }
@@ -208,12 +216,16 @@ impl P0Archive {
         if &prefix[..8] != MAGIC {
             return Err(invalid("incorrect experimental magic"));
         }
-        let header_len = u32::from_le_bytes(prefix[8..12].try_into()
-            .map_err(|_| invalid("invalid header prefix"))?) as usize;
+        let header_len = u32::from_le_bytes(
+            prefix[8..12]
+                .try_into()
+                .map_err(|_| invalid("invalid header prefix"))?,
+        ) as usize;
         if header_len == 0 || header_len > MAX_HEADER {
             return Err(invalid("oversized or empty JSON header"));
         }
-        let payload_start = 12_u64.checked_add(header_len as u64)
+        let payload_start = 12_u64
+            .checked_add(header_len as u64)
             .ok_or_else(|| invalid("header offset overflow"))?;
         if payload_start > file_len {
             return Err(invalid("truncated header"));
@@ -231,7 +243,9 @@ impl P0Archive {
         if unsigned(&doc, "block_records_max")? != MAX_RECORDS as u64 {
             return Err(P0Error::Unsupported("block record cap mismatch".into()));
         }
-        let entries = doc.get("table_of_contents").and_then(Value::as_array)
+        let entries = doc
+            .get("table_of_contents")
+            .and_then(Value::as_array)
             .ok_or_else(|| invalid("missing table_of_contents"))?;
         let mut blocks: BTreeMap<(EventFamily, BodyId), Vec<Block>> = BTreeMap::new();
         let mut expected_offset: u64 = 0;
@@ -239,9 +253,12 @@ impl P0Archive {
         let mut prior_key: Option<(String, String)> = None;
         for entry in entries {
             let family = family_from_name(string(entry, "family")?)?;
-            let body = BodyId::try_from(string(entry, "body")?)
-                .map_err(|_| invalid("invalid body ID"))?;
-            let order_key = (string(entry, "family")?.to_owned(), string(entry, "body")?.to_owned());
+            let body =
+                BodyId::try_from(string(entry, "body")?).map_err(|_| invalid("invalid body ID"))?;
+            let order_key = (
+                string(entry, "family")?.to_owned(),
+                string(entry, "body")?.to_owned(),
+            );
             let key = (family, body);
             if prior_key.as_ref().is_some_and(|prev| &order_key < prev) {
                 return Err(invalid("table_of_contents key order is not canonical"));
@@ -258,13 +275,23 @@ impl P0Archive {
                 .map_err(|_| invalid("raw block length overflow"))?;
             let count = usize::try_from(unsigned(entry, "count")?)
                 .map_err(|_| invalid("block count overflow"))?;
+<<<<<<< Updated upstream
             if start != expected_offset || len == 0 || len > MAX_BLOCK
                 || !(8..=MAX_RAW).contains(&raw_len)
                 || count == 0 || count > MAX_RECORDS
+=======
+            if start != expected_offset
+                || len == 0
+                || len > MAX_BLOCK
+                || !(8..=MAX_RAW).contains(&raw_len)
+                || count == 0
+                || count > MAX_RECORDS
+>>>>>>> Stashed changes
             {
                 return Err(invalid("unsafe block offset, length or count"));
             }
-            expected_offset = expected_offset.checked_add(len as u64)
+            expected_offset = expected_offset
+                .checked_add(len as u64)
                 .ok_or_else(|| invalid("compressed offset overflow"))?;
             let sha256 = string(entry, "raw_sha256")?.to_owned();
             if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -276,17 +303,26 @@ impl P0Archive {
                 }
             }
             blocks.entry(key.clone()).or_default().push(Block {
-                start, len, raw_len, count, first, last, sha256,
+                start,
+                len,
+                raw_len,
+                count,
+                first,
+                last,
+                sha256,
             });
             let total = totals.entry(family).or_default();
-            *total = total.checked_add(count as u64)
+            *total = total
+                .checked_add(count as u64)
                 .ok_or_else(|| invalid("section count overflow"))?;
             prior_key = Some(order_key);
         }
         if payload_start.checked_add(expected_offset) != Some(file_len) {
             return Err(invalid("header index does not cover the entire file"));
         }
-        let sections = doc.get("sections").and_then(Value::as_object)
+        let sections = doc
+            .get("sections")
+            .and_then(Value::as_object)
             .ok_or_else(|| invalid("missing sections map"))?;
         if sections.len() != totals.len() {
             return Err(invalid("section count mismatch"));
@@ -302,7 +338,10 @@ impl P0Archive {
                 .ok_or_else(|| invalid("archive record count overflow"))
         })?;
         Ok(Self {
+<<<<<<< Updated upstream
             archive_id: NEXT_ARCHIVE_ID.fetch_add(1, Ordering::Relaxed),
+=======
+>>>>>>> Stashed changes
             path,
             payload_start,
             blocks,
@@ -343,9 +382,13 @@ impl P0Archive {
     /// completeness of astronomical event dates.
     pub fn verify_archive_sha256(&self, expected: &str) -> Result<String, P0Error> {
         if expected.len() != 64
-            || !expected.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            || !expected
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
         {
-            return Err(invalid("expected archive SHA-256 must be 64 lower-case hex characters"));
+            return Err(invalid(
+                "expected archive SHA-256 must be 64 lower-case hex characters",
+            ));
         }
         let digest = self.archive_sha256()?;
         if digest != expected {
@@ -385,12 +428,17 @@ impl P0Archive {
                 }
                 let count = u64::try_from(decoded.len())
                     .map_err(|_| invalid("decoded block record count overflows u64"))?;
-                summary.records = summary.records.checked_add(count)
+                summary.records = summary
+                    .records
+                    .checked_add(count)
                     .ok_or_else(|| invalid("archive record count overflow"))?;
-                summary.blocks = summary.blocks.checked_add(1)
+                summary.blocks = summary
+                    .blocks
+                    .checked_add(1)
                     .ok_or_else(|| invalid("archive block count overflow"))?;
                 let family_total = summary.by_family.entry(*family).or_default();
-                *family_total = family_total.checked_add(count)
+                *family_total = family_total
+                    .checked_add(count)
                     .ok_or_else(|| invalid("family record count overflow"))?;
             }
         }
@@ -400,21 +448,31 @@ impl P0Archive {
         Ok(summary)
     }
 
-    fn load_block(&self, family: EventFamily, body: &BodyId, block: &Block) -> Result<Vec<P0Record>, P0Error> {
+    fn load_block(
+        &self,
+        family: EventFamily,
+        body: &BodyId,
+        block: &Block,
+    ) -> Result<Vec<P0Record>, P0Error> {
         let mut file = File::open(&self.path)?;
         file.seek(SeekFrom::Start(
-            self.payload_start.checked_add(block.start)
-                .ok_or_else(|| invalid("block seek overflow"))?
+            self.payload_start
+                .checked_add(block.start)
+                .ok_or_else(|| invalid("block seek overflow"))?,
         ))?;
         let mut compressed = vec![0u8; block.len];
         file.read_exact(&mut compressed)?;
         let mut decoder = ZlibDecoder::new(Cursor::new(compressed.as_slice()));
         let mut raw = Vec::new();
         // Read to EOF while refusing to allocate beyond the declared limit.
-        (&mut decoder).take(block.raw_len as u64 + 1).read_to_end(&mut raw)?;
+        (&mut decoder)
+            .take(block.raw_len as u64 + 1)
+            .read_to_end(&mut raw)?;
         let consumed = decoder.into_inner().position();
         if raw.len() != block.raw_len || consumed != compressed.len() as u64 {
-            return Err(invalid("invalid compressed stream length or trailing bytes"));
+            return Err(invalid(
+                "invalid compressed stream length or trailing bytes",
+            ));
         }
         let sha = format!("{:x}", Sha256::digest(&raw));
         if sha != block.sha256 {
@@ -430,21 +488,39 @@ impl P0Archive {
     }
 
     /// Latest recorded event at or before the requested timestamp.
-    pub fn at(&self, family: EventFamily, body: &BodyId, t: TimestampMicros) -> Result<Option<P0Record>, P0Error> {
-        let Some(series) = self.blocks.get(&(family, body.clone())) else { return Ok(None); };
+    pub fn at(
+        &self,
+        family: EventFamily,
+        body: &BodyId,
+        t: TimestampMicros,
+    ) -> Result<Option<P0Record>, P0Error> {
+        let Some(series) = self.blocks.get(&(family, body.clone())) else {
+            return Ok(None);
+        };
         let end = series.partition_point(|block| block.first <= t);
-        let Some(i) = end.checked_sub(1) else { return Ok(None); };
+        let Some(i) = end.checked_sub(1) else {
+            return Ok(None);
+        };
         let records = self.load_block(family, body, &series[i])?;
         Ok(records.into_iter().rev().find(|record| record.at() <= t))
     }
 
     /// First recorded event strictly later than the requested timestamp.
-    pub fn next(&self, family: EventFamily, body: &BodyId, t: TimestampMicros) -> Result<Option<P0Record>, P0Error> {
-        let Some(series) = self.blocks.get(&(family, body.clone())) else { return Ok(None); };
+    pub fn next(
+        &self,
+        family: EventFamily,
+        body: &BodyId,
+        t: TimestampMicros,
+    ) -> Result<Option<P0Record>, P0Error> {
+        let Some(series) = self.blocks.get(&(family, body.clone())) else {
+            return Ok(None);
+        };
         let first = series.partition_point(|block| block.last <= t);
         for block in &series[first..] {
-            if let Some(record) = self.load_block(family, body, block)?
-                .into_iter().find(|record| record.at() > t)
+            if let Some(record) = self
+                .load_block(family, body, block)?
+                .into_iter()
+                .find(|record| record.at() > t)
             {
                 return Ok(Some(record));
             }
@@ -453,12 +529,22 @@ impl P0Archive {
     }
 
     /// Last recorded event strictly earlier than the requested timestamp.
-    pub fn previous(&self, family: EventFamily, body: &BodyId, t: TimestampMicros) -> Result<Option<P0Record>, P0Error> {
-        let Some(series) = self.blocks.get(&(family, body.clone())) else { return Ok(None); };
+    pub fn previous(
+        &self,
+        family: EventFamily,
+        body: &BodyId,
+        t: TimestampMicros,
+    ) -> Result<Option<P0Record>, P0Error> {
+        let Some(series) = self.blocks.get(&(family, body.clone())) else {
+            return Ok(None);
+        };
         let end = series.partition_point(|block| block.first < t);
         for block in series[..end].iter().rev() {
-            if let Some(record) = self.load_block(family, body, block)?
-                .into_iter().rev().find(|record| record.at() < t)
+            if let Some(record) = self
+                .load_block(family, body, block)?
+                .into_iter()
+                .rev()
+                .find(|record| record.at() < t)
             {
                 return Ok(Some(record));
             }
@@ -468,8 +554,11 @@ impl P0Archive {
 
     /// Recorded events within half-open [start,end), not evidence of completeness.
     pub fn between(
-        &self, family: EventFamily, body: &BodyId,
-        start: TimestampMicros, end: TimestampMicros,
+        &self,
+        family: EventFamily,
+        body: &BodyId,
+        start: TimestampMicros,
+        end: TimestampMicros,
     ) -> Result<Vec<P0Record>, P0Error> {
         if end < start {
             return Err(invalid("query interval reversed"));
@@ -477,17 +566,25 @@ impl P0Archive {
         if end == start {
             return Ok(Vec::new());
         }
-        let Some(series) = self.blocks.get(&(family, body.clone())) else { return Ok(Vec::new()); };
+        let Some(series) = self.blocks.get(&(family, body.clone())) else {
+            return Ok(Vec::new());
+        };
         let first = series.partition_point(|block| block.last < start);
         let mut result = Vec::new();
         for block in &series[first..] {
-            if block.first >= end { break; }
-            result.extend(self.load_block(family, body, block)?
-                .into_iter().filter(|record| start <= record.at() && record.at() < end));
+            if block.first >= end {
+                break;
+            }
+            result.extend(
+                self.load_block(family, body, block)?
+                    .into_iter()
+                    .filter(|record| start <= record.at() && record.at() < end),
+            );
         }
         Ok(result)
     }
 
+<<<<<<< Updated upstream
     /// One bounded chronological page of recorded P0 events in [start,end).
     ///
     /// Stable tie ordering is timestamp, EventFamily, BodyId, matching the
@@ -611,8 +708,19 @@ impl P0Archive {
     }
 
     pub fn synod_at(&self, body: &BodyId, t: TimestampMicros) -> Result<Option<P0SynodHandle<'_>>, P0Error> {
+=======
+    pub fn synod_at(
+        &self,
+        body: &BodyId,
+        t: TimestampMicros,
+    ) -> Result<Option<P0SynodHandle<'_>>, P0Error> {
+>>>>>>> Stashed changes
         let record = self.at(EventFamily::Synod, body, t)?;
-        Ok(record.map(|record| P0SynodHandle { archive: self, body: body.clone(), record }))
+        Ok(record.map(|record| P0SynodHandle {
+            archive: self,
+            body: body.clone(),
+            record,
+        }))
     }
 }
 
@@ -625,20 +733,34 @@ pub struct P0SynodHandle<'a> {
 
 impl<'a> P0SynodHandle<'a> {
     pub fn next(&self) -> Result<Option<Self>, P0Error> {
-        Ok(self.archive.next(EventFamily::Synod, &self.body, self.record.at())?
-            .map(|record| Self { archive: self.archive, body: self.body.clone(), record }))
+        Ok(self
+            .archive
+            .next(EventFamily::Synod, &self.body, self.record.at())?
+            .map(|record| Self {
+                archive: self.archive,
+                body: self.body.clone(),
+                record,
+            }))
     }
 
     pub fn previous(&self) -> Result<Option<Self>, P0Error> {
-        Ok(self.archive.previous(EventFamily::Synod, &self.body, self.record.at())?
-            .map(|record| Self { archive: self.archive, body: self.body.clone(), record }))
+        Ok(self
+            .archive
+            .previous(EventFamily::Synod, &self.body, self.record.at())?
+            .map(|record| Self {
+                archive: self.archive,
+                body: self.body.clone(),
+                record,
+            }))
     }
 }
 
 fn take_varint(bytes: &[u8], pos: &mut usize) -> Result<u64, P0Error> {
     let mut value = 0u64;
     for step in 0..10 {
-        let b = *bytes.get(*pos).ok_or_else(|| invalid("truncated unsigned varint"))?;
+        let b = *bytes
+            .get(*pos)
+            .ok_or_else(|| invalid("truncated unsigned varint"))?;
         *pos += 1;
         if step == 9 && b > 1 {
             return Err(invalid("unsigned varint overflow"));
@@ -654,15 +776,23 @@ fn take_varint(bytes: &[u8], pos: &mut usize) -> Result<u64, P0Error> {
 fn take_i64_delta(bytes: &[u8], pos: &mut usize, base: i64) -> Result<i64, P0Error> {
     let delta = take_varint(bytes, pos)?;
     let delta = i64::try_from(delta).map_err(|_| invalid("timestamp delta exceeds i64"))?;
-    base.checked_add(delta).ok_or_else(|| invalid("timestamp addition overflow"))
+    base.checked_add(delta)
+        .ok_or_else(|| invalid("timestamp addition overflow"))
 }
 
 fn decode_records(
-    family: EventFamily, body: &BodyId, bytes: &[u8], count: usize,
+    family: EventFamily,
+    body: &BodyId,
+    bytes: &[u8],
+    count: usize,
 ) -> Result<Vec<P0Record>, P0Error> {
-    let base = bytes.get(..8).ok_or_else(|| invalid("truncated block base time"))?;
-    let mut previous = i64::from_le_bytes(base.try_into()
-        .map_err(|_| invalid("invalid block base time"))?);
+    let base = bytes
+        .get(..8)
+        .ok_or_else(|| invalid("truncated block base time"))?;
+    let mut previous = i64::from_le_bytes(
+        base.try_into()
+            .map_err(|_| invalid("invalid block base time"))?,
+    );
     let mut pos = 8;
     let mut records = Vec::with_capacity(count);
     let mut source_ids = BTreeSet::new();
@@ -680,31 +810,44 @@ fn decode_records(
         let event = match family {
             EventFamily::Synod => {
                 let code = take_varint(bytes, &mut pos)?;
-                if code > 1024 { return Err(invalid("synod phase count cap exceeded")); }
+                if code > 1024 {
+                    return Err(invalid("synod phase count cap exceeded"));
+                }
                 let mut phases = Vec::new();
                 let mut last_phase = current;
                 for n in 0..code.saturating_sub(1) {
                     let when = take_i64_delta(bytes, &mut pos, last_phase)?;
-                    if when <= last_phase { return Err(invalid("non-increasing phase time")); }
-                    phases.push(SynodPhase::new(format!("extra_{}", n + 1), TimestampMicros::new(when))
-                        .map_err(|error| invalid(error.to_string()))?);
+                    if when <= last_phase {
+                        return Err(invalid("non-increasing phase time"));
+                    }
+                    phases.push(
+                        SynodPhase::new(format!("extra_{}", n + 1), TimestampMicros::new(when))
+                            .map_err(|error| invalid(error.to_string()))?,
+                    );
                     last_phase = when;
                 }
                 let phases = if code == 0 { None } else { Some(phases) };
-                Event::Synod(SynodEvent::new(body.clone(), at, phases)
-                    .map_err(|error| invalid(error.to_string()))?)
+                Event::Synod(
+                    SynodEvent::new(body.clone(), at, phases)
+                        .map_err(|error| invalid(error.to_string()))?,
+                )
             }
             EventFamily::Ingress => {
-                let sign = *bytes.get(pos).ok_or_else(|| invalid("truncated ingress sign"))?;
+                let sign = *bytes
+                    .get(pos)
+                    .ok_or_else(|| invalid("truncated ingress sign"))?;
                 pos += 1;
-                let sign = ZodiacSign::try_from(sign).map_err(|error| invalid(error.to_string()))?;
+                let sign =
+                    ZodiacSign::try_from(sign).map_err(|error| invalid(error.to_string()))?;
                 Event::Ingress(IngressEvent::new(body.clone(), at, sign))
             }
             EventFamily::Motion => {
-                let raw = bytes.get(pos..pos + 2).ok_or_else(|| invalid("truncated motion fields"))?;
+                let raw = bytes
+                    .get(pos..pos + 2)
+                    .ok_or_else(|| invalid("truncated motion fields"))?;
                 pos += 2;
-                let sign = ZodiacSign::try_from(raw[0])
-                    .map_err(|error| invalid(error.to_string()))?;
+                let sign =
+                    ZodiacSign::try_from(raw[0]).map_err(|error| invalid(error.to_string()))?;
                 let direction = match raw[1] {
                     0 => MotionDirection::Direct,
                     1 => MotionDirection::Retrograde,

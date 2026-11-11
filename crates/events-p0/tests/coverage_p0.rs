@@ -26,6 +26,7 @@ struct TestFile(PathBuf);
 
 impl TestFile {
     fn new(name: &str, bytes: &[u8]) -> Self {
+<<<<<<< Updated upstream
         // Windows clock resolution is not unique for concurrently running tests.
         // Combine process ID, clock tick and atomic counter, then create
         // exclusively so one test cannot overwrite/delete another's fixture.
@@ -33,6 +34,15 @@ impl TestFile {
         let sequence = NEXT_TEST_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "vseph-coverage-{}-{nanos}-{sequence}-{name}", std::process::id()
+=======
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "vseph-coverage-{}-{nanos}-{name}",
+            std::process::id()
+>>>>>>> Stashed changes
         ));
         let mut file = OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
         file.write_all(bytes).unwrap();
@@ -61,7 +71,9 @@ fn policy_and_archive_fixtures_do_not_collide_under_parallel_allocation() {
 }
 
 fn fixture() -> TestFile {
-    let bytes = STANDARD.decode(include_str!("fixtures/synthetic.p0.base64").trim()).unwrap();
+    let bytes = STANDARD
+        .decode(include_str!("fixtures/synthetic.p0.base64").trim())
+        .unwrap();
     assert_eq!(format!("{:x}", Sha256::digest(&bytes)), GOLDEN_SHA256);
     TestFile::new("synthetic.p0", &bytes)
 }
@@ -104,7 +116,9 @@ fn no_reviewed_ranges_fails_closed_even_with_real_event_index() {
     assert_eq!(covered.reviewed_window_count(), 0);
     assert_eq!(covered.archive_sha256(), GOLDEN_SHA256);
     match covered.sign_at(&body("Moon"), instant(4_000_000)).unwrap() {
-        CoveredState::UnknownCoverage { last_recorded: Some(row) } => {
+        CoveredState::UnknownCoverage {
+            last_recorded: Some(row),
+        } => {
             assert_eq!(row.source_id, 42);
             assert_eq!(row.at().as_i64(), 3_000_000);
         }
@@ -116,21 +130,26 @@ fn no_reviewed_ranges_fails_closed_even_with_real_event_index() {
 fn reviewed_bounds_are_half_open_and_pre_epoch_state_is_exact() {
     let file = fixture();
     let archive = P0Archive::open(&file.0).unwrap();
-    let policy_file = policy_file(GOLDEN_SHA256, vec![
-        reviewed_window("ingress", "Moon", -876_544, 4_000_000)
-    ]);
+    let policy_file = policy_file(
+        GOLDEN_SHA256,
+        vec![reviewed_window("ingress", "Moon", -876_544, 4_000_000)],
+    );
     let covered = archive.with_coverage_policy(&policy_file.0).unwrap();
     for (at, expected_id) in [(-876_544, 41), (3_000_000, 42), (3_999_999, 42)] {
         match covered.sign_at(&body("Moon"), instant(at)).unwrap() {
             CoveredState::Reviewed {
-                record, reviewer, window_start, window_end_exclusive, ..
+                record,
+                reviewer,
+                window_start,
+                window_end_exclusive,
+                ..
             } => {
                 assert_eq!(record.source_id, expected_id);
                 assert_eq!(reviewer, "synthetic-test-reviewer");
                 assert_eq!(window_start.as_i64(), -876_544);
                 assert_eq!(window_end_exclusive.as_i64(), 4_000_000);
                 match record.event {
-                    Event::Ingress(_) => {},
+                    Event::Ingress(_) => {}
                     _ => panic!("expected an ingress event"),
                 }
             }
@@ -147,9 +166,10 @@ fn reviewed_bounds_are_half_open_and_pre_epoch_state_is_exact() {
 fn window_without_start_event_must_not_use_previous_window_state() {
     let file = fixture();
     let archive = P0Archive::open(&file.0).unwrap();
-    let policy_file = policy_file(GOLDEN_SHA256, vec![
-        reviewed_window("ingress", "Moon", 0, 4_000_000)
-    ]);
+    let policy_file = policy_file(
+        GOLDEN_SHA256,
+        vec![reviewed_window("ingress", "Moon", 0, 4_000_000)],
+    );
     let covered = archive.with_coverage_policy(&policy_file.0).unwrap();
     assert!(matches!(
         covered.sign_at(&body("Moon"), instant(2_000_000)).unwrap(),
@@ -165,15 +185,19 @@ fn window_without_start_event_must_not_use_previous_window_state() {
 fn motion_and_ingress_reviews_are_separate_even_for_matching_timestamps() {
     let file = fixture();
     let archive = P0Archive::open(&file.0).unwrap();
-    let policy_file = policy_file(GOLDEN_SHA256, vec![
-        reviewed_window("motion", "Mars", 0, 3_000_000)
-    ]);
+    let policy_file = policy_file(
+        GOLDEN_SHA256,
+        vec![reviewed_window("motion", "Mars", 0, 3_000_000)],
+    );
     let covered = archive.with_coverage_policy(&policy_file.0).unwrap();
     assert!(matches!(
         covered.sign_at(&body("Mars"), instant(2_200_000)).unwrap(),
         CoveredState::UnknownCoverage { .. }
     ));
-    match covered.direction_at(&body("Mars"), instant(2_200_000)).unwrap() {
+    match covered
+        .direction_at(&body("Mars"), instant(2_200_000))
+        .unwrap()
+    {
         CoveredState::Reviewed { record, .. } => match record.event {
             Event::Motion(motion) => assert_eq!(motion.direction().legacy_code(), "d"),
             _ => panic!("expected recorded motion"),
@@ -197,7 +221,7 @@ fn unreviewed_or_overlapping_ranges_are_rejected() {
     let archive = P0Archive::open(&file.0).unwrap();
     let bad = vec![
         reviewed_window("ingress", "Moon", 0, 20),
-        reviewed_window("ingress", "Moon", 10, 30)
+        reviewed_window("ingress", "Moon", 10, 30),
     ];
     let overlapping_policy = policy_file(GOLDEN_SHA256, bad);
     assert!(archive.with_coverage_policy(&overlapping_policy.0).is_err());
@@ -217,9 +241,10 @@ fn unreviewed_or_overlapping_ranges_are_rejected() {
 fn archive_mutation_after_review_attachment_is_detected() {
     let file = fixture();
     let archive = P0Archive::open(&file.0).unwrap();
-    let policy_file = policy_file(GOLDEN_SHA256, vec![
-        reviewed_window("ingress", "Moon", -876_544, 4_000_000)
-    ]);
+    let policy_file = policy_file(
+        GOLDEN_SHA256,
+        vec![reviewed_window("ingress", "Moon", -876_544, 4_000_000)],
+    );
     let covered = archive.with_coverage_policy(&policy_file.0).unwrap();
     let mut bytes = fs::read(&file.0).unwrap();
     let end = bytes.len() - 1;

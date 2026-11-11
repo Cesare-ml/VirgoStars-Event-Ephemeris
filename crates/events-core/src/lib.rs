@@ -21,13 +21,17 @@
 use std::error::Error;
 use std::fmt;
 
-pub mod indexed;
 pub mod coverage;
+<<<<<<< Updated upstream
 pub use indexed::{
     ChronologicalCursor, ChronologicalPage, ChronologicalQueryError, EventFamily, EventIndex,
     IndexError, QueryError, SynodHandle, MAX_CHRONOLOGICAL_PAGE_SIZE,
 };
+=======
+pub mod indexed;
+>>>>>>> Stashed changes
 pub use coverage::{CoverageAssessment, CoverageError, CoveragePolicy, ReviewedWindow};
+pub use indexed::{EventFamily, EventIndex, IndexError, QueryError, SynodHandle};
 
 pub use virgostars_events_format::{probe_magic, FormatProbeError, VSEPH_MAGIC};
 
@@ -65,10 +69,7 @@ impl TryFrom<&str> for BodyId {
     type Error = ModelError;
 
     fn try_from(input: &str) -> Result<Self, Self::Error> {
-        if input.is_empty()
-            || input.trim() != input
-            || input.chars().any(char::is_control)
-        {
+        if input.is_empty() || input.trim() != input || input.chars().any(char::is_control) {
             return Err(ModelError::InvalidBody);
         }
         Ok(Self(input.to_owned()))
@@ -152,7 +153,9 @@ impl fmt::Display for ModelError {
             Self::InvalidSign(sign) => write!(f, "invalid zodiac sign index: {sign}"),
             Self::InvalidMotionCode => f.write_str("invalid motion code; expected d or r"),
             Self::InvalidPhaseName => f.write_str("invalid synodic phase name"),
-            Self::InvalidPhaseOrder => f.write_str("synodic phases must be strictly after the anchor and increasing"),
+            Self::InvalidPhaseOrder => {
+                f.write_str("synodic phases must be strictly after the anchor and increasing")
+            }
         }
     }
 }
@@ -211,7 +214,11 @@ impl SynodEvent {
                 previous = phase.at;
             }
         }
-        Ok(Self { body, start, phases })
+        Ok(Self {
+            body,
+            start,
+            phases,
+        })
     }
 
     pub fn body(&self) -> &BodyId {
@@ -336,7 +343,13 @@ mod tests {
 
     #[test]
     fn body_ids_preserve_source_spelling_and_reject_invalid_input() {
-        for name in ["Moon", "Mercury", "true Node", "true Node Sud", "osc. Apogee"] {
+        for name in [
+            "Moon",
+            "Mercury",
+            "true Node",
+            "true Node Sud",
+            "osc. Apogee",
+        ] {
             assert_eq!(body(name).as_str(), name);
         }
         for invalid in ["", " Moon", "Moon ", "Moon\n", "\t"] {
@@ -348,18 +361,36 @@ mod tests {
     fn zodiac_signs_are_strictly_zero_to_eleven() {
         assert_eq!(ZodiacSign::try_from(0_i32).unwrap().index(), 0);
         assert_eq!(ZodiacSign::try_from(11_i32).unwrap().index(), 11);
-        assert_eq!(ZodiacSign::try_from(-1_i32), Err(ModelError::InvalidSign(-1)));
-        assert_eq!(ZodiacSign::try_from(12_i32), Err(ModelError::InvalidSign(12)));
-        assert_eq!(ZodiacSign::try_from(255_u8), Err(ModelError::InvalidSign(255)));
+        assert_eq!(
+            ZodiacSign::try_from(-1_i32),
+            Err(ModelError::InvalidSign(-1))
+        );
+        assert_eq!(
+            ZodiacSign::try_from(12_i32),
+            Err(ModelError::InvalidSign(12))
+        );
+        assert_eq!(
+            ZodiacSign::try_from(255_u8),
+            Err(ModelError::InvalidSign(255))
+        );
     }
 
     #[test]
     fn direction_round_trips_legacy_codes() {
-        assert_eq!(MotionDirection::from_legacy_code("d").unwrap(), MotionDirection::Direct);
-        assert_eq!(MotionDirection::from_legacy_code("r").unwrap(), MotionDirection::Retrograde);
+        assert_eq!(
+            MotionDirection::from_legacy_code("d").unwrap(),
+            MotionDirection::Direct
+        );
+        assert_eq!(
+            MotionDirection::from_legacy_code("r").unwrap(),
+            MotionDirection::Retrograde
+        );
         assert_eq!(MotionDirection::Direct.legacy_code(), "d");
         assert_eq!(MotionDirection::Retrograde.legacy_code(), "r");
-        assert_eq!(MotionDirection::from_legacy_code("R"), Err(ModelError::InvalidMotionCode));
+        assert_eq!(
+            MotionDirection::from_legacy_code("R"),
+            Err(ModelError::InvalidMotionCode)
+        );
     }
 
     #[test]
@@ -384,13 +415,15 @@ mod tests {
             body("osc. Apogee"),
             TimestampMicros::new(-10),
             Some(vec![phase("conjunction2", -5), phase("conjunction3", -1)]),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(two.phases().unwrap().len(), 2);
         let three = SynodEvent::new(
             body("Mercury"),
             TimestampMicros::new(100),
             Some(vec![phase("R2", 110), phase("R3", 120), phase("D4", 130)]),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(three.phases().unwrap()[1].name(), "R3");
         assert_eq!(three.phases().unwrap()[1].at().as_i64(), 120);
 

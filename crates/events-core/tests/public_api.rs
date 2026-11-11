@@ -46,7 +46,10 @@ fn public_types_work_from_an_external_crate() {
 #[test]
 fn public_validation_is_strict_and_format_probe_is_not_a_decoder() {
     assert_eq!(BodyId::try_from(""), Err(ModelError::InvalidBody));
-    assert_eq!(ZodiacSign::try_from(-1_i32), Err(ModelError::InvalidSign(-1)));
+    assert_eq!(
+        ZodiacSign::try_from(-1_i32),
+        Err(ModelError::InvalidSign(-1))
+    );
     assert!(probe_magic(&VSEPH_MAGIC).is_ok());
     // A magic match alone must not be mistaken for a decoded dataset.
 }
