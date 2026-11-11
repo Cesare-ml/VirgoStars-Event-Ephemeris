@@ -106,7 +106,7 @@ The new test-only oracle's unit tests are in `tools/test_verify_python_synods.py
 py -3 -m unittest discover -s tools -p "test_verify_python_synods.py" -v
 ```
 
-**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **9 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 9 tests as a third suite, in addition to 10 pure-Python API/time tests, 5 CLI tests and 5 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
+**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **9 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 9 tests as a third suite, in addition to 10 pure-Python API/time tests, 5 CLI tests and 6 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
 
 ## 5. Produce a local wheel and reinstall it without build dependencies
 
@@ -124,7 +124,8 @@ Wheel installation with `--no-index` proves it can install without downloading/b
 
 | Check | Status as documented here |
 | --- | --- |
-| Python UTC microseconds + dictionary projection, now 10 tests | **8/8 passed on an earlier revision**; two new precision/strict-ISO tests **NOT RUN** on the current branch |\n| Python CLI JSON/exit behavior, 5 tests | **WRITTEN, NOT RUN** — requires no native extension for these mocked tests |
+| Python UTC microseconds + dictionary projection, now 10 tests | **8/8 passed on an earlier revision**; two new precision/strict-ISO tests **NOT RUN** on the current branch |
+| Python CLI JSON/exit behavior, 5 tests | **WRITTEN, NOT RUN** — requires no native extension for these mocked tests |
 | Synthetic native P0 fixture + PyO3 binding, 6 tests | **WRITTEN, NOT RUN** — `tools/validate_python_mvp.py` fails on a skip |
 | Rust synod phase classifier, 5 new tests | **NOT RUN** |
 | Rust latest-synods P0 batch query, 4 new tests | **NOT RUN** |
