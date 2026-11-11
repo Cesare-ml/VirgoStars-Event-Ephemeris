@@ -50,7 +50,7 @@ Once `pip install .` succeeds, run:
 .\.venv\Scripts\python.exe tools\validate_python_mvp.py
 ```
 
-This gate now requires **10 pure-Python API/time tests, 5 CLI tests, 9 independent CSV-oracle tests and 6 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
+This gate now requires **10 pure-Python API/time tests, 5 CLI tests, 10 independent CSV-oracle tests and 6 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
 
 **Unlike standard `unittest`, the validator exits with failure if a native test is skipped**, if the compiled `virgostars_events._native` module cannot be imported, or if fewer than the expected cases are discovered. An `OK (skipped=5)` from a basic unittest run is **not** a successful native gate.
 
@@ -78,7 +78,7 @@ $env:VSEPH_P0_SHA256 = "c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f
 .\.venv\Scripts\python.exe examples\python_synods.py $env:VSEPH_P0_PATH "2026-11-11T12:00:00Z" --sha256 $env:VSEPH_P0_SHA256
 ```
 
-The smoke tests must **run**, not skip, and return source IDs/recorded phases plus `coverage.status="unreviewed"`. Do not mistake the current zero-window coverage policy for verified astronomical completeness. Known lunar gaps 1919/2018 and Moon ingress 2099–4836 need independent review.
+The smoke tests must **run**, not skip, and return source IDs/recorded phases plus `coverage.status="unreviewed"`. Do not mistake the current zero-window coverage policy for verified astronomical completeness. The recorded Moon synod gaps in 1919/2018 are now guarded against year-long `CAL2` extrapolation; optional owner-data native smoke must verify explicit unknown phases and `moon_recorded_cycle_gap_over_45_days` warnings. This does **not** certify scientific coverage or repair the missing events; Moon ingress 2099–4836 and the gaps still require independent review. See [Moon source gaps](MOON_SYNOD_SOURCE_GAPS.md).
 
 ## 4a. Independent source-CSV parity of the installed Python API
 
@@ -106,7 +106,7 @@ The new test-only oracle's unit tests are in `tools/test_verify_python_synods.py
 py -3 -m unittest discover -s tools -p "test_verify_python_synods.py" -v
 ```
 
-**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **9 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 9 tests as a third suite, in addition to 10 pure-Python API/time tests, 5 CLI tests and 6 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
+**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **10 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 10 tests as a third suite, in addition to 10 pure-Python API/time tests, 5 CLI tests and 6 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
 
 ## 5. Produce a local wheel and reinstall it without build dependencies
 
