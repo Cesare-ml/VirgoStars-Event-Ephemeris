@@ -21,7 +21,7 @@ Applies to all human contributors and AI agents in the entire repository. The go
 - Must preserve source row IDs, UTC microseconds, SQL `NULL` vs `[]`, exact phase threshold equality, dataset identity and known gap warnings. Do not claim scientifically verified phase/current state solely from historical recorded data. Moon synod anchors represent recorded new moon according to the source convention, not newly calculated events.
 - No PyPI publication, permanent dataset bundling or automatic download until dataset distribution rights are explicitly approved. Package source follows CPAL-1.0 with visible VirgoStars credits.
 - Add regression tests and update README, ROADMAP and WORK_LOG for every small milestone. Avoid competing PRs; existing draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) houses Rust/Python work. The user has NOT asked to merge or deploy.
-- **Documentation of a planned API is not code.** Current PyO3 binding, pip wheel and Python `get_synods_at()` are not yet implemented. Never describe their examples as executable until built and tested.
+- **Documentation of a planned API is not code.** Current PyO3 binding source and Python `get_synods_at()` wrapper have been committed, but have NOT been compiled together, installed via pip or smoke-tested against a native wheel. Eight pure-Python mock-binding tests passed; no working package may be claimed yet. Never describe their examples as executable until built and tested.
 
 ## Task selection for each run
 
