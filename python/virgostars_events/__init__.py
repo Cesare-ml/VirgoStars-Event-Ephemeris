@@ -33,12 +33,12 @@ class VirgoStarsEvents:
 
         Installing the Python package does not download or bundle a dataset.
         """
-        from ._native import NativeReader
-
         if not isinstance(expected_sha256, str) or re.fullmatch(
             r"[0-9a-fA-F]{64}", expected_sha256
         ) is None:
             raise ValueError("expected_sha256 must be a 64-digit hexadecimal SHA-256")
+        from ._native import NativeReader
+
         return cls(NativeReader(os.fspath(path), expected_sha256.lower()))
 
     def get_synods_at(self, instant: datetime | str) -> dict[str, Any]:
