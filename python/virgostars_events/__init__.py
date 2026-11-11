@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime
 from typing import Any
 
@@ -34,9 +35,11 @@ class VirgoStarsEvents:
         """
         from ._native import NativeReader
 
-        if not isinstance(expected_sha256, str) or not expected_sha256:
-            raise ValueError("expected_sha256 must be the trusted digest")
-        return cls(NativeReader(os.fspath(path), expected_sha256))
+        if not isinstance(expected_sha256, str) or re.fullmatch(
+            r"[0-9a-fA-F]{64}", expected_sha256
+        ) is None:
+            raise ValueError("expected_sha256 must be a 64-digit hexadecimal SHA-256")
+        return cls(NativeReader(os.fspath(path), expected_sha256.lower()))
 
     def get_synods_at(self, instant: datetime | str) -> dict[str, Any]:
         """Return the latest recorded synod per body plus the previous new moon.
