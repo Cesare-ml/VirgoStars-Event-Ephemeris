@@ -37,6 +37,31 @@ class NativeSmokeTests(unittest.TestCase):
         self.assertEqual(moon["coverage"]["status"], "unreviewed")
         json.dumps(result)
 
+    def test_known_source_moon_gaps_do_not_fabricate_a_year_long_phase(self):
+        reader = VirgoStarsEvents.open(_ARCHIVE, expected_sha256=_SHA256)
+        # The authorized 2026-11-10 owner snapshot has no Moon anchors
+        # in calendar years 1919 or 2018; next recorded anchors are in
+        # 1920/2019 respectively. Do not classify those years as CAL2.
+        for instant, source_id in [
+            ("1919-06-01T00:00:00Z", 44934),
+            ("2018-06-01T00:00:00Z", 46146),
+        ]:
+            with self.subTest(instant=instant):
+                result = reader.get_synods_at(instant)
+                moon = result["new_moon"]
+                self.assertIsNotNone(moon)
+                self.assertEqual(moon["source_id"], source_id)
+                self.assertIsNone(moon["phase"]["code"])
+                self.assertEqual(
+                    moon["phase"]["status"],
+                    "unknown_discontinuous_moon_anchors",
+                )
+                self.assertIn(
+                    "moon_recorded_cycle_gap_over_45_days",
+                    moon["coverage"]["warnings"],
+                )
+                self.assertFalse(result["dataset"]["coverage_certified"])
+
     def test_explicit_timezone_offset_preserves_identical_source_records(self):
         reader = VirgoStarsEvents.open(_ARCHIVE, expected_sha256=_SHA256)
         utc = reader.get_synods_at("2026-11-11T12:00:00.123456Z")
