@@ -69,6 +69,26 @@ $env:VSEPH_P0_SHA256 = "c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f
 
 The smoke tests must **run**, not skip, and return source IDs/recorded phases plus `coverage.status="unreviewed"`. Do not mistake the current zero-window coverage policy for verified astronomical completeness. Known lunar gaps 1919/2018 and Moon ingress 2099–4836 need independent review.
 
+## 4a. Independent source-CSV parity of the installed Python API
+
+After successfully compiling/installing the wheel and assembling the **owner-authorized** normalized CSV and P0 snapshot from draft PR #6 (no merging or publishing required), run:
+
+```powershell
+.\\.venv\\Scripts\\python.exe tools\\verify_python_synods.py --csv "D:\\path\\to\\authorized\\sinodi.csv" --archive $env:VSEPH_P0_PATH --sha256 $env:VSEPH_P0_SHA256
+```
+
+This is a **read-only, fail-closed** compatibility check of the *real installed native Python API* against all 70,554 normalized original `sinodi.csv` records. The script does **not** contain a second P0 binary decoder or astronomical engine; it reuses the independent CSV normalization from `tools/verify_csv_p0.py`, selects the last recorded anchor `<= instant` using the source CSV, and compares all bodies' source IDs, exact starts, next recorded anchors, `NULL` vs `[]` vs phase thresholds, derived phase code/status and the `new_moon` alias.
+
+Default probes include `2026-11-11T12:00:00Z`, exact Moon/Mercury anchors, one microsecond before/after, each of the three original phase thresholds where available, and just before the first recorded Moon anchor. It rejects missing/extra bodies, false scientific coverage claims, wrong archive hash or first unexpected output. **This test compares recorded data and the API, not astronomical completeness.** All local CSV/P0 paths are explicit; neither original CSV nor P0 data are committed in the code PR.
+
+The new test-only oracle's unit tests are in `tools/test_verify_python_synods.py`:
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_verify_python_synods.py" -v
+```
+
+**Status as written:** independent user-provided normalized CSV files have been inspected (70,554 synod rows across 11 source bodies), but the new parity tool's tests and live Rust-backed parity **have not yet been executed** on the full patched checkout. Do not report the gate green until it runs on the installed wheel.
+
 ## 5. Produce a local wheel and reinstall it without build dependencies
 
 ```powershell
