@@ -123,24 +123,40 @@ def expected_phase(
 
 
 def select_probes(source: dict[str, list[SourceSynod]], baseline: str) -> list[int]:
-    """Deterministic probes for everyday usage and exact phase boundaries."""
+    """Bounded cross-body probes, including exact and adjacent phase instants.
+
+    The underlying recorded-event index is read in full, but the compiled
+    API is queried at a deterministic sample rather than at every source row.
+    All indexed bodies are represented, not only Moon and Mercury. Include
+    candidate historical Moon gaps as *queries*, not inferred coverage.
+    """
     base = instant_us(baseline)
     probes = {base}
-    for body in ("Moon", "Mercury"):
-        series = source.get(body)
+    for series in source.values():
         if not series:
-            continue
+            raise ValueError("empty indexed body series")
         current, _ = expected_row(series, base)
         if current is None:
             current = series[0]
-        probes.add(current.at)
-        probes.add(current.at - 1)
-        probes.add(current.at + 1)
-        if current.extras is not None:
-            probes.update(current.extras[:3])
+
+        # Inclusive anchor and both adjacent microseconds detect off-by-one
+        # errors even when the source uses sub-second precision.
+        for at in (current.at, current.at - 1, current.at + 1):
+            probes.add(at)
+
+        # Each stage boundary is start-inclusive. Test the moment before,
+        # the exact instant, and immediately after, across ALL source bodies.
+        for at in (current.extras or ())[:3]:
+            probes.update((at - 1, at, at + 1))
+
     moon = source.get("Moon")
     if moon:
         probes.add(moon[0].at - 1)
+
+    # Known candidates for missing lunar synods. These demonstrate recorded
+    # evidence only; a successful parity test cannot certify completeness.
+    probes.add(instant_us("1919-01-01T00:00:00Z"))
+    probes.add(instant_us("2018-01-01T00:00:00Z"))
     return sorted(probes)
 
 
