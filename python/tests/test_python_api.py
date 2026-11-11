@@ -45,6 +45,38 @@ class TimestampTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             iso_utc_from_microseconds(True)
 
+    def test_submicrosecond_iso_precision_is_rejected_not_truncated(self):
+        for value in [
+            "2026-11-11T12:00:00.1234567Z",
+            "1970-01-01T00:00:00.0000009+00:00",
+            "2026-11-11T12:00:00.123456789+01:00",
+        ]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                to_utc_microseconds(value)
+
+    def test_strict_offset_and_civil_iso_format_while_preserving_valid_input(self):
+        for value in [
+            "20261111T120000Z",
+            "2026-11-11 12:00:00Z",
+            "2026-11-11T12:00:00+01:00:01",
+            "2026-11-11T12:00:00Z\\n",
+            "2026-11-11T12:00:00+01:00.2",
+        ]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                to_utc_microseconds(value)
+        self.assertEqual(
+            to_utc_microseconds("1970-01-01T01:30:00+01:30"),
+            0,
+        )
+        self.assertEqual(
+            to_utc_microseconds("1969-12-31T18:30:00-05:30"),
+            0,
+        )
+        self.assertEqual(
+            to_utc_microseconds("1970-01-01T00:00:00.1Z"),
+            100_000,
+        )
+
     def test_no_float_timestamp_precision_loss_for_year_0002(self):
         source = "0002-01-01T00:00:00.000001Z"
         self.assertEqual(iso_utc_from_microseconds(to_utc_microseconds(source)), source)
