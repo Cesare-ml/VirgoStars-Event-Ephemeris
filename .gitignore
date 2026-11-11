@@ -7,6 +7,9 @@ __pycache__/
 .venv/
 dist/
 *.egg-info/
+.venv-wheel-test/
+/build/
+*.pyd
 # JavaScript and TypeScript
 node_modules/
 coverage/
