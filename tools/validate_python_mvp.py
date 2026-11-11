@@ -52,10 +52,13 @@ def main() -> int:
     )
     parser.add_argument("--archive", help="Optional owner-authorized local P0 archive")
     parser.add_argument("--sha256", help="Trusted lower-case 64-digit SHA-256 for archive")
+    parser.add_argument("--synods-csv", help="Optional authorized normalized sinodi.csv for API parity")
     args = parser.parse_args()
 
     if bool(args.archive) != bool(args.sha256):
         parser.error("--archive and --sha256 must be given together")
+    if args.synods_csv and not args.archive:
+        parser.error("--synods-csv requires --archive and --sha256")
 
     try:
         import virgostars_events  # noqa: F401
@@ -79,6 +82,23 @@ def main() -> int:
         os.environ["VSEPH_P0_PATH"] = str(Path(args.archive).resolve())
         os.environ["VSEPH_P0_SHA256"] = args.sha256
         if not run_tests("test_native_smoke.py", 2):
+            return 1
+
+    if args.synods_csv:
+        try:
+            from verify_python_synods import assert_parity, load_synod_csv, select_probes
+            from virgostars_events import VirgoStarsEvents
+
+            source = load_synod_csv(Path(args.synods_csv))
+            reader = VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256)
+            probes = select_probes(source, "2026-11-11T12:00:00Z")
+            report = assert_parity(reader, source, probes, args.sha256)
+            print(
+                "\\n[Python MVP source parity] "
+                f"{report['checked_body_instants']} body/instant checks PASS"
+            )
+        except (OSError, ValueError, TypeError, KeyError, OverflowError) as exc:
+            print(f"FAIL: native Python/CSV parity: {exc}", file=sys.stderr)
             return 1
 
     print("\nPASS: Python MVP validation on an installed Rust extension")
