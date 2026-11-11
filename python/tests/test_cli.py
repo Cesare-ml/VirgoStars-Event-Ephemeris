@@ -91,6 +91,22 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(version.exception.code, 0)
         self.assertIn("virgostars-events 0.1.0", stdout.getvalue())
 
+    def test_invalid_instant_rejected_before_archive_is_opened(self) -> None:
+        stdout, stderr = StringIO(), StringIO()
+        with patch.object(
+            cli.VirgoStarsEvents, "open",
+            side_effect=AssertionError("must not open an archive"),
+        ) as opener:
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                status = cli.main([
+                    "huge.p0", "2026-11-11T12:00:00.1234567Z",
+                    "--sha256", "a" * 64,
+                ])
+        self.assertEqual(status, 1)
+        opener.assert_not_called()
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("up to 6 fractional", stderr.getvalue())
+
     def test_invalid_submicrosecond_input_fails_before_json(self) -> None:
         stdout, stderr = StringIO(), StringIO()
         with patch.object(cli.VirgoStarsEvents, "open", return_value=FakeReader()):
