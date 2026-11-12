@@ -807,6 +807,12 @@ fn take_varint(bytes: &[u8], pos: &mut usize) -> Result<u64, P0Error> {
         }
         value |= ((b & 0x7f) as u64) << (step * 7);
         if b & 0x80 == 0 {
+            // Unsigned LEB128 has a unique shortest representation. A
+            // redundant zero top group would let distinct P0 byte strings
+            // decode to the same source ID / timestamp / phase count.
+            if step > 0 && b == 0 {
+                return Err(invalid("non-canonical unsigned varint"));
+            }
             return Ok(value);
         }
     }
