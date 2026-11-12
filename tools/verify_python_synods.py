@@ -282,7 +282,10 @@ def assert_parity(
                 "status": "recorded" if previous else "no_preceding_recorded_cycle",
             }
             for key, expected in expected_fields.items():
-                if row.get(key) != expected:
+                # Missing required JSON keys are not equivalent to explicit
+                # null. dict.get() would otherwise silently accept omitted
+                # source IDs, anchors or thresholds before the first event.
+                if key not in row or row[key] != expected:
                     raise ValueError(
                         f"parity mismatch {body} at {iso_utc(instant)}: "
                         f"{key}={row.get(key)!r} expected={expected!r}"
@@ -291,7 +294,7 @@ def assert_parity(
             for key, expected in (
                 ("code", code), ("started_at_utc", started), ("status", status)
             ):
-                if phase.get(key) != expected:
+                if key not in phase or phase[key] != expected:
                     raise ValueError(
                         f"parity mismatch {body} at {iso_utc(instant)}: "
                         f"phase.{key}={phase.get(key)!r} expected={expected!r}"
