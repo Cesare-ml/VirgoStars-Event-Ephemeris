@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # The suites here use mocked readers or an independent synthetic CSV oracle.
 # The nine genuinely compiled native tests belong ONLY to the separate gate.
 SOURCE_SUITES = (
-    ("test_python_api.py", 15, "python/tests"),
+    ("test_python_api.py", 16, "python/tests"),
     ("test_cli.py", 8, "python/tests"),
     ("test_verify_python_synods.py", 16, "tools"),
 )
