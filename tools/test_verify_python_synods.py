@@ -289,6 +289,30 @@ class SourceCsvTests(unittest.TestCase):
             assert_parity(OracleReader(source, detach_moon_alias),
                           source, [150], "a" * 64)
 
+        # A missing predecessor must be represented by an explicit JSON
+        # null field, not by omitting the public convenience field.
+        def drop_new_moon(result):
+            del result["new_moon"]
+
+        # The real Moon is in the source but the requested instant predates
+        # its first recorded event; the alias is correctly None.
+        accepted = assert_parity(OracleReader(source), source, [49], "a" * 64)
+        self.assertEqual(accepted["checked_body_instants"], len(source))
+        with self.assertRaisesRegex(ValueError, "new_moon alias mismatch"):
+            assert_parity(
+                OracleReader(source, drop_new_moon), source, [49], "a" * 64
+            )
+
+        # The same requirement holds if a valid source archive has no Moon
+        # synod family at all.
+        without_moon = {"Mercury": source["Mercury"]}
+        assert_parity(OracleReader(without_moon), without_moon, [49], "a" * 64)
+        with self.assertRaisesRegex(ValueError, "new_moon alias mismatch"):
+            assert_parity(
+                OracleReader(without_moon, drop_new_moon),
+                without_moon, [49], "a" * 64,
+            )
+
     def test_wrong_source_row_id_is_detected(self):
         def bad(result):
             result["synods"]["Moon"]["source_id"] = 999
