@@ -13,7 +13,7 @@ py -3 -m unittest discover -s tools -p "test_validate_python_sources.py" -v
 
 It requires exactly **39 non-skipped source tests**: 15 Python API/time + 8 mocked CLI + 16 independent synthetic CSV-oracle tests. It verifies the imported Python package lives under this checkout's `python/` directory and rejects a missing suite, test failure, skip or stale count. It uses only Python >= 3.10 standard-library modules. The source runner's own eight regression cases are separate from those 39 tests.
 
-**This is explicitly NOT M0 acceptance**: the real local Python/Rust package still needs `cargo generate-lockfile`, `py -3 tools\\build_python_mvp.py`, the **48-case installed-wheel validator** (including 9 compiled Rust/PyO3 tests), and the authorized original CSV/P0 parity check. The source-runner tests are committed but have not been executed on the full GitHub checkout in this authoring environment.
+**This is explicitly NOT M0 acceptance**: the real local Python/Rust package still needs `cargo generate-lockfile`, `py -3 tools\\build_python_mvp.py`, the **48-case installed-wheel validator** (including 9 compiled Rust/PyO3 tests), and the authorized original CSV/P0 parity check. The **8/8 exact source-runner unit tests PASSED** locally under Python 3.13.5 from GitHub-byte-verified files (`git hash-object` matched both blobs). A synthetic 39-case local checkout PASS and a deliberate skip correctly produced nonzero. **The real repository's 39 source tests and the compiled 48-case wheel gate have NOT RUN**; the local synthetic checkout exercises the gate's control flow only.
 
 ## M0: fail-fast owner-data input checks (2026-11-12)
 
