@@ -37,6 +37,12 @@ A production snapshot export is **not authorized in this repository by default**
 
 As of 2026-11-10, the count baseline is 70,554 + 266,516 + 43,774 = 380,844 reported rows; this is an **expectation to audit**, not proven ground truth.
 
+## Python-first M0 native acceptance (2026-11-12 update)
+
+The draft PyO3 reader must reject changes to the on-disk P0 path *after* `VirgoStarsEvents.open()`: `NativeReader.get_synods_at_us` checks the original trusted whole-file SHA-256 **before and after** reading stored synods. Required synthetic cases cover same-size in-place byte mutation and atomic path replacement, including restoration. This catches normal file modifications but is **not an immutable file lock** and adds two O(archive size) reads per request.
+
+On the Windows development machine, run `py -3 tools\build_python_mvp.py`, which invokes the required Cargo checks and then a clean local offline wheel/PyO3 acceptance gate. The minimum is **36 non-skipped Python tests** (12 API/time + 6 CLI + 10 independent source oracle + **8 native fixture**), plus optional original P0/CSV parity. As of the source change, these additional native regressions are **NOT RUN** because Cargo/maturin are unavailable in the authoring environment. Do not mark the MVP or wheel ready based on static source checks.
+
 ## Gate D: cross-language parity
 
 For a shared synthetic golden fixture, compare exact serialized results and error categories from Rust, JS/TS WASM and Python PyO3. Include UTC and Europe/Rome on both DST transitions, out-of-coverage dates, month containing multiple new moons, negative timestamps, missing phases and invalid input. Test browser and Node loading separately, and Python wheels on supported target platforms.
