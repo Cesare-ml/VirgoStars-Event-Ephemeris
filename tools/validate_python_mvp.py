@@ -59,7 +59,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     # Reject invalid owner-data arguments BEFORE importing PyO3 or spending
-    # time running the mandatory 49 tests. Never silently normalize a
+    # time running the mandatory 50 tests. Never silently normalize a
     # potentially mistyped digest: the original snapshot identity is trusted.
     if bool(args.archive) != bool(args.sha256):
         parser.error("--archive and --sha256 must be given together")
