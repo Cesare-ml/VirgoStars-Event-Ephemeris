@@ -118,6 +118,42 @@ class SourceCsvTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "repeated source row ID"):
                 load_synod_csv(path)
 
+            # An unterminated quoted cell must never silently absorb
+            # subsequent scientific events under csv.DictReader's default
+            # permissive quoting mode.
+            path.write_text(
+                "id,elemento,dataora_utc,dataora_extra_utc_json\n"
+                '1,Moon,1970-01-01 00:00:00+00,"[unterminated\n'
+                "2,Moon,1970-01-01 00:00:01+00,\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError, "malformed normalized synod CSV near line"
+            ):
+                load_synod_csv(path)
+
+            # Valid multiline JSON arrays are still legal inside a quoted
+            # CSV cell; strict CSV parsing must preserve them exactly.
+            with path.open("w", encoding="utf-8", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([
+                    "id", "elemento", "dataora_utc", "dataora_extra_utc_json"
+                ])
+                writer.writerow([
+                    3, "Moon", "1970-01-01 00:00:00+00",
+                    json.dumps([
+                        "1970-01-01 00:00:01+00",
+                        "1970-01-01 00:00:02+00",
+                        "1970-01-01 00:00:03+00",
+                    ], indent=2),
+                ])
+            parsed = load_synod_csv(path)
+            self.assertEqual(len(parsed["Moon"]), 1)
+            self.assertEqual(
+                parsed["Moon"][0].extras,
+                (1_000_000, 2_000_000, 3_000_000),
+            )
+
     def test_strict_utc_probe_preserves_exact_microseconds(self):
         self.assertEqual(instant_us("1970-01-01T00:00:00Z"), 0)
         self.assertEqual(instant_us("1970-01-01T00:00:00.1Z"), 100_000)
