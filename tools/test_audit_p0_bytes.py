@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from audit_p0_bytes import audit_file
+from audit_p0_bytes import _varint, audit_file
 
 FIXTURE_B64 = (Path(__file__).resolve().parent.parent /
                'crates/events-p0/tests/fixtures/synthetic.p0.base64')
@@ -107,6 +107,52 @@ class AuditP0BytesTest(unittest.TestCase):
             'table_of_contents': toc,
         }, sort_keys=True, separators=(',', ':')).encode()
         return b'VSEPH-P0' + struct.pack('<I', len(header)) + header + payload
+
+    def test_unsigned_leb128_is_shortest_and_bounded(self):
+        for encoded, expected in (
+            (b"\\x00", 0), (b"\\x7f", 127),
+            (b"\\x80\\x01", 128),
+            (b"\\xff\\x7f", 16_383),
+            (b"\\xff" * 9 + b"\\x01", (1 << 64) - 1),
+        ):
+            with self.subTest(encoded=encoded):
+                self.assertEqual(_varint(encoded, 0), (expected, len(encoded)))
+        for malformed in (
+            b"\\x80\\x00", b"\\x81\\x00",
+            b"\\xff\\x00", b"\\x80\\x80\\x00",
+        ):
+            with self.subTest(malformed=malformed):
+                with self.assertRaisesRegex(ValueError, "non-canonical unsigned varint"):
+                    _varint(malformed, 0)
+        for malformed in (b"\\x80", b"\\x80\\x80", b"\\xff" * 9 + b"\\x02"):
+            with self.subTest(malformed=malformed):
+                with self.assertRaises(ValueError):
+                    _varint(malformed, 0)
+
+    def test_noncanonical_varints_are_rejected_with_valid_block_checksum(self):
+        # Construct complete, self-consistent P0 files with an authentic
+        # SHA-256 over their malformed uncompressed blocks. An integrity
+        # checksum failure must not mask the canonical varint rule.
+        cases = (
+            ("ingress ID", "ingress", b"\\x84\\x00\\x00\\x00"),
+            ("ingress delta", "ingress", b"\\x04\\x80\\x00\\x00"),
+            ("synod phase count", "synod", b"\\x04\\x00\\x81\\x00"),
+            ("synod phase offset", "synod", b"\\x04\\x00\\x02\\x81\\x00"),
+        )
+        for label, family, payload in cases:
+            with self.subTest(label=label):
+                raw = struct.pack("<q", 0) + payload
+                archive = self.build_semantic_fixture([
+                    (family, "Moon", 0, 0, 1, raw),
+                ])
+                with self.assertRaisesRegex(ValueError, "non-canonical unsigned varint"):
+                    self.audit(archive)
+        # Control: the same source event encoded canonically remains readable.
+        valid_raw = struct.pack("<q", 0) + b"\\x04\\x00\\x00"
+        archive = self.build_semantic_fixture([
+            ("ingress", "Moon", 0, 0, 1, valid_raw),
+        ])
+        self.assertEqual(self.audit(archive)["records"], 1)
 
     def test_zero_original_source_id_rejected_even_with_valid_checksum(self):
         raw = struct.pack('<q', 0) + bytes([0, 0, 1])
