@@ -41,6 +41,18 @@ struct NativeReader {
 impl NativeReader {
     #[new]
     fn new(path: &str, expected_sha256: &str) -> PyResult<Self> {
+        // This native class is independently importable; Python's public
+        // VirgoStarsEvents.open() validation can be bypassed. Reject an
+        // invalid trust anchor before touching the source or temp storage.
+        if expected_sha256.len() != 64
+            || !expected_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(PyValueError::new_err(
+                "expected archive SHA-256 must be 64 lower-case hex characters",
+            ));
+        }
         // Reject invalid P0 framing before copying any input. We never bundle
         // or publish the owner dataset: this is a per-reader private snapshot.
         P0Archive::open(path).map_err(as_py_error)?;
