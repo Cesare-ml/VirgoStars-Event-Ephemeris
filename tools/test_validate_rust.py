@@ -75,7 +75,32 @@ class ValidateRustToolTest(unittest.TestCase):
                 raise subprocess.CalledProcessError(1, command)
         with self.assertRaises(subprocess.CalledProcessError):
             run_gates(root=self.root, cargo="mock-cargo", invoke=fail_clippy)
-        self.assertEqual([c[1] for c in failure_calls], ["fmt", "clippy"])
+        self.assertEqual([c[1] for c in failure_calls], ["metadata", "fmt", "clippy"])
+
+    def test_cargo_lock_is_checked_first_and_all_compile_steps_are_locked(self):
+        self.assertEqual(GATES[0][0], "Cargo lockfile reproducibility")
+        self.assertEqual(
+            GATES[0][1],
+            ("metadata", "--locked", "--no-deps", "--format-version", "1"),
+        )
+        for label, args in GATES:
+            if label in ("Rust Clippy", "Rust tests", "Rust release build"):
+                self.assertIn("--locked", args)
+            if label == "Rust format":
+                self.assertNotIn("--locked", args)
+
+    def test_stale_lockfile_fails_before_format_or_compilation(self):
+        calls = []
+
+        def reject_stale_lock(cmd, **kwargs):
+            calls.append(cmd)
+            if cmd[1] == "metadata":
+                raise subprocess.CalledProcessError(101, cmd)
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            run_gates(root=self.root, cargo="mock-cargo", invoke=reject_stale_lock)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1:4], ["metadata", "--locked", "--no-deps"])
 
     def test_archive_requires_python_audit_and_rust_cli_with_same_digest(self):
         calls = []
