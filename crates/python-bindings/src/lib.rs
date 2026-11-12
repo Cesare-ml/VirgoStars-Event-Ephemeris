@@ -11,6 +11,8 @@
 use pyo3::exceptions::{PyOSError, PyValueError};
 use pyo3::prelude::*;
 use serde_json::{json, Map, Value};
+use std::fs;
+use std::path::Path;
 use virgostars_events_core::{
     Event, TimestampMicros, MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_MICROS,
 };
@@ -28,36 +30,47 @@ fn as_py_error(err: P0Error) -> PyErr {
 /// Python-visible, read-only, precomputed event archive.
 #[pyclass]
 struct NativeReader {
+    // Keep the verified snapshot alive until Python drops this reader.
+    // No mutable original source path is used for subsequent Rust queries.
     archive: P0Archive,
     sha256: String,
+    _snapshot_dir: tempfile::TempDir,
 }
 
 #[pymethods]
 impl NativeReader {
     #[new]
     fn new(path: &str, expected_sha256: &str) -> PyResult<Self> {
-        let archive = P0Archive::open(path).map_err(as_py_error)?;
+        // Reject invalid P0 framing before copying any input. We never bundle
+        // or publish the owner dataset: this is a per-reader private snapshot.
+        P0Archive::open(path).map_err(as_py_error)?;
+        let snapshot_dir =
+            tempfile::tempdir().map_err(|error| PyOSError::new_err(error.to_string()))?;
+        let snapshot = snapshot_dir.path().join("verified-archive.vseph-p0");
+        // A changing source cannot be authenticated accidentally: validate
+        // the exact copied bytes against the caller's independent SHA-256.
+        // Each reader thereafter only queries this private, stable path.
+        fs::copy(Path::new(path), &snapshot)
+            .map_err(|error| PyOSError::new_err(error.to_string()))?;
+        let archive = P0Archive::open(&snapshot).map_err(as_py_error)?;
         let sha256 = archive
             .verify_archive_sha256(expected_sha256)
             .map_err(as_py_error)?;
-        Ok(Self { archive, sha256 })
+        Ok(Self {
+            archive,
+            sha256,
+            _snapshot_dir: snapshot_dir,
+        })
     }
 
     /// Internal JSON transport; public Python wrapper returns a native dict.
     fn get_synods_at_us(&self, requested_at_us: i64) -> PyResult<String> {
-        // The archive is read from its path on each indexed lookup. A file
-        // replaced or edited after NativeReader::new must not be reported
-        // under the original trusted SHA-256. Hash once before reading and
-        // once after decoding, catching ordinary edits during a query too.
-        // This is an integrity check, not an OS-level immutable file lock.
-        self.archive
-            .verify_archive_sha256(&self.sha256)
-            .map_err(as_py_error)?;
+        // The archive was copied and authenticated at construction. Queries
+        // read only this reader's private snapshot, even when the original
+        // path is overwritten, replaced or removed. No per-query full-file
+        // SHA pass is needed for this read-only snapshot.
         let t = TimestampMicros::new(requested_at_us);
         let snapshots = self.archive.synods_at(t).map_err(as_py_error)?;
-        self.archive
-            .verify_archive_sha256(&self.sha256)
-            .map_err(as_py_error)?;
         let mut entries = Map::new();
 
         for (body, snapshot) in snapshots {
