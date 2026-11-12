@@ -43,11 +43,15 @@ fn run() -> Result<(), Box<dyn Error>> {
         None => archive.archive_sha256()?,
     };
     let count = |family| result.by_family.get(&family).copied().unwrap_or(0);
+    // Report the complete on-disk byte length as an independently
+    // comparable property alongside the full-file digest and decoded totals.
+    let bytes = std::fs::metadata(&path)?.len();
     println!(
         "{}",
         serde_json::json!({
             "format": "VSEPH-P0-EXPERIMENTAL",
             "sha256": sha256,
+            "bytes": bytes,
             "sha256_checked_against_expected": expected.is_some(),
             "blocks": result.blocks,
             "records": result.records,
