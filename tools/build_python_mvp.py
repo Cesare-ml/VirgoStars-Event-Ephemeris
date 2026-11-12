@@ -117,6 +117,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     try:
+        # Catch Python facade, CLI and independent CSV-oracle regressions
+        # before the much slower locked Cargo build. This source gate is
+        # strictly non-native; successful wheels still require the entire
+        # real PyO3/50-case installed test suite below.
+        run([sys.executable, ROOT / "tools" / "validate_python_sources.py"])
         run([sys.executable, ROOT / "tools" / "validate_rust.py"])
         with tempfile.TemporaryDirectory(prefix="virgostars-m0-build-") as temp:
             wheels_dir = Path(temp) / "wheels"
