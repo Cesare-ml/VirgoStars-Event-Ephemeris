@@ -72,7 +72,12 @@ class OracleReader:
         moon = rows.get("Moon")
         result = {
             "requested_at_utc": iso,
-            "dataset": {"sha256": "a" * 64, "coverage_certified": False},
+            "dataset": {
+                "id": None,
+                "format": "VSEPH-P0",
+                "sha256": "a" * 64,
+                "coverage_certified": False,
+            },
             "synods": rows,
             "new_moon": moon if moon and moon["cycle_start_utc"] else None,
         }
@@ -275,6 +280,15 @@ class SourceCsvTests(unittest.TestCase):
         self.assertEqual(outcome["checked_body_instants"], 3 * len(probes))
         self.assertFalse(outcome["scientific_coverage_certified"])
 
+        # Equal-looking copies violate the public alias contract: consumers
+        # must get the identical Moon dict under both response paths.
+        def detach_moon_alias(result):
+            result["new_moon"] = dict(result["synods"]["Moon"])
+
+        with self.assertRaisesRegex(ValueError, "new_moon alias mismatch"):
+            assert_parity(OracleReader(source, detach_moon_alias),
+                          source, [150], "a" * 64)
+
     def test_wrong_source_row_id_is_detected(self):
         def bad(result):
             result["synods"]["Moon"]["source_id"] = 999
@@ -293,6 +307,28 @@ class SourceCsvTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "coverage claim"):
             assert_parity(OracleReader(synthetic_source(), overclaimed),
                           synthetic_source(), [150], "a" * 64)
+
+        # Source row matches alone do not establish archive identity:
+        # detect unknown formats and missing/altered dataset IDs.
+        for altered in ("format", "missing_format", "id", "missing_id"):
+            def corrupt_identity(result):
+                dataset = result["dataset"]
+                if altered == "format":
+                    dataset["format"] = "VSEPH-v1"
+                elif altered == "missing_format":
+                    del dataset["format"]
+                elif altered == "id":
+                    dataset["id"] = "unreviewed-other-dataset"
+                else:
+                    del dataset["id"]
+
+            with self.subTest(altered=altered), self.assertRaisesRegex(
+                ValueError, "dataset identity, format"
+            ):
+                assert_parity(
+                    OracleReader(synthetic_source(), corrupt_identity),
+                    synthetic_source(), [150], "a" * 64,
+                )
 
     def test_deterministic_probes_cover_all_bodies_and_adjacent_boundaries(self):
         source = synthetic_source()
