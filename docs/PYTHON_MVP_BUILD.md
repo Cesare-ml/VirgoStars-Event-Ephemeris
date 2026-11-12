@@ -84,7 +84,7 @@ The smoke tests must **run**, not skip, and return source IDs/recorded phases pl
 
 The real-data smoke suite now contains **3 owner-snapshot tests**, including the two source gaps (1919 and 2018). Using the owner-approved 2026-11-10 P0 snapshot, the smoke test must prove that `get_synods_at("1919-06-01T00:00:00Z")` and `get_synods_at("2018-06-01T00:00:00Z")` retain recorded Moon source IDs **44934** and **46146**, report `phase.code=None` / `phase.status="unknown_discontinuous_moon_anchors"`, and include the `moon_recorded_cycle_gap_over_45_days` warning. Normal Moon cycles must still classify their source thresholds. A gap guard is not scientific completeness certification; see [Moon gaps](MOON_SYNOD_SOURCE_GAPS.md).
 
-The independent CSV oracle contains **10 tests** (including a year-long gap regression); the mandatory base Python/PyO3 suite contains **36 non-skipped tests** (12 API/time + 6 CLI + 10 oracle + 8 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
+The independent CSV oracle contains **10 tests** (including a year-long gap regression); the mandatory base Python/PyO3 suite contains **37 non-skipped tests** (12 API/time + 6 CLI + 10 oracle + 8 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
 
 ## 4a. Independent source-CSV parity of the installed Python API
 
@@ -178,7 +178,7 @@ py -3 tools\build_python_mvp.py --archive $env:VSEPH_P0_PATH --sha256 $env:VSEPH
 | --- | --- |
 | Python UTC microseconds + dictionary projection, now 10 tests | **8/8 passed on an earlier revision**; two new precision/strict-ISO tests **NOT RUN** on the current branch |
 | Python CLI JSON/exit behavior, 5 tests | **WRITTEN, NOT RUN** — requires no native extension for these mocked tests |
-| Synthetic native P0 fixture + PyO3 binding, 8 tests | **WRITTEN, NOT RUN** — `tools/validate_python_mvp.py` fails on a skip |
+| Synthetic native P0 fixture + PyO3 binding, 9 tests | **WRITTEN, NOT RUN** — `tools/validate_python_mvp.py` fails on a skip |
 | Rust synod phase classifier, 5 new tests | **NOT RUN** |
 | Rust latest-synods P0 batch query, 4 new tests | **NOT RUN** |
 | Rust/PyO3 extension build, Clippy, workspace tests | **NOT RUN** on new commits |
@@ -192,12 +192,17 @@ The Python surface is a prototype **for precomputed recorded events**, not a new
 
 `VirgoStarsEvents.open(..., expected_sha256=...)` validates exactly 64 hexadecimal SHA-256 characters **before importing the Rust extension**, then forwards a lowercase digest for the native whole-file check. Invalid instants on the CLI are rejected before opening/hashing the archive. For aware Python datetimes using a DST timezone, nonexistent local spring-forward wall times raise `ValueError` rather than converting silently. These boundary guards have three new tests, using a synthetic timezone so Windows does not require system timezone data. Run the expanded **34-test** native gate after installing the local wheel; this is not evidence of a successful wheel build.
 
-## 8. File identity after opening a Python reader
+## 8. Private authenticated archive snapshot (source edits do not affect a reader)
 
-The Rust `P0Archive` reads indexed blocks from its on-disk path on demand. To avoid attaching the trusted opening SHA-256 to later bytes from a replaced/mutated path, the PyO3 `NativeReader.get_synods_at_us` now verifies the original SHA-256 **both before and after** the batch lookup. This is an integrity-first safeguard (two additional whole-file reads per query), not an atomic immutable file lock. Do not edit or replace a dataset while querying it; use a read-only immutable copy for production.
+The Rust Python binding now creates a secure private temporary directory, copies the separately authorized source P0 file into it, and checks **the copied bytes** against the independently trusted whole-file SHA-256 at reader creation. Queries use only the private copy; modifying/replacing/deleting the source path later no longer affects an open reader. No per-query full-file checksum scans are required. Temporary copies persist for as long as native readers are alive and are cleaned up when released. Budget extra free disk space roughly equal to one archive per live reader and use a trusted temp directory; this is not an adversary-proof file lock.
 
-Two synthetic native tests have been added to `python/tests/test_native_fixture.py`: in-place modification and atomic replacement after `VirgoStarsEvents.open()`, with digest mismatch rejection before returning potentially stale records. The mandatory non-skipping acceptance count is now **36 = 12 API/time + 6 CLI + 10 source-oracle + 8 native fixture**, plus optional three owner-snapshot smoke tests and source CSV parity. **Neither the changed Rust binding nor these tests has been compiled/executed in this environment.** From the reviewed branch, run:
+**Required native regression count: 9; total mandatory: 37 = 12 API/time + 6 CLI + 10 source oracle + 9 PyO3 golden fixture.** The native fixture cases exercise source in-place alteration, atomic replacement and deletion after construction. The modified native binding and these tests **have not been compiled or run** in this authoring environment.
+
+**Cargo.lock checkpoint:** introducing the new Rust `tempfile` crate requires regenerating the tracked `Cargo.lock`. That lockfile did not include PyO3's workspace dependencies previously either. Do not hand-edit checksums. On the Windows developer checkout with Cargo available, run `cargo generate-lockfile`, review/commit the result, then validate and build:
 
 ```powershell
+cargo generate-lockfile
 py -3 tools\build_python_mvp.py
 ```
+
+Only report successful compiled wheel/native test results after the commands actually pass. Scientific owner archive parity requires the additional trusted P0/CSV arguments documented above.
