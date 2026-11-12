@@ -6,6 +6,8 @@ from __future__ import annotations
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
+import os
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -100,24 +102,86 @@ class BuildTests(unittest.TestCase):
             source.write_bytes(b"old")
             self.assertEqual(build.save_verified_wheel(source, dest), existing)
 
-    def test_exclusive_copy_race_keeps_existing_dist_artifact(self):
+    def test_atomic_staging_hides_incomplete_wheel(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "artifact.whl"
+            source.write_bytes(b"original" * 65536)
+            out = root / "dist"
+            original_copy = shutil.copyfileobj
+
+            def observe_copy(src, dst):
+                self.assertEqual(list(out.glob("*.whl")), [])
+                original_copy(src, dst)
+                self.assertEqual(list(out.glob("*.whl")), [])
+
+            with patch.object(shutil, "copyfileobj", side_effect=observe_copy):
+                result = build.save_verified_wheel(source, out)
+            self.assertEqual(result.read_bytes(), source.read_bytes())
+            self.assertEqual(list(out.iterdir()), [result])
+
+    def test_interrupted_copy_leaves_no_partial_wheel(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             source = root / "artifact.whl"
             source.write_bytes(b"original")
-            dest = root / "dist"
-            dest.mkdir()
-            output = dest / source.name
-            actual_open = Path.open
-            def racing_open(path, mode="r", *args, **kwargs):
-                if str(path) == str(output) and mode == "xb":
-                    output.write_bytes(b"concurrent-job")
-                    raise FileExistsError("another process created the artifact")
-                return actual_open(path, mode, *args, **kwargs)
-            with patch.object(Path, "open", autospec=True, side_effect=racing_open):
+            out = root / "dist"
+
+            def interrupted(src, dst):
+                dst.write(b"partial")
+                raise OSError("interrupted during copy")
+
+            with patch.object(shutil, "copyfileobj", side_effect=interrupted):
+                with self.assertRaises(OSError):
+                    build.save_verified_wheel(source, out)
+            self.assertEqual(list(out.iterdir()), [])
+
+    def test_exclusive_publish_race_keeps_existing_dist_artifact(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "artifact.whl"
+            source.write_bytes(b"original")
+            out = root / "dist"
+            output = out / source.name
+
+            def racing_link(staged, destination):
+                self.assertEqual(Path(destination), output)
+                output.write_bytes(b"concurrent-job")
+                raise FileExistsError("another process created the artifact")
+
+            with patch.object(os, "link", side_effect=racing_link):
                 with self.assertRaises(FileExistsError):
-                    build.save_verified_wheel(source, dest)
+                    build.save_verified_wheel(source, out)
             self.assertEqual(output.read_bytes(), b"concurrent-job")
+            self.assertEqual(list(out.iterdir()), [output])
+
+    def test_source_mutation_during_copy_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "artifact.whl"
+            source.write_bytes(b"original")
+            out = root / "dist"
+            original_copy = shutil.copyfileobj
+
+            def changing_source(src, dst):
+                original_copy(src, dst)
+                source.write_bytes(b"changed")
+
+            with patch.object(shutil, "copyfileobj", side_effect=changing_source):
+                with self.assertRaises(OSError):
+                    build.save_verified_wheel(source, out)
+            self.assertEqual(list(out.iterdir()), [])
+
+    def test_unsupported_hard_link_fails_closed_without_artifact(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "artifact.whl"
+            source.write_bytes(b"original")
+            out = root / "dist"
+            with patch.object(os, "link", side_effect=OSError("hard links unavailable")):
+                with self.assertRaises(OSError):
+                    build.save_verified_wheel(source, out)
+            self.assertEqual(list(out.iterdir()), [])
 
     def test_real_subprocess_environment_strips_python_overrides(self):
         with patch.dict(build.os.environ, {"PYTHONPATH": "shadow", "PYTHONHOME": "shadow", "PYTHONUSERBASE": "shadow"}), patch.object(build.subprocess, "run") as invoked:
