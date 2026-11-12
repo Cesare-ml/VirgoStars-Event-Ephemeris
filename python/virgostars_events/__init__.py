@@ -126,6 +126,21 @@ class VirgoStarsEvents:
         result["requested_at_utc"] = iso_utc_from_microseconds(requested_us)
 
         for body, record in synods.items():
+            # Rust serializes the body twice (map key and record field), plus
+            # an original positive source ID only if a recorded cycle exists.
+            # Reject cross-body swaps or fabricated/missing source identities.
+            if not isinstance(body, str) or record.get("body") != body:
+                raise ValueError(f"native synod body identity mismatch for {body}")
+            source_id = record.get("source_id")
+            current_us = record["cycle_start_us"]
+            if (
+                (source_id is None) != (current_us is None)
+                or (
+                    source_id is not None
+                    and (type(source_id) is not int or source_id <= 0)
+                )
+            ):
+                raise ValueError(f"native synod source ID inconsistent with cycle for {body}")
             # The Rust index promises a latest anchor <= X and a strictly
             # later next anchor. Never display a future start as recorded
             # current state, or a stale end boundary, if transport regresses.
