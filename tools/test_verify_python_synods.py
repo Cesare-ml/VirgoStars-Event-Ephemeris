@@ -108,6 +108,33 @@ class SourceCsvTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "repeated source row ID"):
                 load_synod_csv(path)
 
+    def test_strict_utc_probe_preserves_exact_microseconds(self):
+        self.assertEqual(instant_us("1970-01-01T00:00:00Z"), 0)
+        self.assertEqual(instant_us("1970-01-01T00:00:00.1Z"), 100_000)
+        self.assertEqual(instant_us("1970-01-01T00:00:00.123456Z"), 123_456)
+        self.assertEqual(instant_us("1969-12-31T23:59:59.999999Z"), -1)
+        self.assertEqual(
+            iso_utc(instant_us("0002-01-01T00:00:00.000001Z")),
+            "0002-01-01T00:00:00.000001Z",
+        )
+
+    def test_utc_probe_never_silently_truncates_or_normalizes(self):
+        bad = (
+            "1970-01-01T00:00:00.0000009Z",
+            "2026-11-11T12:00:00.1234567Z",
+            "2026-11-11T12:00:00.123456789Z",
+            "2026-11-11T12:00:00+00:00",
+            "2026-11-11T12:00:00+01:00",
+            "2026-11-11 12:00:00Z",
+            "2026-11-11T12:00:00Z\\n",
+            "2026-11-11T12:00Z",
+            "2026-02-30T12:00:00Z",
+            "0000-01-01T00:00:00Z",
+        )
+        for value in bad:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                instant_us(value)
+
     def test_latest_anchor_inclusive_and_before_first_is_missing(self):
         series = synthetic_source()["Moon"]
         before, nxt = expected_row(series, 49)
