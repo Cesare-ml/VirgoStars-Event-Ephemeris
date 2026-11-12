@@ -300,23 +300,29 @@ def assert_parity(
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Check real Python/Rust synod API against original source CSV")
     parser.add_argument("--csv", type=Path, required=True, help="Authorized normalized sinodi.csv")
     parser.add_argument("--archive", type=Path, required=True, help="Authorized local VSEPH-P0 file")
     parser.add_argument("--sha256", required=True, help="Trusted lower-case whole-file SHA-256")
     parser.add_argument("--instant", default="2026-11-11T12:00:00Z",
                         help="Baseline UTC instant with Z suffix")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    # Validate trust material and the UTC instant BEFORE reading a potentially
+    # large CSV or creating a verified private P0 archive snapshot.
+    if re.fullmatch(r"[0-9a-fA-F]{64}", args.sha256) is None:
+        parser.error("--sha256 must be a 64-character hexadecimal SHA-256")
+    trusted_sha256 = args.sha256.lower()
     try:
+        instant_us(args.instant)
         source = load_synod_csv(args.csv)
         probes = select_probes(source, args.instant)
         from virgostars_events import VirgoStarsEvents
         # The native reader keeps a verified temporary archive copy. Release
         # it promptly even if source parity detects an error.
-        with VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256) as reader:
-            report = assert_parity(reader, source, probes, args.sha256)
-    except (OSError, ValueError, TypeError, KeyError, OverflowError) as exc:
+        with VirgoStarsEvents.open(args.archive, expected_sha256=trusted_sha256) as reader:
+            report = assert_parity(reader, source, probes, trusted_sha256)
+    except (ImportError, OSError, RuntimeError, ValueError, TypeError, KeyError, OverflowError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(report, indent=2, sort_keys=True))
