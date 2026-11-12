@@ -3,7 +3,7 @@
 """Pure-Python fail-fast checks for the M0 native acceptance orchestrator.
 
 These tests mock the test runner/native import. They do NOT prove that a
-compiled Rust/PyO3 wheel or scientific archive can pass the 44-test gate.
+compiled Rust/PyO3 wheel or scientific archive can pass the native acceptance gate.
 """
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
             [
                 ("test_python_api.py", 15),
                 ("test_cli.py", 8),
-                ("test_verify_python_synods.py", 12),
+                ("test_verify_python_synods.py", 14),
                 ("test_native_fixture.py", 9),
             ],
         )
