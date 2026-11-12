@@ -165,6 +165,56 @@ def fake_response():
 
 
 class PythonApiTests(unittest.TestCase):
+    def test_native_cycle_boundaries_must_enclose_the_requested_instant(self):
+        # A precomputed reader must never report future events as the
+        # already current cycle, or a next anchor <= the requested instant.
+        for body, field, invalid in (
+            ("Mercury", "cycle_start_us", 1),
+            ("Mercury", "cycle_start_us", True),
+            ("Mercury", "cycle_start_us", "-300"),
+            ("Moon", "next_cycle_start_us", 0),
+            ("Moon", "next_cycle_start_us", -1),
+            ("Moon", "next_cycle_start_us", False),
+            ("Moon", "next_cycle_start_us", "2000000"),
+        ):
+            with self.subTest(body=body, field=field, invalid=invalid):
+                response = fake_response()
+                response["synods"][body][field] = invalid
+                with self.assertRaisesRegex(
+                    ValueError, "native synod (current|next) anchor invalid"
+                ):
+                    VirgoStarsEvents(DummyNative(response)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        # The current anchor is inclusive at X, while the *next* anchor
+        # must be strictly later than X. Both cases are common boundaries.
+        at_boundary = fake_response()
+        at_boundary["synods"]["Mercury"]["cycle_start_us"] = 0
+        at_boundary["synods"]["Mercury"]["next_cycle_start_us"] = 1
+        result = VirgoStarsEvents(DummyNative(at_boundary)).get_synods_at(
+            "1970-01-01T00:00:00Z"
+        )
+        self.assertEqual(
+            result["synods"]["Mercury"]["cycle_start_utc"],
+            "1970-01-01T00:00:00.000000Z",
+        )
+        self.assertEqual(
+            result["synods"]["Mercury"]["next_cycle_start_utc"],
+            "1970-01-01T00:00:00.000001Z",
+        )
+
+        # An indexed body with no preceding event remains a legitimate
+        # missing state, not a fabricated future cycle.
+        missing = fake_response()
+        missing["synods"]["Moon"]["cycle_start_us"] = None
+        missing["synods"]["Moon"]["next_cycle_start_us"] = None
+        result = VirgoStarsEvents(DummyNative(missing)).get_synods_at(
+            "1970-01-01T00:00:00Z"
+        )
+        self.assertIsNone(result["new_moon"])
+        self.assertIsNone(result["synods"]["Moon"]["cycle_start_utc"])
+
     def test_native_requested_instant_must_match_exact_microseconds(self):
         requested = "1970-01-01T01:00:00.000001+01:00"
         for native_us in (None, True, False, "1", -1, 0, 2, 1.0):
