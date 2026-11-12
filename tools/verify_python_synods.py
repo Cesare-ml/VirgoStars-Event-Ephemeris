@@ -232,8 +232,17 @@ def assert_parity(
         if result["requested_at_utc"] != iso_utc(instant):
             raise ValueError(f"requested instant mismatch at {instant}")
         dataset = result["dataset"]
-        if dataset["sha256"] != digest or dataset["coverage_certified"] is not False:
-            raise ValueError("dataset SHA-256 or coverage claim mismatch")
+        # The experiment is identified by both its trusted whole-file digest
+        # and the P0 schema. Missing/changed identity must not pass source
+        # parity just because the event rows happen to look plausible.
+        if (
+            dataset.get("sha256") != digest
+            or dataset.get("format") != "VSEPH-P0"
+            or "id" not in dataset
+            or dataset["id"] is not None
+            or dataset.get("coverage_certified") is not False
+        ):
+            raise ValueError("dataset identity, format, SHA-256 or coverage claim mismatch")
         actual = result["synods"]
         if set(actual) != bodies:
             raise ValueError(f"body set mismatch: missing={sorted(bodies-set(actual))}, "
@@ -288,7 +297,10 @@ def assert_parity(
         expected_moon = actual.get("Moon")
         if expected_moon is None or expected_moon["cycle_start_utc"] is None:
             expected_moon = None
-        if result.get("new_moon") != expected_moon:
+        # This public Python convenience field must be the *same object* as
+        # synods["Moon"], not a separately queried/detached copy that could
+        # diverge after callers inspect or update their dictionaries.
+        if result.get("new_moon") is not expected_moon:
             raise ValueError(f"new_moon alias mismatch at {iso_utc(instant)}")
     return {
         "checked_bodies": len(bodies),
