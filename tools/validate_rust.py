@@ -86,7 +86,7 @@ def run_gates(
         py_result = invoke(python_cmd, cwd=root, check=True, capture_output=True, text=True)
         # The Rust CLI performs complete block decoding AND full-file hashing.
         cli_cmd = [
-            executable, "run", "-p", "virgostars-events-p0", "--bin",
+            executable, "run", "--locked", "-p", "virgostars-events-p0", "--bin",
             "p0-verify", "--", str(archive), "--sha256", expected_sha256 or "",
         ]
         print("\n[Rust P0 complete archive audit]", flush=True)
