@@ -108,7 +108,7 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
         # Prevent parallel agents from adding coverage while leaving the
         # mandatory installed-wheel acceptance gate silently out of date.
         suites = (
-            ("test_python_api.py", 15, validator.TESTS),
+            ("test_python_api.py", 16, validator.TESTS),
             ("test_cli.py", 8, validator.TESTS),
             ("test_verify_python_synods.py", 16, validator.TOOLS_TESTS),
             ("test_native_fixture.py", 9, validator.TESTS),
