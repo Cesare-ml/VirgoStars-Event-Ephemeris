@@ -84,7 +84,7 @@ The smoke tests must **run**, not skip, and return source IDs/recorded phases pl
 
 The real-data smoke suite now contains **3 owner-snapshot tests**, including the two source gaps (1919 and 2018). Using the owner-approved 2026-11-10 P0 snapshot, the smoke test must prove that `get_synods_at("1919-06-01T00:00:00Z")` and `get_synods_at("2018-06-01T00:00:00Z")` retain recorded Moon source IDs **44934** and **46146**, report `phase.code=None` / `phase.status="unknown_discontinuous_moon_anchors"`, and include the `moon_recorded_cycle_gap_over_45_days` warning. Normal Moon cycles must still classify their source thresholds. A gap guard is not scientific completeness certification; see [Moon gaps](MOON_SYNOD_SOURCE_GAPS.md).
 
-The independent CSV oracle contains **10 tests** (including a year-long gap regression); the mandatory base Python/PyO3 suite contains **37 non-skipped tests** (12 API/time + 6 CLI + 10 oracle + 8 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
+The independent CSV oracle contains **10 tests** (including a year-long gap regression); the mandatory base Python/PyO3 suite contains **37 non-skipped tests** (12 API/time + 6 CLI + 10 oracle + 9 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
 
 ## 4a. Independent source-CSV parity of the installed Python API
 
