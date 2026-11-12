@@ -20,6 +20,15 @@ from virgostars_events._time import to_utc_microseconds
 class FakeReader:
     def __init__(self) -> None:
         self.requested = None
+        self.closed = False
+
+    def __enter__(self):
+        if self.closed:
+            raise RuntimeError("reader is closed")
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.closed = True  # mimic native snapshot release
 
     def get_synods_at(self, instant: str) -> dict:
         to_utc_microseconds(instant)
@@ -54,6 +63,35 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(data["new_moon"], data["synods"]["Moon"])
         self.assertFalse(data["dataset"]["coverage_certified"])
         self.assertIn("\n  \"dataset\"", stdout.getvalue())
+
+    def test_cli_closes_verified_snapshot_after_successful_json(self) -> None:
+        fake = FakeReader()
+        with patch.object(cli.VirgoStarsEvents, "open", return_value=fake):
+            with redirect_stdout(StringIO()):
+                result = cli.main([
+                    "archive.p0", "2026-11-11T12:00:00Z",
+                    "--sha256", "a" * 64,
+                ])
+        self.assertEqual(result, 0)
+        self.assertTrue(fake.closed)
+
+    def test_cli_closes_verified_snapshot_after_query_failure(self) -> None:
+        class FaultyReader(FakeReader):
+            def get_synods_at(self, instant):
+                raise ValueError("fixture lookup failed")
+
+        fake = FaultyReader()
+        stdout, stderr = StringIO(), StringIO()
+        with patch.object(cli.VirgoStarsEvents, "open", return_value=fake):
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                result = cli.main([
+                    "archive.p0", "2026-11-11T12:00:00Z",
+                    "--sha256", "b" * 64,
+                ])
+        self.assertEqual(result, 1)
+        self.assertTrue(fake.closed)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("fixture lookup failed", stderr.getvalue())
 
     def test_compact_output_is_one_valid_json_line(self) -> None:
         stdout = StringIO()
