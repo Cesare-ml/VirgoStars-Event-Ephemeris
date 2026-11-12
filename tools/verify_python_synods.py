@@ -223,7 +223,14 @@ def select_probes(source: dict[str, list[SourceSynod]], baseline: str) -> list[i
         "2018-01-01T00:00:00Z", "2018-06-01T00:00:00Z",
     ):
         probes.add(instant_us(instant))
-    return sorted(probes)
+
+    # Normalized source timestamps can legally fall on the first or last
+    # representable Python datetime. The adjacent +/-1 us parity queries
+    # must NOT cross year 0001/9999: iso_utc() and the Python-facing API
+    # cannot represent those synthetic out-of-range instants.
+    earliest = instant_us("0001-01-01T00:00:00Z")
+    latest = instant_us("9999-12-31T23:59:59.999999Z")
+    return sorted(instant for instant in probes if earliest <= instant <= latest)
 
 
 def assert_parity(
