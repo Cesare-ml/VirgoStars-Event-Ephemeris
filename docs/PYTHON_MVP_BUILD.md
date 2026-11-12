@@ -41,7 +41,7 @@ py -3 tools\build_python_mvp.py
 
 After successful Windows compilation, commit the *reviewed*, compiler-generated `Cargo.lock` onto PR #5. Do not hand-author crate digests. `tools/validate_rust.py` begins with `cargo metadata --locked --no-deps --format-version 1` and all subsequent cargo compile/test commands use `--locked`. `tools/build_python_mvp.py` runs `maturin build --locked`, and `pyproject.toml` sets `[tool.maturin] locked = true` so even source `pip install .` cannot update dependency resolution silently. This uses the documented maturin option; `--locked` is **not** an offline-mode guarantee. 
 
-**Status:** lock regeneration and the real Rust/PyO3/46-test Windows acceptance **NOT RUN here**; the authoring container lacks Cargo/rustc/maturin.
+**Status:** lock regeneration and the real Rust/PyO3/48-test Windows acceptance **NOT RUN here**; the authoring container lacks Cargo/rustc/maturin.
 
 ## 2. Rust baseline gates (mandatory)
 
@@ -79,7 +79,7 @@ Once `pip install .` succeeds, run:
 .\.venv\Scripts\python.exe tools\validate_python_mvp.py
 ```
 
-This gate now requires **15 pure-Python API/time tests, 8 CLI tests, 14 independent CSV-oracle tests and 9 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
+This gate now requires **15 pure-Python API/time tests, 8 CLI tests, 16 independent CSV-oracle tests and 9 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
 
 **Unlike standard `unittest`, the validator exits with failure if a native test is skipped**, if the compiled `virgostars_events._native` module cannot be imported, or if fewer than the expected cases are discovered. An `OK (skipped=5)` from a basic unittest run is **not** a successful native gate.
 
@@ -113,7 +113,7 @@ The smoke tests must **run**, not skip, and return source IDs/recorded phases pl
 
 The real-data smoke suite now contains **3 owner-snapshot tests**, including the two source gaps (1919 and 2018). Using the owner-approved 2026-11-10 P0 snapshot, the smoke test must prove that `get_synods_at("1919-06-01T00:00:00Z")` and `get_synods_at("2018-06-01T00:00:00Z")` retain recorded Moon source IDs **44934** and **46146**, report `phase.code=None` / `phase.status="unknown_discontinuous_moon_anchors"`, and include the `moon_recorded_cycle_gap_over_45_days` warning. Normal Moon cycles must still classify their source thresholds. A gap guard is not scientific completeness certification; see [Moon gaps](MOON_SYNOD_SOURCE_GAPS.md).
 
-The independent CSV oracle contains **14 tests** (including UTC probe precision and a year-long gap regression); the mandatory base Python/PyO3 suite contains **46 non-skipped tests** (15 API/time + 8 CLI + 14 oracle + 9 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
+The independent CSV oracle contains **16 tests** (including UTC probe precision and a year-long gap regression); the mandatory base Python/PyO3 suite contains **48 non-skipped tests** (15 API/time + 8 CLI + 16 oracle + 9 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
 
 ## 4a. Independent source-CSV parity of the installed Python API
 
@@ -141,7 +141,7 @@ The new test-only oracle's unit tests are in `tools/test_verify_python_synods.py
 py -3 -m unittest discover -s tools -p "test_verify_python_synods.py" -v
 ```
 
-**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **14 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 10 tests as a third suite, in addition to 12 pure-Python API/time tests, 6 CLI tests and 6 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
+**Status:** the eight original CSV-oracle tests were written previously; one additional regression test now checks non-Moon/non-Mercury body selection and rejects empty indexed series, for **16 independent source-oracle tests**. Their current execution is **not yet verified**. The mandatory `tools/validate_python_mvp.py` now runs these 10 tests as a third suite, in addition to 12 pure-Python API/time tests, 6 CLI tests and 6 native golden tests. **Do not report a passing native or source-parity gate until it actually runs on an installed wheel.**
 
 ## 5. Produce a local wheel and reinstall it without build dependencies
 
@@ -227,7 +227,7 @@ The Python surface is a prototype **for precomputed recorded events**, not a new
 
 The Rust Python binding now creates a secure private temporary directory, copies the separately authorized source P0 file into it, and checks **the copied bytes** against the independently trusted whole-file SHA-256 at reader creation. Queries use only the private copy; modifying/replacing/deleting the source path later no longer affects an open reader. No per-query full-file checksum scans are required. Temporary copies persist for as long as native readers are alive and are cleaned up when released. Budget extra free disk space roughly equal to one archive per live reader and use a trusted temp directory; this is not an adversary-proof file lock.
 
-**Required native regression count: 9; total mandatory: 46 = 15 API/time + 8 CLI + 14 source oracle + 9 PyO3 golden fixture.** The native fixture cases exercise source in-place alteration, atomic replacement and deletion after construction. The modified native binding and these tests **have not been compiled or run** in this authoring environment.
+**Required native regression count: 9; total mandatory: 48 = 15 API/time + 8 CLI + 16 source oracle + 9 PyO3 golden fixture.** The native fixture cases exercise source in-place alteration, atomic replacement and deletion after construction. The modified native binding and these tests **have not been compiled or run** in this authoring environment.
 
 **Cargo.lock checkpoint:** introducing the new Rust `tempfile` crate requires regenerating the tracked `Cargo.lock`. That lockfile did not include PyO3's workspace dependencies previously either. Do not hand-edit checksums. On the Windows developer checkout with Cargo available, run `cargo generate-lockfile`, review/commit the result, then validate and build:
 
@@ -264,4 +264,10 @@ The path above is the agent's isolated test checkout, not a command for Windows 
 
 ## 11. Efficient original sinod CSV parity queries (2026-11-12)
 
-The independent source oracle's `expected_row` no longer builds a fresh full timestamp list for each source-body instant probe. It now uses `bisect_right(series, instant, key=attrgetter("at"))` (supported since Python 3.10) over already sorted `SourceSynod` objects, preserving latest-anchor-inclusive semantics. The two new synthetic regressions prohibit a full iterator walk of 20,000 records and measure <=24 indexed accesses across a virtual million events. **Isolated local Python 3.13.5 reproduction: 2/2 PASS**; not a full source oracle run or production benchmark. The standalone CLI `python tools/verify_python_synods.py --csv ... --archive ... --sha256 ...` now closes its Rust-backed private archive using `with`, including mismatch/error cases. The validator requires **46 non-skipped M0 tests**: 15 API/time, 8 CLI, **14 independent oracle**, 9 compiled native. Cargo, maturin wheel and owner-source CSV/P0 parity are still not executed in this environment.
+The independent source oracle's `expected_row` no longer builds a fresh full timestamp list for each source-body instant probe. It now uses `bisect_right(series, instant, key=attrgetter("at"))` (supported since Python 3.10) over already sorted `SourceSynod` objects, preserving latest-anchor-inclusive semantics. The two new synthetic regressions prohibit a full iterator walk of 20,000 records and measure <=24 indexed accesses across a virtual million events. **Isolated local Python 3.13.5 reproduction: 2/2 PASS**; not a full source oracle run or production benchmark. The standalone CLI `python tools/verify_python_synods.py --csv ... --archive ... --sha256 ...` now closes its Rust-backed private archive using `with`, including mismatch/error cases. The validator requires **48 non-skipped M0 tests**: 15 API/time, 8 CLI, **16 independent oracle**, 9 compiled native. Cargo, maturin wheel and owner-source CSV/P0 parity are still not executed in this environment.
+
+## 12. Source-parity CLI input normalization (2026-11-12)
+
+`python tools/verify_python_synods.py --csv ... --archive ... --sha256 ... --instant ...` now rejects an invalid SHA-256 or noncanonical UTC instant **before loading any source CSV**. The standalone helper accepts uppercase hexadecimal but normalizes it to lowercase once; both the verified Rust reader and the independent source comparison see the same trusted digest. It handles native-import failure as a clean nonzero error. The stricter *installed-wheel acceptance* driver `tools/validate_python_mvp.py` still requires a lowercase owner SHA-256; when running that driver on Windows, supply the manifest digest in lowercase.
+
+Two added oracle regressions verify fail-fast input validation and case-equivalent identity with a context-managed fake native reader. A **2/2 standalone Python 3.13 reproduction PASSED**, not the complete exact repository suite. The minimum mandatory installed-wheel acceptance rises to **48 non-skipped tests** (15 API/time + 8 CLI + **16 independent oracle** + 9 compiled native fixture). Rust/Cargo/maturin compilation, wheel and approved original dataset parity remain **NOT RUN** here.
