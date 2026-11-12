@@ -2,6 +2,14 @@
 
 **No implementation/tests have been run for this repository as of initial setup.** The following gates become executable as code is added; record actual commands and outcomes in PRs and [WORK_LOG](WORK_LOG.md).
 
+## Authenticate trusted archive before decompressing it (2026-11-12, draft PR #5)
+
+The standalone Rust `p0-verify <archive> --sha256 <trusted-lowercase-digest>` previously called `P0Archive::verify_all()` **before** comparing the complete input SHA-256 with the trusted digest, which forced the expensive zlib/block/event audit on an archive that might have the wrong identity. The CLI now first opens and bounds the **header/index**, then verifies the entire archive hash (or computes the informational hash when `--sha256` is absent), and only **after that** performs the exhaustive compressed-block validation. It still reports the same JSON fields (format, SHA, bytes, counts, independent coverage disclaimer). Without a trusted digest, full decoding is still required; an informational hash alone does not certify authenticity.
+
+Three Rust binary-unit tests were added in `crates/events-p0/src/bin/p0-verify.rs` using the independent synthetic fixture: the intact trusted file reports expected fields; a file with both a mismatched full SHA and a damaged compressed block reports **SHA mismatch first**; and a corrupted file without `--sha256` is **still** rejected during exhaustive auditing. No new runtime dependency; existing `base64` dev-dependency is used only for test fixture decoding.
+
+**Actual executed reference verification:** Python 3.13.5 checks on the exact original synthetic archive: **4/4 PASS** for expected full-file SHA-256, 1,470-byte original metadata/4 blocks/8 events, wrong digest after one-byte mutation, and independent corruption of the compressed block. This verifies the fixture and error-priority prerequisites, **not** the new compiled Rust tests. `cargo test --locked -p virgostars-events-p0 --bin p0-verify` remains pending until a real Cargo-equipped checkout has a reviewed and regenerated `Cargo.lock`. The full Python source/wheel acceptance and original owner dataset parity remain separate gates.
+
 ## Mandatory portable P0 byte-integrity preflight (2026-11-12, PR #5)
 
 Run `py -3 tools\validate_p0_synthetic.py` from a complete source checkout **before Cargo**. The builder `tools/build_python_mvp.py` now runs this gate immediately after the existing 42-case source gate and before `tools/validate_rust.py`; a nonzero exit blocks wheel creation. The independent P0 audit suite has 15 authored methods: **14 fully synthetic required** and **one separately authorized real snapshot audit** (`test_real_snapshot_full_block_audit`) which is explicitly excluded rather than silently skipped. The helper fails closed if the optional method disappears, the synthetic method count changes, a test is skipped/expected-failed/failed, or execution stops early.
