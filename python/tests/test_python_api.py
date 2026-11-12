@@ -193,6 +193,13 @@ class PythonApiTests(unittest.TestCase):
             VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
 
         raw["synods"]["Mercury"]["source_id"] = None
+        raw["synods"]["Mercury"]["next_cycle_start_us"] = None
+        raw["synods"]["Mercury"]["phase_thresholds_us"] = None
+        raw["synods"]["Mercury"]["phase"] = {
+            "code": None,
+            "started_at_us": None,
+            "status": "no_preceding_recorded_cycle",
+        }
         accepted = VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
         self.assertIsNone(accepted["synods"]["Mercury"]["source_id"])
         self.assertIsNone(accepted["synods"]["Mercury"]["cycle_start_utc"])
