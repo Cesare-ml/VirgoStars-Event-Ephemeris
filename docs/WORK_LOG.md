@@ -2,6 +2,16 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-12 — bind coverage reader to immutable archive identity (draft PR #6)
+
+- **Scope / existing PR:** [#6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6), branch `data/2026-11-10-snapshot`; focused extension to the experimental `prototype/coverage_policy.py`, not a competing PR.
+- **Observed defect:** `CoveragePolicy.load(policy, archive_A)` verified archive A once, but `CoverageAwareReader(reader_B, policy)` did not attest the reader file. A different or modified P0 archive could thus be paired with reviewed windows.
+- **Fix:** retain the reviewed archive SHA-256 in the policy; verify the reader's real file at attachment and both before and after each state query to catch swapped or modified bytes and guard cached blocks. Missing file-backed reader path fails closed. The underlying recorded-event reader remains unchanged.
+- **Tests:** new `prototype/test_coverage_identity.py` with six fully synthetic standard-library tests: matching archive and window boundary, wrong attached archive, modified archive after attach, modification during `at`, unreviewed lookup mutation, missing reader path. **Executed** isolated Python 3.13.5 reproduction of exactly these source/test contents: `python -m unittest discover -s /mnt/data/vseph-coverage-check -p 'test_*.py' -v` → **6/6 PASS**; `python -m py_compile ...` → **PASS**. These run with a fake file-backed reader, not the actual P0 decoder.
+- **Not run:** complete repo `prototype/test_coverage_policy.py` and binary P0 integration from a cloned checkout; GitHub checkout cannot be cloned from this environment. No Cargo/Rust or scientific completeness validation claimed. Source file readback against the published branch should be part of integration verification.
+- **Cost / risk:** streaming archive SHA twice per state query; this is deliberately conservative and not a substitute for immutable file-descriptor-backed snapshots or genuine scientific coverage audits. Zero human-reviewed windows remain. No dataset files, manifest, live database, release or production code changed.
+- **Next:** run the three Python prototype suites on a fresh checkout and integrate the equivalent snapshot-identity contract in the authoritative Rust/PyO3 reader when Cargo gates pass. No GitHub Actions, merge, deploy or publication.
+
 ## 2026-11-10 — fail-closed coverage safety on dataset draft PR #6
 
 - **Existing PR / branch:** [#6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6), `data/2026-11-10-snapshot`; no duplicate PR.
