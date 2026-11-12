@@ -48,7 +48,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ensure_ascii=False,
                 indent=None if args.compact else 2,
             )
-    except (ImportError, OSError, ValueError, TypeError, OverflowError, RuntimeError) as exc:
+    except (ImportError, OSError, ValueError, TypeError, KeyError, OverflowError, RuntimeError) as exc:
         print(f"virgostars-events: {exc}", file=sys.stderr)
         return 1
 
