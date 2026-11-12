@@ -1,3 +1,12 @@
+## 2026-11-12 — M0 opt-in Cargo.lock regeneration rejects external symlink (draft PR #5)
+
+- **Coordination:** Continued existing [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) on `feat/p0-2-rust-workspace`; verified latest GitHub source/PR state and available local tools. No edits to scientific data, other PRs, production or Rust scientific calculations.
+- **Defect:** The previous guarded `tools/prepare_cargo_lock.py --apply` verified that `Cargo.lock` was tracked by Git and that Cargo workspace equaled Git root, but a *tracked symlink* pointing to a file outside the checkout could still pass those tests. Cargo operations might write outside the checkout and the Git diff would only track the link.
+- **Fix:** Reject `Cargo.lock.is_symlink()` before running Git/Cargo mutating steps on `--apply`. The default read-only package report still works without Cargo. No commit, reset, staging or merge is performed.
+- **Executed:** `python3 -m unittest discover -s /mnt/data/ve-lockprep/tools -p test_prepare_cargo_lock.py -v` on Python 3.13.5: **15/15 PASS**, no skips; `python3 -m compileall -q` both modules PASS. Added cross-platform mocked symlink test and a real Git repository with `Cargo.lock` symlinked to an outside file. The helper rejects it before any Git/Cargo command and leaves external file bytes unchanged. Local source/test Git blob SHA values match GitHub readback exactly: `b157f181c76f2a94f445b372cfea6b5e1ebd3046` and `0aee337d35dc016d177b9543ac367c3ebbb7c780`.
+- **Still not executed:** Actual Cargo/rustc/maturin (not installed), full source 41-test suite on complete checkout, all **50** mandatory installed-wheel native cases, original owner CSV/P0 parity. Rejected attempts to clone public GitHub directly from this container because outbound DNS is unavailable; don't infer real integration success from local standalone runner tests. `Cargo.lock` still needs genuine Cargo regeneration, review and commit on Windows.
+- **Docs/process:** Updated AGENTS, ROADMAP, Windows build guide; PR remains draft. No GitHub Actions, merge, deploy, release, dataset publication, PyPI.
+
 ## 2026-11-12 — M0 wheel builder: source tests before Cargo; repair missing-Moon regression fixture (draft PR #5)
 
 - **Scope and coordination:** Continued the existing `feat/p0-2-rust-workspace` draft PR #5 after checking current GitHub commits, open PRs/issues, Python tests and build scripts. No changes to owner snapshot PR #6, scientific Rust computations, main, GitHub Actions or published artifacts.
