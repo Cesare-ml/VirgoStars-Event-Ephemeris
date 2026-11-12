@@ -8,14 +8,19 @@ No compiled extension, scientific dataset or PostgreSQL required.
 from __future__ import annotations
 
 import csv
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 import json
 from pathlib import Path
+import sys
 import tempfile
+import types
 import unittest
+from unittest.mock import patch
 
 from verify_python_synods import (
     SourceSynod, assert_parity, expected_phase, expected_row, has_moon_source_gap,
-    instant_us, iso_utc, load_synod_csv, select_probes,
+    instant_us, iso_utc, load_synod_csv, main, select_probes,
 )
 
 
@@ -134,6 +139,61 @@ class SourceCsvTests(unittest.TestCase):
         for value in bad:
             with self.subTest(value=value), self.assertRaises(ValueError):
                 instant_us(value)
+
+    def test_standalone_parity_cli_rejects_bad_inputs_before_csv_io(self):
+        options = [
+            "--csv", "owner.csv", "--archive", "owner.p0",
+            "--sha256", "a" * 64,
+        ]
+        with patch("verify_python_synods.load_synod_csv") as loader:
+            with redirect_stderr(StringIO()) as err, self.assertRaises(SystemExit) as caught:
+                main(options[:5] + ["x" * 64])
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn("64-character hexadecimal", err.getvalue())
+            loader.assert_not_called()
+
+            with redirect_stderr(StringIO()) as err:
+                status = main(options + ["--instant", "2026-11-12T12:00:00.0000009Z"])
+            self.assertEqual(status, 1)
+            self.assertIn("at most six fractional digits", err.getvalue())
+            loader.assert_not_called()
+
+    def test_standalone_parity_cli_normalizes_uppercase_sha_and_closes_reader(self):
+        source = synthetic_source()
+        calls = []
+        reader_instances = []
+
+        class ContextOracle(OracleReader):
+            closed = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                self.closed = True
+
+        class FakeEvents:
+            @classmethod
+            def open(cls, archive, *, expected_sha256):
+                calls.append((archive, expected_sha256))
+                reader = ContextOracle(source)
+                reader_instances.append(reader)
+                return reader
+
+        extension_stub = types.ModuleType("virgostars_events")
+        extension_stub.VirgoStarsEvents = FakeEvents
+        with patch("verify_python_synods.load_synod_csv", return_value=source), patch(
+            "verify_python_synods.select_probes", return_value=[150]
+        ), patch.dict(sys.modules, {"virgostars_events": extension_stub}):
+            with redirect_stdout(StringIO()) as out:
+                code = main([
+                    "--csv", "owner.csv", "--archive", "owner.p0",
+                    "--sha256", "A" * 64,
+                ])
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, [(Path("owner.p0"), "a" * 64)])
+        self.assertEqual(json.loads(out.getvalue())["checked_body_instants"], 3)
+        self.assertTrue(reader_instances[0].closed)
 
     def test_latest_anchor_inclusive_and_before_first_is_missing(self):
         series = synthetic_source()["Moon"]
