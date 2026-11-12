@@ -58,6 +58,13 @@ def prepare(root: Path = ROOT, *, apply: bool = False,
         print("This read-only check does not prove Cargo --locked or compilation.")
         return 0
 
+    # A tracked symlink is not a safe Cargo lock input: Cargo may replace
+    # or follow it outside this checkout, while Git only sees the link.
+    # Refuse it before running any Git/Cargo command that can mutate files.
+    if lock.is_symlink():
+        print("FAIL: Cargo.lock must be a regular file, not a symlink", file=sys.stderr)
+        return 1
+
     git, cargo = which("git"), which("cargo")
     if not git or not cargo:
         print("FAIL: --apply requires both Git and Cargo on PATH", file=sys.stderr)
