@@ -11,6 +11,8 @@
 
 **M0 reproducible build blocker (2026-11-12, draft PR #5):** `tools/prepare_cargo_lock.py` provides a no-change stale lock report and explicit `--apply` guarded regeneration/locked metadata verification on a clean, Cargo-equipped checkout. Its **13** exact Python unit tests passed; three use real Git temporary repositories to verify a nested non-root Cargo workspace fails closed, an untracked lockfile fails closed, and a tracked lockfile remains unstaged after simulated Cargo; **Cargo.lock is not yet regenerated**, and no native build or installed wheel gate has run. This is preparatory tooling, not M0 completion. Keep `cargo generate-lockfile` output under explicit developer review/commit, never hand-edit dependency checksums.
 
+**M0 safe-lockfile hardening (2026-11-12, PR #5):** `prepare_cargo_lock.py --apply` now also refuses symlinked `Cargo.lock` to prevent writes outside the source checkout. The exact helper has **15/15 local passing Python tests**, including real Git with tracked external symlink and a portable mock case. The genuine Cargo regeneration, 41-source Python gate and 50-case native wheel acceptance are still pending. No promotion of M0 milestone from these tooling checks.
+
 ## M0 — FIRST user-facing deliverable: installable Python synod MVP
 
 **Deliver this BEFORE JS/TS WASM, production backend migration or frozen VSEPH v1.** Full acceptance criteria and proposed dictionary API: [Python-first MVP](PYTHON_FIRST_MVP.md). End-to-end delivery order including post-MVP features: [Delivery milestones M0–M5](DELIVERY_MILESTONES.md).
