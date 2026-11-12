@@ -23,26 +23,41 @@ from typing import Sequence
 ROOT = Path(__file__).resolve().parents[1]
 
 # Execute in a DIFFERENT working directory so source imports cannot mask a
-# missing wheel. Python's import check also requires the installed location
-# to be under the temporary venv, rather than a PYTHONPATH checkout.
+# missing wheel. Both the Python package and compiled native extension must
+# be inside the temporary venv. A pure-Python _native.py must not pass.
 INSTALLED_PROBE = """
+from importlib.machinery import EXTENSION_SUFFIXES
 from importlib.metadata import version
 from pathlib import Path
 import sys
 import virgostars_events
+import virgostars_events._native as native
 from virgostars_events._native import NativeReader
+root = Path(sys.prefix).resolve()
 package = Path(virgostars_events.__file__).resolve()
-if not package.is_relative_to(Path(sys.prefix).resolve()):
+extension = Path(native.__file__).resolve()
+if not package.is_relative_to(root):
     raise SystemExit(f'FAIL: package imported outside test venv: {package}')
+if not extension.is_relative_to(root):
+    raise SystemExit(f'FAIL: native extension imported outside test venv: {extension}')
+if not any(str(extension).endswith(suffix) for suffix in EXTENSION_SUFFIXES):
+    raise SystemExit(f'FAIL: _native is not a compiled extension: {extension}')
 if version('virgostars-event-ephemeris') != virgostars_events.__version__:
     raise SystemExit('FAIL: Python module version differs from installed wheel')
-print(f'Installed VirgoStars native wheel: {package}')
+print(f'Installed VirgoStars native wheel: {package}; extension: {extension}')
 """.strip()
 
 
 def venv_python(directory: Path) -> Path:
     """Return the venv interpreter, including the Windows Scripts layout."""
     return directory / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def venv_console_script(directory: Path) -> Path:
+    """Return the *installed* CLI path, including Windows pip .exe launchers."""
+    return directory / (
+        "Scripts/virgostars-events.exe" if os.name == "nt" else "bin/virgostars-events"
+    )
 
 
 def run_checked(command: Sequence[str], *, cwd: Path) -> None:
@@ -78,9 +93,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     validator = ROOT / "tools" / "validate_python_mvp.py"
     with tempfile.TemporaryDirectory(prefix="virgostars-wheel-verify-") as tmp:
         temp = Path(tmp)
-        venv.EnvBuilder(with_pip=True, clear=True).create(str(temp / "venv"))
-        python = venv_python(temp / "venv")
+        venv_dir = temp / "venv"
         try:
+            venv.EnvBuilder(with_pip=True, clear=True).create(str(venv_dir))
+            python = venv_python(venv_dir)
             # --no-index + --no-deps must remain present: this is an offline
             # installation proof, not a request to fetch/build dependencies.
             run_checked(
@@ -89,13 +105,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             run_checked([python, "-I", "-c", INSTALLED_PROBE], cwd=temp)
             run_checked([python, "-I", "-m", "virgostars_events", "--version"], cwd=temp)
+            # Verify pip's advertised [project.scripts] entry point, not only
+            # `python -m`. This is a .exe wrapper on Windows, POSIX script elsewhere.
+            run_checked([venv_console_script(venv_dir), "--version"], cwd=temp)
             command: list[str | Path] = [python, "-I", validator]
             if args.archive:
                 command.extend(["--archive", args.archive.resolve(), "--sha256", args.sha256.lower()])
             if args.synods_csv:
                 command.extend(["--synods-csv", args.synods_csv.resolve()])
             run_checked(command, cwd=temp)
-        except (OSError, RuntimeError) as exc:
+        except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
             print(f"FAIL: clean offline Python wheel gate: {exc}", file=sys.stderr)
             return 1
 
