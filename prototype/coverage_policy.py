@@ -21,6 +21,19 @@ SCHEMA = "virgostars-reviewed-coverage/v0"
 I64_MIN = -(1 << 63)
 I64_MAX = (1 << 63) - 1
 FAMILIES = frozenset(("ingress", "motion"))
+# Match the experimental Rust P0 policy parser's resource ceilings.
+MAX_POLICY_BYTES = 1_000_000
+MAX_REVIEWED_WINDOWS = 4096
+
+
+def _unique_keys(pairs: list[tuple[str, object]]) -> dict:
+    """Reject ambiguous JSON keys rather than silently choosing the last one."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate coverage policy JSON key: {key}")
+        result[key] = value
+    return result
 
 
 def _archive_sha256(path: str | Path) -> str:
@@ -36,7 +49,7 @@ def _time_value(value: object) -> int:
     if not isinstance(value, str) or not value or (value[0] == "-" and len(value) == 1):
         raise ValueError("coverage times must be signed decimal microsecond strings")
     digits = value[1:] if value[0] == "-" else value
-    if not digits.isdecimal() or (len(digits) > 1 and digits.startswith("0")):
+    if not all("0" <= character <= "9" for character in digits) or (len(digits) > 1 and digits.startswith("0")):
         raise ValueError("invalid coverage microseconds")
     number = int(value)
     if not I64_MIN <= number <= I64_MAX:
@@ -71,7 +84,11 @@ class CoveragePolicy:
 
     @classmethod
     def load(cls, policy_path: str | Path, archive_path: str | Path) -> "CoveragePolicy":
-        doc = json.loads(Path(policy_path).read_text(encoding="utf-8"))
+        with Path(policy_path).open("rb") as source:
+            encoded = source.read(MAX_POLICY_BYTES + 1)
+        if len(encoded) > MAX_POLICY_BYTES:
+            raise ValueError("coverage policy exceeds maximum size")
+        doc = json.loads(encoded, object_pairs_hook=_unique_keys)
         if not isinstance(doc, dict) or doc.get("schema") != SCHEMA:
             raise ValueError("unsupported coverage policy schema")
         if doc.get("verification") != "human-reviewed-only":
@@ -84,6 +101,8 @@ class CoveragePolicy:
         raw = doc.get("reviewed_windows")
         if not isinstance(raw, list):
             raise ValueError("missing reviewed_windows array")
+        if len(raw) > MAX_REVIEWED_WINDOWS:
+            raise ValueError("too many coverage windows")
         windows = []
         for entry in raw:
             if not isinstance(entry, dict):
