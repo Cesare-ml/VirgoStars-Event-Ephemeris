@@ -6,12 +6,13 @@ from __future__ import annotations
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+import os
 from types import SimpleNamespace
 import tempfile
 import subprocess
 import shutil
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from prepare_cargo_lock import missing_packages, prepare
 
@@ -54,6 +55,51 @@ class CargoLockPreparationTests(unittest.TestCase):
     def test_missing_workspace_fails_closed(self):
         with tempfile.TemporaryDirectory() as folder, redirect_stderr(StringIO()):
             self.assertEqual(prepare(Path(folder)), 1)
+
+    def test_symlink_lock_is_refused_before_tools_or_git_commands(self):
+        # Cross-platform check: simulate a tracked symlink, even on Windows
+        # machines where creating symlinks requires additional privileges.
+        with tempfile.TemporaryDirectory() as folder, redirect_stderr(StringIO()) as errors:
+            root = self.workspace(Path(folder))
+            run = Mock(side_effect=AssertionError("no Git or Cargo commands may run"))
+            original = Path.is_symlink
+            with patch.object(Path, "is_symlink", autospec=True,
+                              side_effect=lambda path: path.name == "Cargo.lock"):
+                self.assertEqual(prepare(root, apply=True, which=lambda name: name, run=run), 1)
+            run.assert_not_called()
+            self.assertIn("not a symlink", errors.getvalue())
+
+    @unittest.skipUnless(shutil.which("git") and hasattr(os, "symlink"), "requires Git and symlinks")
+    def test_real_git_symlink_lock_cannot_redirect_external_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            outside = base / "external-Cargo.lock"
+            outside.write_bytes(b"unchanged-external-lock")
+            root = base / "repo"
+            root.mkdir()
+            self.workspace(root)
+            (root / "Cargo.lock").unlink()
+            try:
+                (root / "Cargo.lock").symlink_to(outside)
+            except OSError as error:
+                self.skipTest(f"symlinks unavailable: {error}")
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "add", "Cargo.toml", "Cargo.lock", "crates/python-bindings/Cargo.toml"],
+                           cwd=root, check=True)
+            subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.org",
+                            "commit", "-q", "-m", "tracked symlink"], cwd=root, check=True)
+            calls = []
+            def run(cmd, **kwargs):
+                calls.append(cmd)
+                if cmd[0] == "cargo-stub":
+                    raise AssertionError("Cargo must not run on symlinked Cargo.lock")
+                return subprocess.run(cmd, **kwargs)
+            with redirect_stderr(StringIO()) as errors:
+                self.assertEqual(prepare(root, apply=True, which=lambda n: "cargo-stub" if n == "cargo" else "git",
+                                         run=run), 1)
+            self.assertEqual(calls, [])
+            self.assertEqual(outside.read_bytes(), b"unchanged-external-lock")
+            self.assertIn("not a symlink", errors.getvalue())
 
     def test_apply_requires_git_and_cargo(self):
         with tempfile.TemporaryDirectory() as folder, redirect_stderr(StringIO()):
