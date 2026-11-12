@@ -62,6 +62,7 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(len(called), 3)
             self.assertIn("validate_rust.py", called[0][1])
             self.assertIn("--release", called[1])
+            self.assertIn("--locked", called[1])
             self.assertIn("verify_python_wheel.py", called[2][1])
             self.assertEqual([w.name for w in out.glob("*.whl")], ["virgostars-0.1.0-cp310-abi3-win_amd64.whl"])
 
