@@ -2,6 +2,29 @@
 
 **Status 2026-11-11: scaffold implemented on draft PR #5; not yet compiled, pip-installed or tested end-to-end with Rust.** Do not call this a released package. No GitHub Actions, dataset redistribution or production replacement.
 
+## Safely regenerate the stale Cargo.lock before the first M0 wheel
+
+A **read-only** dependency-lock report works without Rust/Cargo:
+
+```powershell
+py -3 tools\prepare_cargo_lock.py
+py -3 -m unittest discover -s tools -p "test_prepare_cargo_lock.py" -v
+```
+
+If that report lists missing \`pyo3\`, \`tempfile\` or \`virgostars-events-python\`, first safely synchronize the **draft PR #5 branch**, inspect \`git status\`, and preserve all local edits. After installing Cargo and reaching a **clean tracked working tree**, explicitly run:
+
+```powershell
+py -3 tools\prepare_cargo_lock.py --apply
+git diff -- Cargo.lock
+cargo metadata --locked --no-deps --format-version 1
+py -3 tools\validate_python_sources.py
+py -3 tools\build_python_mvp.py
+```
+
+The opt-in helper rejects dirty tracked files, regenerates only via **real Cargo**, checks that all three lock packages exist, runs locked Cargo metadata, and refuses unexpected tracked changes. It does **not** revert or commit anything: inspect/commit \`Cargo.lock\` deliberately on your own development branch. A successful lock preparation alone **does not** demonstrate compilation, wheel installation, or scientific parity. The separate 50-test compiled/native gate and authorized original CSV/P0 checks remain mandatory.
+
+**Verification 2026-11-12:** exactly the two committed helper files passed **10/10 standalone stdlib unit tests** on Python 3.13.5; local \`git hash-object\` of both files matched GitHub blobs \`52a2c7423dc42cc5a9ae53c1f198339fb4bd5641\` and \`0a0505208f574db4d4d3987fe1bb11b351e206d9\`. This execution mocks Git/Cargo command results; the actual Cargo regeneration and locked build **have NOT run** in this authoring environment.
+
 ## Run Python-only source tests before Rust is available (2026-11-12)
 
 The developer-only script below runs **real** Python tests directly from the current checkout, without installing a package, downloading a dataset, or pretending the PyO3 binding exists:
@@ -11,9 +34,9 @@ py -3 tools\\validate_python_sources.py
 py -3 -m unittest discover -s tools -p "test_validate_python_sources.py" -v
 ```
 
-It requires exactly **41 non-skipped source tests**: 17 Python API/time + 8 mocked CLI + 16 independent synthetic CSV-oracle tests. It verifies the imported Python package lives under this checkout's `python/` directory and rejects a missing suite, test failure, skip or stale count. It uses only Python >= 3.10 standard-library modules. The source runner's own eight regression cases are separate from those 39 tests.
+It requires exactly **41 non-skipped source tests**: 17 Python API/time + 8 mocked CLI + 16 independent synthetic CSV-oracle tests. It verifies the imported Python package lives under this checkout's `python/` directory and rejects a missing suite, test failure, skip or stale count. It uses only Python >= 3.10 standard-library modules. The source runner's own eight regression cases are separate from those 41 tests.
 
-**This is explicitly NOT M0 acceptance**: the real local Python/Rust package still needs `cargo generate-lockfile`, `py -3 tools\\build_python_mvp.py`, the **50-case installed-wheel validator** (including 9 compiled Rust/PyO3 tests), and the authorized original CSV/P0 parity check. The **8/8 exact source-runner unit tests PASSED** locally under Python 3.13.5 from GitHub-byte-verified files (`git hash-object` matched both blobs). A synthetic 39-case local checkout PASS and a deliberate skip correctly produced nonzero. **The real repository's 39 source tests and the compiled 48-case wheel gate have NOT RUN**; the local synthetic checkout exercises the gate's control flow only.
+**This is explicitly NOT M0 acceptance**: the real local Python/Rust package still needs `cargo generate-lockfile`, `py -3 tools\\build_python_mvp.py`, the **50-case installed-wheel validator** (including 9 compiled Rust/PyO3 tests), and the authorized original CSV/P0 parity check. The **8/8 exact source-runner unit tests PASSED** locally under Python 3.13.5 from GitHub-byte-verified files (`git hash-object` matched both blobs). A synthetic 39-case local checkout PASS and a deliberate skip correctly produced nonzero. **The real repository's 41 source tests and the compiled 50-case wheel gate have NOT RUN**; the local synthetic checkout exercises the gate's control flow only.
 
 ## M0: fail-fast owner-data input checks (2026-11-12)
 
