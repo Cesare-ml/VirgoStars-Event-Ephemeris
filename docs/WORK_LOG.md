@@ -1,3 +1,13 @@
+## 2026-11-12 — recursive strict coverage JSON parser in Rust (draft PR #5)
+
+- **Scope:** existing `feat/p0-2-rust-workspace` / [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5); no competing PR, data changes, or new format version.
+- **Problem:** `serde_json::Value` silently retained the last of duplicate JSON keys. The Python policy in draft PR #6 now rejects duplicates recursively, creating an integrity/parity mismatch.
+- **Code:** a serde `Deserialize` visitor recursively converts accepted JSON into `Value`, rejecting duplicate keys in every object (including unknown metadata and escaped-equivalent names). The existing policy schema, archive digest binding, size limits, window semantics and recorded-event queries remain unchanged. Added direct `serde` dependency to events-p0.
+- **Tests written:** two synthetic Rust integration tests in `crates/events-p0/tests/coverage_p0.rs`: five rejected duplicate variants and one accepted nested primitive/array/object structure. Rust tests are **NOT RUN** because `cargo`, `rustc`, `rustfmt` are unavailable in this environment; compile, clippy, tests and release build still required. No claim of Rust/Python runtime parity yet.
+- **Executed reference check:** `python -m unittest discover -s . -p test_coverage_identity.py -v` in `/mnt/data/vseph-coverage-check` (Python 3.13) → **12/12 PASS**. This is the isolated Python reference, not the Rust suite.
+- **Blocker:** tracked `Cargo.lock` was already stale for Python/PyO3 workspace additions; regeneration using real Cargo, review and commit are required. Do not hand-edit the lockfile or waive `--locked`.
+- **Next:** run locked Cargo gates on a clean native checkout after lockfile regeneration, compare duplicate-policy error behavior with Python, then evaluate post-read archive-byte attestation. PR stays draft; no merge, deployment, GitHub Actions, or dataset licensing claim.
+
 ## 2026-11-12 — Executed exact GitHub synthetic P0 audit and made 14-test gate mandatory before Cargo (draft PR #5)
 
 - **Coordination:** Continued existing [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), branch `feat/p0-2-rust-workspace`. Reviewed branch HEAD, open issues/PRs and the current Python byte auditor, fixture, source preflight and wheel builder. No changes to PR #4 fixtures, PR #6 owner dataset, main, production, GitHub Actions, release or PyPI.
