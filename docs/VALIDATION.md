@@ -2,6 +2,12 @@
 
 **No implementation/tests have been run for this repository as of initial setup.** The following gates become executable as code is added; record actual commands and outcomes in PRs and [WORK_LOG](WORK_LOG.md).
 
+## M0 compiled PyO3 golden-boundary acceptance (2026-11-12, draft PR #5)
+
+The existing native integration suite `python/tests/test_native_fixture.py` now checks **13 timestamp subcases inside one existing test**, using the independently authored `crates/events-p0/tests/fixtures/synthetic.p0.base64` fixture. The recorded Moon source rows are ID 10 at UTC microseconds `-876544` (SQL `NULL` phase thresholds) and ID 12 at `1500000` (thresholds `1700000, 1800000, 1900000`); there is **no third Moon anchor**. The test proves inclusive phase starts and exact -1/at/+1 microsecond transitions, source-ID selection before/at the new Moon, and `unknown_open_ended_cycle` with no invented `CAL2` after the last recorded phase threshold. It also asserts that the public `new_moon` is the same Python object as `synods["Moon"]`.
+
+The original fixture file's Git blob `64f38ded0a336f0d2652e994bf87b8e16ce8d393` was verified in the local test environment, as was the decoded byte SHA-256 `4b7dbe3171633402b76565df79a31066f58913b52b2839c735ea3e68cb413499`. An **independent standard-library P0 decode/reference check ran 13/13 PASS** on those original bytes. This validates the fixture and expected outputs, **not** the compiled Rust binding; the edited native test still needs to run on a real wheel. The required acceptance count remains **51** (18 Python API/time + 8 CLI + 16 source CSV oracle + 9 compiled/native P0 fixture). Do not count the independent reference check as PyO3 acceptance.
+
 ## Gate A: documentation/specification
 
 - README, AGENTS, license, NOTICE, ADR, API and format docs are consistent and discoverable.
