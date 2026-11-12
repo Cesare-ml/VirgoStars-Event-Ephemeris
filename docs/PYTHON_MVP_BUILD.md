@@ -57,7 +57,9 @@ For editable source development:
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-**2026-11-12 UTC oracle precision update:** The independent source-CSV oracle now refuses submicrosecond ISO strings and noncanonical UTC probes instead of accepting Python's silent fractional truncation. Two new source-oracle regressions increase the mandatory installed acceptance gate to **42 non-skipped tests**: 15 Python API/time + 6 CLI + 12 CSV-oracle + 9 native fixture. These new cases were added to PR #5; three isolated exact-parser tests passed, but **the full repository/compiled native gate has NOT RUN**.\n\n## 3a. Mandatory synthetic native end-to-end gate (no owner dataset needed)
+**2026-11-12 UTC oracle precision update:** The independent source-CSV oracle now refuses submicrosecond ISO strings and noncanonical UTC probes instead of accepting Python's silent fractional truncation. Two new source-oracle regressions increase the mandatory installed acceptance gate to **42 non-skipped tests**: 15 Python API/time + 6 CLI + 12 CSV-oracle + 9 native fixture. These new cases were added to PR #5; three isolated exact-parser tests passed, but **the full repository/compiled native gate has NOT RUN**.
+
+## 3a. Mandatory synthetic native end-to-end gate (no owner dataset needed)
 
 Once `pip install .` succeeds, run:
 
