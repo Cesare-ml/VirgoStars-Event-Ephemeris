@@ -6,6 +6,7 @@ from __future__ import annotations
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -72,6 +73,21 @@ class WheelGateTests(unittest.TestCase):
         self.assertIn("extension.is_relative_to(root)", probe)
         self.assertIn("_native is not a compiled extension", probe)
         self.assertIn("version('virgostars-event-ephemeris')", probe)
+
+    def test_subprocesses_do_not_inherit_python_import_overrides(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.dict(wheel_check.os.environ, {
+                "PYTHONPATH": "unsafe-source-checkout",
+                "PYTHONHOME": "unsafe-python-home",
+                "PYTHONUSERBASE": "unsafe-user-site",
+            }), patch.object(
+                wheel_check.subprocess, "run", return_value=SimpleNamespace(returncode=0)
+            ) as invoked:
+                wheel_check.run_checked(["fake-command", "--version"], cwd=Path(temp))
+            sanitized = invoked.call_args.kwargs["env"]
+            for name in ("PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE"):
+                self.assertNotIn(name, sanitized)
+            self.assertEqual(invoked.call_args.kwargs["cwd"], temp)
 
     def test_owner_snapshot_and_csv_paths_are_forwarded_to_validator(self):
         with tempfile.TemporaryDirectory() as temp:
