@@ -1,3 +1,13 @@
+## 2026-11-12 — M0 verified wheel: atomic no-clobber local publication
+
+- **Task / branch / PR:** Focused reliability gate for Python-first M0 build pipeline on existing draft PR #5: https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5 ; branch feat/p0-2-rust-workspace. No competing PR.
+- **Observed issue:** build_python_mvp.py opened the final dist/*.whl name for direct exclusive writing; a power loss could leave a partial wheel under the distributable filename. The tracked Cargo.lock also lacks the newer PyO3/tempfile dependency graph; regenerate with Cargo on developer machine, never manually.
+- **Implementation:** Stage as same-directory .part, flush/fsync, verify source and staged SHA-256, publish with atomic no-overwrite hard link. Reject changed sources, differing concurrent outputs, symlink outputs, and unsupported hard-link operations; always clean temporary stage after caught exceptions. Local packaging only; no reader or scientific algorithm changes.
+- **Files:** tools/build_python_mvp.py, tools/test_build_python_mvp.py, docs/PYTHON_MVP_BUILD.md, docs/WORK_LOG.md.
+- **Validation:** Six standalone Python 3 regression cases on equivalent atomic writer PASSED in isolated temporary reproduction (successful publication, idempotency, interruption, competing writer, source mutation, unsupported hard link). Five focused regression cases added to the tracked test module, replacing the old direct-write race case. **Full-checkout Python unittest, Rust fmt/Clippy/tests, maturin wheel, Windows NTFS build and full 40-test native installation gate NOT RUN**: no Cargo in this environment and no network clone.
+- **Remaining blockers:** On Windows run cargo generate-lockfile, review/commit lockfile, then Python build script unit tests and py -3 tools/build_python_mvp.py, with authorized P0/CSV parity when available. The atomic publication requires a local hard-link-capable filesystem such as NTFS; unsupported filesystems fail closed. A sudden power loss can leave a .part file, never an incomplete final wheel from this operation.
+- **Next:** Compile and verify an actual Windows wheel and non-skipped installed native tests; keep PR draft. No merges, Actions, deployments, PyPI release or dataset change.
+
 ## 2026-11-12 — Python reader lifecycle: close/context manager for private verified P0 snapshot
 
 - **Branch/task:** Extended existing draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`. Current branch head, existing draft PRs/issues, Python API/tests/validator, Cargo.lock and native snapshot implementation inspected before modifying. The new feature is bounded to Python resource lifetime and the M0 acceptance gate.
