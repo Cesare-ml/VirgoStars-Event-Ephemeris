@@ -180,15 +180,23 @@ def select_probes(source: dict[str, list[SourceSynod]], baseline: str) -> list[i
         if current is None:
             current = series[0]
 
-        # Inclusive anchor and both adjacent microseconds detect off-by-one
-        # errors even when the source uses sub-second precision.
-        for at in (current.at, current.at - 1, current.at + 1):
-            probes.add(at)
+        # Sample every body's oldest, middle, latest and baseline-nearest
+        # anchors. A single recent baseline alone cannot catch historical
+        # source-order or phase-boundary regressions across millennia.
+        # Four anchors/body keeps the native parity workload bounded even
+        # when the original CSV contains tens of thousands of cycles.
+        selected = {event.at: event for event in (
+            series[0], series[len(series) // 2], series[-1], current
+        )}
+        for event in selected.values():
+            # Equality, one microsecond before, and one after distinguish
+            # inclusive anchor lookup from next/previous event semantics.
+            probes.update((event.at - 1, event.at, event.at + 1))
 
-        # Each stage boundary is start-inclusive. Test the moment before,
-        # the exact instant, and immediately after, across ALL source bodies.
-        for at in (current.extras or ())[:3]:
-            probes.update((at - 1, at, at + 1))
+            # Source phase boundaries are independently sampled with the
+            # same exact/adjacent rule for every selected historical era.
+            for at in (event.extras or ())[:3]:
+                probes.update((at - 1, at, at + 1))
 
     moon = source.get("Moon")
     if moon:
