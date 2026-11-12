@@ -1,3 +1,10 @@
+## 2026-11-12 — M0 isolation follow-up: contaminated developer PYTHONPATH
+
+- **Existing PR:** [#5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), branch `feat/p0-2-rust-workspace`, no merge. The clean wheel check must test **only installed wheel code**, even if the developer launching it has set Python environment overrides.
+- **Code:** `tools/verify_python_wheel.py::run_checked` now removes inherited `PYTHONPATH`, `PYTHONHOME`, `PYTHONUSERBASE` from the environment of all subprocesses. This matters for the pip-installed `virgostars-events` console script, which cannot use `python -I`. The isolated `python -I` native probe and 34-test gate remain mandatory. No scientific logic or dataset changed.
+- **Executed:** `PYTHONPATH=/mnt/data/virgostars-mvp-gate/tools python -m unittest discover -s /mnt/data/virgostars-mvp-gate/tools -p test_verify_python_wheel.py -v` → **8/8 PASS** (Python 3.13); `python -m compileall -q /mnt/data/virgostars-mvp-gate/tools` → **PASS**. GitHub blob hashes match byte-for-byte the tested local files: `7949d47dda6930cccc34322c7a12990a38eefaeb` (verifier), `7928e88e0085952b0e58e00dd7d7a08bdda0a39a` (tests). One new mocked-subprocess regression asserts inherited Python overrides are absent, bringing the suite to eight.
+- **Real offline negative smoke:** prior pass confirmed a fake `_native.py` wheel installs but is rejected by the binary module probe. **Not run:** full real PyO3 Rust wheel / Windows console launcher / 34 non-skipped native acceptance tests / authorized P0-CSV parity. No release or merge.
+
 ## 2026-11-12 — M0 wheel gate: verify compiled extension and installed CLI
 
 - **Scope:** extended existing draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) on `feat/p0-2-rust-workspace`; checked latest branch, open PRs/issues and project guidance first. No changes to dataset PR #6, astronomy, output timestamps, production or packaging releases.
