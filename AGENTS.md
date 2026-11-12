@@ -43,6 +43,10 @@ The existing draft PR #5 now includes `tools/verify_python_wheel.py`, a stdlib-o
 
 The per-reader verified P0 copy consumes temporary disk space until its last native owner is released. The Python `VirgoStarsEvents` wrapper now provides `close()` (idempotent), `closed`, and `with VirgoStarsEvents.open(...) as reader:` context management; the `with` form closes on both normal and exceptional exit. After close, `get_synods_at` and re-entering the context raise `RuntimeError`. This changes only Python resource lifetime, not the Rust event decoder/phase semantics. Three new no-Rust Python tests cover weakref cleanup, idempotency, error propagation. The target required suite is **40 tests** (15 API/time, 6 CLI, 10 oracle, 9 native). The exact new tests are committed but full native/PyO3 acceptance and Rust build **NOT RUN** here.
 
+## Lockfile reproducibility in M0 (2026-11-12)
+
+The tracked `Cargo.lock` is stale for `crates/python-bindings` (PyO3 and `tempfile` not present). **Only Cargo should regenerate it**, not a model hand-authoring registry package/checksums. `tools/validate_rust.py` now first invokes `cargo metadata --locked --no-deps --format-version 1`, and all compilations and the P0 verification command include `--locked`. `tools/build_python_mvp.py` calls `maturin build --locked`; `pyproject.toml` also has `locked = true` for PEP 517 / pip builds. If lock is stale, every build must fail instead of changing dependency resolution. On a machine with Rust/Cargo, run `cargo generate-lockfile`, review `git diff -- Cargo.lock` and commit the generated file only after checking license/MSRV compatibility, then run the Rust validator and Python M0 40-test gate. Mocked regression tests are committed but **real Rust toolchain verification remains NOT RUN**. Keep PR #5 draft.
+
 ## Task selection for each run
 
 1. Inspect the repo, issues, PRs, branches, tests, and roadmap status first.
