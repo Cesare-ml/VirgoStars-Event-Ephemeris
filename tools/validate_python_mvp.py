@@ -82,7 +82,9 @@ def main() -> int:
     # results. It needs neither owner data nor a network connection.
     if not run_tests("test_verify_python_synods.py", 10, TOOLS_TESTS):
         return 1
-    if not run_tests("test_native_fixture.py", 6):
+    # Includes post-open archive mutation/replacement regressions: a stale
+    # trusted digest must never be attached to altered on-disk bytes.
+    if not run_tests("test_native_fixture.py", 8):
         return 1
 
     if args.archive is not None:
