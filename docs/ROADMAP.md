@@ -9,7 +9,7 @@
 - Every deliverable includes relevant code, tests, docs, validation outcomes and a *draft PR*; do not deploy/merge without explicit authorization.
 - No GitHub Actions automation. Run explicit checks locally or through available tools.
 
-**M0 reproducible build blocker (2026-11-12, draft PR #5):** `tools/prepare_cargo_lock.py` provides a no-change stale lock report and explicit `--apply` guarded regeneration/locked metadata verification on a clean, Cargo-equipped checkout. Its **12** exact Python unit tests passed; two use real Git temporary repositories to verify that an untracked lockfile fails closed and a tracked lockfile remains unstaged after simulated Cargo; **Cargo.lock is not yet regenerated**, and no native build or installed wheel gate has run. This is preparatory tooling, not M0 completion. Keep `cargo generate-lockfile` output under explicit developer review/commit, never hand-edit dependency checksums.
+**M0 reproducible build blocker (2026-11-12, draft PR #5):** `tools/prepare_cargo_lock.py` provides a no-change stale lock report and explicit `--apply` guarded regeneration/locked metadata verification on a clean, Cargo-equipped checkout. Its **13** exact Python unit tests passed; three use real Git temporary repositories to verify a nested non-root Cargo workspace fails closed, an untracked lockfile fails closed, and a tracked lockfile remains unstaged after simulated Cargo; **Cargo.lock is not yet regenerated**, and no native build or installed wheel gate has run. This is preparatory tooling, not M0 completion. Keep `cargo generate-lockfile` output under explicit developer review/commit, never hand-edit dependency checksums.
 
 ## M0 — FIRST user-facing deliverable: installable Python synod MVP
 
