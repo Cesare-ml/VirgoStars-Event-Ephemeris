@@ -92,7 +92,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # This suite independently checks original source-CSV normalization,
     # exact phase boundaries, duplicate IDs and rejection of altered API
     # results. It needs neither owner data nor a network connection.
-    if not run_tests("test_verify_python_synods.py", 14, TOOLS_TESTS):
+    if not run_tests("test_verify_python_synods.py", 16, TOOLS_TESTS):
         return 1
     # The native reader owns a SHA-verified private P0 snapshot. Source-file
     # edits, path replacement or deletion must never change its results.
