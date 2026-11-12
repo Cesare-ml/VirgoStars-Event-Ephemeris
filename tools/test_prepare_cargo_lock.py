@@ -82,11 +82,11 @@ class CargoLockPreparationTests(unittest.TestCase):
                         self.packages("pyo3", "tempfile", "virgostars-events-python"),
                         encoding="utf-8")
                 return SimpleNamespace(returncode=0,
-                    stdout="Cargo.lock\n" if "diff" in cmd else "", stderr="")
+                    stdout=(str(root) + "\n" if "rev-parse" in cmd else "Cargo.lock\n" if "diff" in cmd else ""), stderr="")
             self.assertEqual(prepare(root, apply=True, which=lambda name: name, run=run), 0)
             self.assertEqual([cmd[1] for cmd in calls],
-                             ["status", "ls-files", "generate-lockfile", "metadata", "diff"])
-            self.assertIn("--locked", calls[3])
+                             ["status", "rev-parse", "ls-files", "generate-lockfile", "metadata", "diff"])
+            self.assertIn("--locked", calls[4])
 
     @unittest.skipUnless(shutil.which("git"), "requires Git for real tracking test")
     def test_real_git_checkout_requires_tracked_cargo_lock(self):
@@ -107,7 +107,7 @@ class CargoLockPreparationTests(unittest.TestCase):
                 return subprocess.run(cmd, **kwargs)
             with redirect_stderr(StringIO()):
                 self.assertEqual(prepare(root, apply=True, which=lambda n: "cargo-stub" if n == "cargo" else "git", run=run), 1)
-            self.assertEqual([c[1] for c in calls], ["status", "ls-files"])
+            self.assertEqual([c[1] for c in calls], ["status", "rev-parse", "ls-files"])
 
     @unittest.skipUnless(shutil.which("git"), "requires Git for real tracking test")
     def test_real_git_tracked_lock_only_changes_unstaged_lock(self):
@@ -135,6 +135,31 @@ class CargoLockPreparationTests(unittest.TestCase):
                                     capture_output=True, text=True, check=True).stdout
             self.assertEqual(staged, "")
 
+    @unittest.skipUnless(shutil.which("git"), "requires Git for real root test")
+    def test_nested_cargo_workspace_must_not_use_parent_repository(self):
+        # A nested source directory is not its own Git checkout. Never let
+        # cargo generate-lockfile run under the accidental parent Git tree.
+        with tempfile.TemporaryDirectory() as folder:
+            parent = Path(folder)
+            subprocess.run(["git", "init", "-q"], cwd=parent, check=True)
+            root = parent / "nested"
+            root.mkdir()
+            root = self.workspace(root)
+            cargo_calls = []
+            def run(cmd, **kwargs):
+                if cmd[0] == "cargo-stub":
+                    cargo_calls.append(cmd)
+                    raise AssertionError("Cargo must never run in a nested non-root checkout")
+                return subprocess.run(cmd, **kwargs)
+            with redirect_stderr(StringIO()) as error:
+                self.assertEqual(prepare(
+                    root, apply=True,
+                    which=lambda name: "cargo-stub" if name == "cargo" else "git",
+                    run=run,
+                ), 1)
+            self.assertEqual(cargo_calls, [])
+            self.assertIn("not the Git repository root", error.getvalue())
+
     def test_generation_without_deps_never_claims_success(self):
         with tempfile.TemporaryDirectory() as folder, redirect_stderr(StringIO()):
             root = self.workspace(Path(folder))
@@ -150,7 +175,7 @@ class CargoLockPreparationTests(unittest.TestCase):
                     (root / "Cargo.lock").write_text(
                         self.packages("pyo3", "tempfile", "virgostars-events-python"), encoding="utf-8")
                 return SimpleNamespace(returncode=7 if "metadata" in cmd else 0,
-                                       stdout="", stderr="Cargo metadata error")
+                                       stdout=str(root) if "rev-parse" in cmd else "", stderr="Cargo metadata error")
             self.assertEqual(prepare(root, apply=True, which=lambda name: name, run=run), 1)
 
     def test_unexpected_tracked_files_never_get_reverted(self):
@@ -161,7 +186,7 @@ class CargoLockPreparationTests(unittest.TestCase):
                     (root / "Cargo.lock").write_text(
                         self.packages("pyo3", "tempfile", "virgostars-events-python"), encoding="utf-8")
                 return SimpleNamespace(returncode=0,
-                                       stdout="Cargo.lock\nREADME.md\n" if "diff" in cmd else "",
+                                       stdout=(str(root) if "rev-parse" in cmd else "Cargo.lock\nREADME.md\n" if "diff" in cmd else ""),
                                        stderr="")
             self.assertEqual(prepare(root, apply=True, which=lambda name: name, run=run), 1)
             self.assertTrue((root / "Cargo.lock").is_file())
