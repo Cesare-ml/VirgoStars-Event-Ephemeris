@@ -122,6 +122,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         # strictly non-native; successful wheels still require the entire
         # real PyO3/50-case installed test suite below.
         run([sys.executable, ROOT / "tools" / "validate_python_sources.py"])
+        # The independent binary P0 integrity tests must also pass without
+        # skips; their optional owner archive test is a separate gate.
+        run([sys.executable, ROOT / "tools" / "validate_p0_synthetic.py"])
         run([sys.executable, ROOT / "tools" / "validate_rust.py"])
         with tempfile.TemporaryDirectory(prefix="virgostars-m0-build-") as temp:
             wheels_dir = Path(temp) / "wheels"
