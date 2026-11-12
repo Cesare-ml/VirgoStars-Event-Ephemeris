@@ -76,7 +76,7 @@ def main() -> int:
         return 1
     # CLI source tests validate safe JSON output, required trusted digest,
     # timestamp precision and usable nonzero exit status for invalid input.
-    if not run_tests("test_cli.py", 6):
+    if not run_tests("test_cli.py", 8):
         return 1
     # This suite independently checks original source-CSV normalization,
     # exact phase boundaries, duplicate IDs and rejection of altered API
@@ -103,9 +103,11 @@ def main() -> int:
             from virgostars_events import VirgoStarsEvents
 
             source = load_synod_csv(Path(args.synods_csv))
-            reader = VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256)
-            probes = select_probes(source, "2026-11-11T12:00:00Z")
-            report = assert_parity(reader, source, probes, args.sha256)
+            # An owner-data parity sweep can perform many queries; release
+            # its private P0 snapshot on both success and comparison failure.
+            with VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256) as reader:
+                probes = select_probes(source, "2026-11-11T12:00:00Z")
+                report = assert_parity(reader, source, probes, args.sha256)
             print(
                 "\n[Python MVP source parity] "
                 f"{report['checked_body_instants']} body/instant checks PASS"
