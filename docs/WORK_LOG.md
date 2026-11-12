@@ -1,3 +1,13 @@
+## 2026-11-12 — Cargo.lock preflight refuses nested Git workspaces (draft PR #5)
+
+- **Scope and coordination:** Continued existing `feat/p0-2-rust-workspace`, [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5). Confirmed latest PR/issue state and read current GitHub helper and tests. No competing branch or dataset changes.
+- **Problem:** The previous `tools/prepare_cargo_lock.py --apply` checked tracked status and `git ls-files Cargo.lock`, but those commands can succeed when `Cargo.toml` is in a nested directory of a **different parent Git repository**. The resulting lockfile could be generated against a workspace that is not the intended repo root.
+- **Fix:** After clean tracked-tree verification and before any Cargo invocation, require `git rev-parse --show-toplevel` resolved path to exactly match the Cargo workspace root. A nested parent-repository mismatch fails with a descriptive error and never runs Cargo. Existing zero-commit/no-reset/no-merge policy retained.
+- **Regression:** `tools/test_prepare_cargo_lock.py` adds `test_nested_cargo_workspace_must_not_use_parent_repository` using **real temporary local Git**. Existing mocked command test is updated for the additional rev-parse call; successful lock preparation still checks the locked Cargo metadata step and leaves the lockfile unstaged.
+- **Actually executed:** Python **3.13.5**, `python -m unittest discover -s tools -p test_prepare_cargo_lock.py -v`: **13/13 PASS**, zero skips. `python -m compileall -q` both files PASS. Exact source/test file content was verified by local `git hash-object` and GitHub API readback: `30fc704d10ef94a7aa6a79990b4c69722214d62a` (helper), `0fba026a7d3f60aa3280ba78e03038ed1b125914` (tests).
+- **Not executed:** Rust Cargo/rustc/maturin not available; the complete 41 Python source tests could not be reconstructed in this isolated runtime, and the required **50 installed native tests**, actual Cargo.lock regeneration and owner CSV/P0 parity remain unrun. This is a genuine test of the helper + real Git, not a claim to have compiled the Rust extension.
+- **Documentation:** Updated AGENTS, ROADMAP and Windows build guide. Kept PR draft; no merge, GitHub Actions, release, PyPI, deployment, or original scientific data edits.
+
 ## 2026-11-12 — Reject silent early-stop false positives in installed-wheel acceptance
 
 - **Scope/coordination:** Continued the existing draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`. Reviewed latest PR/issue queue, the current M0 native acceptance driver, and source-only gate. No edits to Rust, Python scientific calculations, original dataset, or other PRs.
