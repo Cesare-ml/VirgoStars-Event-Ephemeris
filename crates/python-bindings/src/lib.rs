@@ -45,8 +45,19 @@ impl NativeReader {
 
     /// Internal JSON transport; public Python wrapper returns a native dict.
     fn get_synods_at_us(&self, requested_at_us: i64) -> PyResult<String> {
+        // The archive is read from its path on each indexed lookup. A file
+        // replaced or edited after NativeReader::new must not be reported
+        // under the original trusted SHA-256. Hash once before reading and
+        // once after decoding, catching ordinary edits during a query too.
+        // This is an integrity check, not an OS-level immutable file lock.
+        self.archive
+            .verify_archive_sha256(&self.sha256)
+            .map_err(as_py_error)?;
         let t = TimestampMicros::new(requested_at_us);
         let snapshots = self.archive.synods_at(t).map_err(as_py_error)?;
+        self.archive
+            .verify_archive_sha256(&self.sha256)
+            .map_err(as_py_error)?;
         let mut entries = Map::new();
 
         for (body, snapshot) in snapshots {
