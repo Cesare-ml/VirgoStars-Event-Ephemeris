@@ -52,19 +52,20 @@ class BuildTests(unittest.TestCase):
             def fake_run(command):
                 command = [str(a) for a in command]
                 called.append(command)
-                if len(called) == 3:
+                if len(called) == 4:
                     wheel_dir = Path(command[command.index("--out") + 1])
                     wheel_dir.mkdir(parents=True)
                     (wheel_dir / "virgostars-0.1.0-cp310-abi3-win_amd64.whl").write_bytes(b"fixture-wheel")
             with patch.object(build, "ROOT", root), patch.object(build, "maturin_executable", return_value=Path("maturin")), patch.object(build, "run", side_effect=fake_run):
                 result = build.main(["--out-dir", str(out)])
             self.assertEqual(result, 0)
-            self.assertEqual(len(called), 4)
+            self.assertEqual(len(called), 5)
             self.assertIn("validate_python_sources.py", called[0][1])
-            self.assertIn("validate_rust.py", called[1][1])
-            self.assertIn("--release", called[2])
-            self.assertIn("--locked", called[2])
-            self.assertIn("verify_python_wheel.py", called[3][1])
+            self.assertIn("validate_p0_synthetic.py", called[1][1])
+            self.assertIn("validate_rust.py", called[2][1])
+            self.assertIn("--release", called[3])
+            self.assertIn("--locked", called[3])
+            self.assertIn("verify_python_wheel.py", called[4][1])
             self.assertEqual([w.name for w in out.glob("*.whl")], ["virgostars-0.1.0-cp310-abi3-win_amd64.whl"])
 
     def test_gate_failure_does_not_leave_distributable_wheel(self):
@@ -77,12 +78,12 @@ class BuildTests(unittest.TestCase):
             def fake_run(command):
                 nonlocal counter
                 counter += 1
-                if counter == 3:
+                if counter == 4:
                     args = list(map(str, command))
                     wheels = Path(args[args.index("--out") + 1])
                     wheels.mkdir()
                     (wheels / "fixture.whl").write_bytes(b"bad")
-                if counter == 4:
+                if counter == 5:
                     raise RuntimeError("native tests failed")
             with patch.object(build, "ROOT", root), patch.object(build, "maturin_executable", return_value=Path("maturin")), patch.object(build, "run", side_effect=fake_run):
                 with redirect_stderr(StringIO()):
@@ -109,6 +110,28 @@ class BuildTests(unittest.TestCase):
             self.assertIn("validate_python_sources.py", commands[0][1])
             self.assertFalse(out.exists())
 
+    def test_synthetic_p0_gate_failure_prevents_cargo_and_wheel(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Cargo.toml").touch()
+            (root / "pyproject.toml").touch()
+            out = root / "dist"
+            commands = []
+
+            def fail_p0(command):
+                commands.append([str(item) for item in command])
+                if len(commands) == 2:
+                    raise RuntimeError("independent P0 synthetic audit failed")
+
+            with patch.object(build, "ROOT", root), patch.object(
+                build, "maturin_executable", return_value=Path("maturin")
+            ), patch.object(build, "run", side_effect=fail_p0), redirect_stderr(StringIO()):
+                self.assertEqual(build.main(["--out-dir", str(out)]), 1)
+            self.assertEqual(len(commands), 2)
+            self.assertIn("validate_python_sources.py", commands[0][1])
+            self.assertIn("validate_p0_synthetic.py", commands[1][1])
+            self.assertFalse(out.exists())
+
     def test_cargo_failure_after_python_gate_prevents_wheel(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -119,16 +142,17 @@ class BuildTests(unittest.TestCase):
 
             def fail_rust(command):
                 commands.append([str(item) for item in command])
-                if len(commands) == 2:
+                if len(commands) == 3:
                     raise RuntimeError("Cargo lockfile stale")
 
             with patch.object(build, "ROOT", root), patch.object(
                 build, "maturin_executable", return_value=Path("maturin")
             ), patch.object(build, "run", side_effect=fail_rust), redirect_stderr(StringIO()):
                 self.assertEqual(build.main(["--out-dir", str(out)]), 1)
-            self.assertEqual(len(commands), 2)
+            self.assertEqual(len(commands), 3)
             self.assertIn("validate_python_sources.py", commands[0][1])
-            self.assertIn("validate_rust.py", commands[1][1])
+            self.assertIn("validate_p0_synthetic.py", commands[1][1])
+            self.assertIn("validate_rust.py", commands[2][1])
             self.assertFalse(out.exists())
 
     def test_existing_dist_file_never_overwritten(self):
