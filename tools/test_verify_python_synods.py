@@ -146,6 +146,51 @@ class SourceCsvTests(unittest.TestCase):
         self.assertEqual(expected_row(series, 249)[0].source_id, 11)
         self.assertIsNone(expected_row(series, 250)[1])
 
+    def test_expected_row_does_not_iterate_or_copy_large_series(self):
+        class NoIteration(list):
+            def __iter__(self):
+                raise AssertionError("bisect must not copy all timestamps")
+
+        series = NoIteration(SourceSynod(i * 10, i + 1, None) for i in range(20_000))
+        for when, expected_id, next_id in (
+            (-1, None, None),
+            (0, 1, 2),
+            (10, 2, 3),
+            (15, 2, 3),
+            (199_990, 20_000, None),
+            (199_991, 20_000, None),
+        ):
+            with self.subTest(when=when):
+                before, after = expected_row(series, when)
+                self.assertEqual(before.source_id if before else None, expected_id)
+                self.assertEqual(after.source_id if after else None, next_id)
+
+    def test_expected_row_uses_logarithmic_index_lookups(self):
+        class VirtualMillionEvents:
+            def __init__(self):
+                self.reads = 0
+
+            def __len__(self):
+                return 1_000_000
+
+            def __getitem__(self, index):
+                self.reads += 1
+                return SourceSynod(index * 10, index + 1, None)
+
+            def __iter__(self):
+                raise AssertionError("a full scan is not allowed")
+
+        series = VirtualMillionEvents()
+        for when, expected_id in ((-1, None), (0, 1), (555_555, 55_556),
+                                  (9_999_990, 1_000_000), (10_000_000, 1_000_000)):
+            with self.subTest(when=when):
+                series.reads = 0
+                before, after = expected_row(series, when)
+                self.assertEqual(before.source_id if before else None, expected_id)
+                self.assertLessEqual(series.reads, 24)
+                if before and after:
+                    self.assertGreater(after.at, before.at)
+
     def test_exact_planet_and_moon_stage_boundary_oracle(self):
         merc = synthetic_source()["Mercury"][0]
         moon = synthetic_source()["Moon"][1]
