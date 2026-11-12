@@ -65,6 +65,15 @@ The experimental Python adapter now **checks the hash of the actual reader file*
 - This prototype intentionally incurs **two complete streaming SHA-256 reads per state query** (~8.3 MB of hashing against the current 4.14 MB archive). It is an integrity-first implementation, not a benchmark or a solution to hostile concurrent filesystem writes; a trusted immutable snapshot/file descriptor is preferable for the authoritative Rust runtime.
 
 The SHA-256 check confirms **byte identity**, not scientific correctness, completeness, data licensing or an authenticated reviewer's authority. The currently distributed policy still approves **no intervals**.
+
+### Bounded, unambiguous policy JSON (2026-11-12)
+
+The experimental Python policy loader now shares the provisional Rust P0 reader's limits: **at most 1,000,000 encoded JSON bytes** and **at most 4,096 reviewed windows**. It reads at most 1,000,001 bytes before rejecting oversized input, and only accepts ASCII decimal digits (with optional leading minus) for signed i64 microsecond strings. This avoids Python accepting Unicode decimal digits that Rust rejects.
+
+Python additionally rejects **duplicate JSON object keys at every nesting level** (even when the duplicate values match); silently keeping the last occurrence could alter a review policy's meaning. The current Rust parser uses `serde_json::Value`, so duplicate-key rejection is an outstanding **cross-language parity task** there, not a behavior we claim is implemented in Rust.
+
+The new policy-parser regression tests in `prototype/test_coverage_identity.py` cover the size ceiling (including its exact boundary), window count ceiling, non-ASCII time values and duplicate top-level/nested keys. These limits prevent oversized policy allocations, **not** scientific misclassification; reviewers still must certify all declared coverage intervals.
+
  A review record requires `family`, `body`, `start_us`, `end_us_exclusive`, `reviewer` and `evidence`.
 
 ## How to review a missing interval
