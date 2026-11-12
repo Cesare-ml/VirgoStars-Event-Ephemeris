@@ -9,6 +9,8 @@
 - Every deliverable includes relevant code, tests, docs, validation outcomes and a *draft PR*; do not deploy/merge without explicit authorization.
 - No GitHub Actions automation. Run explicit checks locally or through available tools.
 
+**M0 reproducible build blocker (2026-11-12, draft PR #5):** `tools/prepare_cargo_lock.py` provides a no-change stale lock report and explicit `--apply` guarded regeneration/locked metadata verification on a clean, Cargo-equipped checkout. Its ten exact Python unit tests passed with mocked subprocesses; **Cargo.lock is not yet regenerated**, and no native build or installed wheel gate has run. This is preparatory tooling, not M0 completion. Keep `cargo generate-lockfile` output under explicit developer review/commit, never hand-edit dependency checksums.
+
 ## M0 — FIRST user-facing deliverable: installable Python synod MVP
 
 **Deliver this BEFORE JS/TS WASM, production backend migration or frozen VSEPH v1.** Full acceptance criteria and proposed dictionary API: [Python-first MVP](PYTHON_FIRST_MVP.md). End-to-end delivery order including post-MVP features: [Delivery milestones M0–M5](DELIVERY_MILESTONES.md).
