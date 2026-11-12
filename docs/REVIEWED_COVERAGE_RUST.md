@@ -41,6 +41,12 @@ The snippet belongs inside a Rust function returning a compatible error type. Th
 
 `P0Archive::with_coverage_policy` requires `schema="virgostars-reviewed-coverage/v0"` and `verification="human-reviewed-only"`. It parses policy times as signed decimal-string POSIX microseconds, rejects overlapping/malformed windows and checks a **lowercase SHA-256 of the entire archive** against `archive_sha256` in the policy. To avoid trusting a changed file, P0 currently re-hashes the archive before each coverage-aware query. This is safe for experimental correctness but **not optimized for high-frequency queries**. A future verified, immutable file handle and hash caching can improve performance.
 
+### Strict JSON policy parsing (2026-11-12, draft PR #5)
+
+The experimental Rust P0 adapter now deserializes policy JSON recursively and rejects **duplicate keys** in any object, including inside unrecognized metadata, and equivalent names written with JSON Unicode escapes. It also rejects identical duplicate values; the first or last occurrence must never implicitly win. This aligns with the stricter Python reference policy on draft PR #6. The existing 1,000,000-byte policy and 4,096-window limits are retained. Valid nested JSON values (booleans, numbers, null, arrays, objects and strings) remain supported.
+
+Two synthetic Rust integration tests have been added to `crates/events-p0/tests/coverage_p0.rs`: one exercises five ambiguous-policy variants (top-level, identical, reviewed-window, arbitrary nested, escaped-equivalent), and one checks a valid nested metadata structure. **These tests have been committed but NOT run with Cargo or checked by rustfmt/Clippy** in the current toolchain-free environment. A direct `serde = "1.0"` dependency is now declared, but the tracked stale `Cargo.lock` still requires verified regeneration and review before any locked native build. The Python reference's 12 synthetic coverage-identity tests were rerun locally on Python 3.13 and passed; they are not Rust test evidence.
+
 The `P0Archive` raw event APIs (`at`, `next`, `previous`, `between`) remain available **without** coverage review, but their output MUST be labeled as recorded events rather than trusted continuous states. Do not automatically certify any time interval based solely on event density or apparent regularity.
 
 ## Validate before merge
