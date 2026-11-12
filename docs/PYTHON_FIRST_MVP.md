@@ -137,7 +137,7 @@ The sample uses placeholders and fabricated IDs; **it is not a real ephemeris re
 
 - `python/virgostars_events/_time.py` now rejects unsupported ISO formats and more than **six** fractional-second digits, avoiding `datetime.fromisoformat` silently discarding sub-microsecond digits. Aware Python `datetime` remains supported. Two regression tests added.
 - `python/virgostars_events/__main__.py` and `[project.scripts]` provide `python -m virgostars_events` and `virgostars-events` to query the same Rust-backed API from a shell, returning JSON with explicit checksum and no bundled data. Five CLI unit tests added.
-- **Current required suite counts:** 15 Python/time tests + 6 CLI tests + 12 CSV oracle tests + 9 native synthetic P0 tests = **42 checks** before optional real-data and SQL parity. These **new tests and CLI have NOT yet been executed on a compiled wheel**. Earlier results for 8 tests are historical.
+- **Current required suite counts:** 15 Python/time tests + 8 CLI tests + 12 CSV oracle tests + 9 native synthetic P0 tests = **44 checks** before optional real-data and SQL parity. These **new tests and CLI have NOT yet been executed on a compiled wheel**. Earlier results for 8 tests are historical.
 
 ## Implementation checkpoint — 2026-11-11
 
@@ -179,3 +179,7 @@ with VirgoStarsEvents.open(path, expected_sha256=trusted_sha256) as events:
 ```
 
 Closing clears the wrapper's native-reader reference, which releases the Rust `TempDir` when no additional references exist. Calling `close()` again is harmless; queries/re-entry after closure raise `RuntimeError`; `with` does not suppress exceptions. Three new pure-Python lifecycle tests cover these semantics and raise the **mandatory non-skipped gate to 40** = 15 API/time + 6 CLI + 10 CSV oracle + 9 compiled native. **Isolated Python logic reproduction: 3/3 PASS**; actual changed GitHub package tests, wheel, Rust compilation and original dataset parity **NOT RUN** in this authoring environment. This API does not protect an immutable source against a malicious local process.
+
+### Context-managed CLI and original-data parity (2026-11-12)
+
+The CLI now uses `with VirgoStarsEvents.open(...) as reader` so a successful command or a query/JSON failure releases the wrapper's native private P0 copy. The independent CSV/P0 parity validator and optional owner-data native smoke tests also close their readers explicitly. Two new pure-Python CLI regressions enforce closure on both success and failure. Updated full baseline: **44 non-skipped cases = 15 Python API/time + 8 CLI + 12 independent oracle + 9 compiled native fixture**. **Executed on exact GitHub-file bytes with Python 3.13.5: 23/23 API/time and CLI cases PASS**; compiled PyO3, independent original-data parity and the whole 44-case native gate are NOT RUN in this environment. The context-managed CLI does not download, generate or redistribute P0 data.
