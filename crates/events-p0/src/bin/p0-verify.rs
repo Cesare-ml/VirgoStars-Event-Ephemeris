@@ -22,6 +22,37 @@ fn usage() -> IoError {
     )
 }
 
+fn verify_archive(
+    path: &std::path::Path,
+    expected: Option<&str>,
+) -> Result<serde_json::Value, Box<dyn Error>> {
+    // Opening reads only the bounded header/index. When a trusted SHA was
+    // supplied, verify the complete input BEFORE decompressing arbitrary
+    // blocks: wrong snapshots must fail as identity errors, not codec errors.
+    let archive = P0Archive::open(path)?;
+    let sha256 = match expected {
+        Some(expected) => archive.verify_archive_sha256(expected)?,
+        None => archive.archive_sha256()?,
+    };
+    let result = archive.verify_all()?;
+    let count = |family| result.by_family.get(&family).copied().unwrap_or(0);
+    let bytes = std::fs::metadata(path)?.len();
+    Ok(serde_json::json!({
+        "format": "VSEPH-P0-EXPERIMENTAL",
+        "sha256": sha256,
+        "bytes": bytes,
+        "sha256_checked_against_expected": expected.is_some(),
+        "blocks": result.blocks,
+        "records": result.records,
+        "sections": {
+            "synod": count(EventFamily::Synod),
+            "motion": count(EventFamily::Motion),
+            "ingress": count(EventFamily::Ingress)
+        },
+        "coverage_certified": false
+    }))
+}
+
 fn run() -> Result<(), Box<dyn Error>> {
     let mut args = env::args_os();
     let _program_name = args.next();
@@ -36,33 +67,10 @@ fn run() -> Result<(), Box<dyn Error>> {
         return Err(usage().into());
     }
 
-    let archive = P0Archive::open(std::path::Path::new(&path))?;
-    let result = archive.verify_all()?;
-    let sha256 = match expected.as_ref() {
-        Some(expected) => archive.verify_archive_sha256(expected.to_str().ok_or_else(usage)?)?,
-        None => archive.archive_sha256()?,
-    };
-    let count = |family| result.by_family.get(&family).copied().unwrap_or(0);
-    // Report the complete on-disk byte length as an independently
-    // comparable property alongside the full-file digest and decoded totals.
-    let bytes = std::fs::metadata(std::path::Path::new(&path))?.len();
-    println!(
-        "{}",
-        serde_json::json!({
-            "format": "VSEPH-P0-EXPERIMENTAL",
-            "sha256": sha256,
-            "bytes": bytes,
-            "sha256_checked_against_expected": expected.is_some(),
-            "blocks": result.blocks,
-            "records": result.records,
-            "sections": {
-                "synod": count(EventFamily::Synod),
-                "motion": count(EventFamily::Motion),
-                "ingress": count(EventFamily::Ingress)
-            },
-            "coverage_certified": false
-        })
-    );
+    let path = std::path::Path::new(&path);
+    let digest = expected.as_ref().map(|value| value.to_str().ok_or_else(usage)).transpose()?;
+    let report = verify_archive(path, digest)?;
+    println!("{report}");
     Ok(())
 }
 
