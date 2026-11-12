@@ -71,7 +71,8 @@ def main() -> int:
         )
         return 1
 
-    if not run_tests("test_python_api.py", 12):
+    # Explicit close()/with cleanup must release the native per-reader snapshot.
+    if not run_tests("test_python_api.py", 15):
         return 1
     # CLI source tests validate safe JSON output, required trusted digest,
     # timestamp precision and usable nonzero exit status for invalid input.
