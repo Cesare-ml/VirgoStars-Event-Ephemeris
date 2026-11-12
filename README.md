@@ -11,10 +11,12 @@
 ```python
 from virgostars_events import VirgoStarsEvents
 
-events = VirgoStarsEvents.open("local-events.vseph-p0", expected_sha256="<trusted dataset SHA-256>")
-result = events.get_synods_at("2026-11-11T12:00:00Z")
-print(result["synods"]["Mercury"]["phase"]["code"])
-print(result["new_moon"]["cycle_start_utc"])
+with VirgoStarsEvents.open(
+    "local-events.vseph-p0", expected_sha256="<trusted dataset SHA-256>"
+) as events:
+    result = events.get_synods_at("2026-11-11T12:00:00Z")
+    print(result["synods"]["Mercury"]["phase"]["code"])
+    print(result["new_moon"]["cycle_start_utc"])
 ```
 
 **The Python package source is now on draft PR #5, but this example is NOT YET VALIDATED against a compiled Rust wheel.** Before running it, build/install the local package using [PYTHON_MVP_BUILD.md](docs/PYTHON_MVP_BUILD.md) and supply an independently trusted local P0 archive. An earlier set of 8 pure-Python wrapper tests passed; newly expanded timestamp and CLI tests still require execution. Rust native compilation and pip installation remain unverified. Implement the same Rust reader via PyO3/maturin, package as a locally installable wheel (`pip install .` after a build backend is added), and require explicit caller-supplied local data plus a trusted digest. The result is a JSON-compatible dictionary of latest **recorded** cycle anchors `<= X`, Moon's latest recorded new moon and source-threshold-derived D1/R2/R3/D4 or Moon quarter-stage code, with transparent unknowns/coverage warnings. No interpolation or scientific completeness guarantees.
@@ -29,11 +31,13 @@ python -m virgostars_events "local-events.vseph-p0" "2026-11-11T12:00:00Z" --sha
 
 Both commands return JSON from the same Rust-backed API, require a user-provided local archive and trusted checksum, and never download or bundle the dataset. Input timestamps must contain an explicit UTC offset with **at most six fractional-second digits**; submicrosecond timestamps are rejected rather than silently truncated.
 
-Input validation now fails early on a malformed SHA-256, an impossible local DST datetime or a malformed CLI instant, without opening the archive on invalid input. The expanded **37-test** acceptance suite still requires a compiled PyO3 wheel; its native checks have **NOT RUN** on this branch.
+Input validation now fails early on a malformed SHA-256, an impossible local DST datetime or a malformed CLI instant, without opening the archive on invalid input. The expanded **40-test** acceptance suite still requires a compiled PyO3 wheel; its native checks have **NOT RUN** on this branch.
 
 A clean **offline wheel-installation gate** is now available after local `maturin build --release --out dist`: `py -3 tools\verify_python_wheel.py --wheel path\to\matching.whl`. It creates an isolated venv, installs only that wheel without an index, checks installed package/native imports and the offline CLI, then invokes the mandatory fail-closed Python MVP suite. Optional `--archive`, `--sha256`, and `--synods-csv` add authorized original-data comparisons. The gate's **8 orchestrator unit tests passed**, and an actual offline installation of a deliberately invalid wheel failed as expected because it contained a Python stub instead of a compiled Rust extension. It also checks the installed `virgostars-events` command with inherited Python import overrides stripped from subprocesses. **No actual compiled native wheel has yet passed this gate**; see the [Windows build guide](docs/PYTHON_MVP_BUILD.md).
 
 To run **all required local build and installation checks together** (on a source checkout with Cargo and maturin installed), use `py -3 tools\build_python_mvp.py`. It compiles a new candidate wheel in a temporary directory, invokes Rust validation and the isolated Python/native acceptance gate, and only retains the verified wheel in `dist/`; it never releases to PyPI, bundles the dataset or overwrites a different wheel. Its **7 orchestration tests passed**, but the actual Rust/Windows wheel has **not** been built or installed in this agent environment. See the [M0 build guide](docs/PYTHON_MVP_BUILD.md) before treating it as a usable wheel.
+
+**Explicit resource cleanup:** `VirgoStarsEvents.close()` releases the Rust-owned private archive snapshot as soon as the wrapper no longer has other native owners; `with VirgoStarsEvents.open(...) as events:` automatically closes it even on exceptions. `events.closed` reports the state, and querying or re-entering a closed wrapper raises `RuntimeError`. The three new lifecycle tests pass in an isolated Python reproduction; the compiled PyO3 wheel has **not** been tested. The baseline is **40 required non-skipped tests** (15 API/time + 6 CLI + 10 source oracle + 9 native golden fixture). Context management helps avoid retaining temporary disk copies longer than needed.
 
 See [Python-first MVP specification and acceptance tests](docs/PYTHON_FIRST_MVP.md), [delivery milestones M0–M5](docs/DELIVERY_MILESTONES.md), [roadmap](docs/ROADMAP.md) and [backend compatibility](docs/BACKEND_COMPATIBILITY.md). Public PyPI publication and redistribution of the separately licensed dataset are **not approved yet**.
 
