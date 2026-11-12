@@ -24,13 +24,28 @@ The project has Rust as the authoritative codebase, but the agent environment us
 **It runs, in order:**
 
 ```sh
+cargo metadata --locked --no-deps --format-version 1
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-cargo build --workspace --release
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
+cargo build --locked --workspace --release
 ```
 
 Any failed command stops the run and exits with status 1. There is no automatic merge, release, package upload, network service, GitHub Actions workflow or live database change. Cargo may need crates.io to install the explicitly declared development dependencies on the first build. No live backend is involved.
+
+## Mandatory lockfile preflight (2026-11-12)
+
+Before compiling on the current PR #5 branch, the checked-in `Cargo.lock` must be regenerated **once** with Cargo and reviewed. The present lockfile lacks the Python binding workspace crate plus its `pyo3` and `tempfile` dependencies. Do not manually write crate versions, hashes or checksums. On a clean local development branch:
+
+```powershell
+cargo generate-lockfile
+git diff -- Cargo.lock
+py -3 tools\validate_rust.py
+```
+
+Commit the reviewed lockfile as part of PR #5 after confirming source and MSRV compatibility. The validator now runs `cargo metadata --locked --no-deps --format-version 1` **first** and then Rust format, Clippy, workspace tests and release build. Cargo Clippy/test/build and the P0 verification CLI also use `--locked`. If resolution would update `Cargo.lock`, fail **before** format/compilation instead of silently modifying a tracked lock. Cargo metadata and downloads may still require crates.io access on a new machine; `--locked` is about dependency reproducibility, not forced offline execution.
+
+The actual Rust CLI and these new regression tests **have not been executed in the authoring environment** (Cargo unavailable). Test the orchestration alone using `py -3 -m unittest discover -s tools -p test_validate_rust.py -v` on any Python 3.10+ installation. Then compile with Cargo locally.
 
 ## Full compressed-data audit and summary parity, when both draft PRs are available in a local testing checkout
 
