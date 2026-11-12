@@ -8,6 +8,8 @@ from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
+import subprocess
+import shutil
 import unittest
 from unittest.mock import Mock
 
@@ -83,8 +85,55 @@ class CargoLockPreparationTests(unittest.TestCase):
                     stdout="Cargo.lock\n" if "diff" in cmd else "", stderr="")
             self.assertEqual(prepare(root, apply=True, which=lambda name: name, run=run), 0)
             self.assertEqual([cmd[1] for cmd in calls],
-                             ["status", "generate-lockfile", "metadata", "diff"])
-            self.assertIn("--locked", calls[2])
+                             ["status", "ls-files", "generate-lockfile", "metadata", "diff"])
+            self.assertIn("--locked", calls[3])
+
+    @unittest.skipUnless(shutil.which("git"), "requires Git for real tracking test")
+    def test_real_git_checkout_requires_tracked_cargo_lock(self):
+        # Execute Git itself, not a mock: Cargo is simulated by a test-run
+        # callback so the test stays independent of Rust and of crates.io.
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.workspace(Path(folder))
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "add", "Cargo.toml", "crates/python-bindings/Cargo.toml"],
+                           cwd=root, check=True)
+            subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.org",
+                            "commit", "-q", "-m", "initial"], cwd=root, check=True)
+            calls = []
+            def run(cmd, **kwargs):
+                calls.append(cmd)
+                if cmd[0] == "cargo-stub":
+                    raise AssertionError("untracked Cargo.lock must prevent Cargo execution")
+                return subprocess.run(cmd, **kwargs)
+            with redirect_stderr(StringIO()):
+                self.assertEqual(prepare(root, apply=True, which=lambda n: "cargo-stub" if n == "cargo" else "git", run=run), 1)
+            self.assertEqual([c[1] for c in calls], ["status", "ls-files"])
+
+    @unittest.skipUnless(shutil.which("git"), "requires Git for real tracking test")
+    def test_real_git_tracked_lock_only_changes_unstaged_lock(self):
+        # Exercise actual Git cleanliness and diff detection on a temporary
+        # committed repository. Only Cargo responses are simulated.
+        with tempfile.TemporaryDirectory() as folder, redirect_stdout(StringIO()):
+            root = self.workspace(Path(folder), "# original\n")
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "add", "Cargo.toml", "Cargo.lock", "crates/python-bindings/Cargo.toml"],
+                           cwd=root, check=True)
+            subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.org",
+                            "commit", "-q", "-m", "initial"], cwd=root, check=True)
+            def run(cmd, **kwargs):
+                if cmd[0] == "cargo-stub":
+                    if cmd[1] == "generate-lockfile":
+                        (root / "Cargo.lock").write_text(
+                            self.packages("pyo3", "tempfile", "virgostars-events-python"), encoding="utf-8")
+                    return SimpleNamespace(returncode=0, stdout="{}", stderr="")
+                return subprocess.run(cmd, **kwargs)
+            self.assertEqual(prepare(root, apply=True, which=lambda n: "cargo-stub" if n == "cargo" else "git", run=run), 0)
+            changes = subprocess.run(["git", "status", "--porcelain=v1"], cwd=root,
+                                     capture_output=True, text=True, check=True).stdout
+            self.assertEqual(changes.strip(), "M Cargo.lock")
+            staged = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=root,
+                                    capture_output=True, text=True, check=True).stdout
+            self.assertEqual(staged, "")
 
     def test_generation_without_deps_never_claims_success(self):
         with tempfile.TemporaryDirectory() as folder, redirect_stderr(StringIO()):
