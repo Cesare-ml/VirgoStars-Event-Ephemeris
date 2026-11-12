@@ -84,7 +84,22 @@ class VirgoStarsEvents:
         result.pop("requested_at_us")
         result["requested_at_utc"] = iso_utc_from_microseconds(requested_us)
 
-        for record in result["synods"].values():
+        for body, record in result["synods"].items():
+            # The Rust index promises a latest anchor <= X and a strictly
+            # later next anchor. Never display a future start as recorded
+            # current state, or a stale end boundary, if transport regresses.
+            current_us = record["cycle_start_us"]
+            next_us = record["next_cycle_start_us"]
+            if current_us is not None and (
+                type(current_us) is not int or current_us > requested_us
+            ):
+                raise ValueError(f"native synod current anchor invalid for {body}")
+            if next_us is not None and (
+                type(next_us) is not int
+                or next_us <= requested_us
+            ):
+                raise ValueError(f"native synod next anchor invalid for {body}")
+
             record["status"] = (
                 "recorded" if record["cycle_start_us"] is not None
                 else "no_preceding_recorded_cycle"
