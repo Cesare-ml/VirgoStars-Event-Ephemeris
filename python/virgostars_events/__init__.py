@@ -25,6 +25,27 @@ class VirgoStarsEvents:
     def __init__(self, native_reader: Any) -> None:
         self._reader = native_reader
 
+    @property
+    def closed(self) -> bool:
+        """Whether this wrapper no longer holds its native archive snapshot."""
+        return self._reader is None
+
+    def close(self) -> None:
+        """Release the native reader and its private P0 snapshot if unshared.
+
+        Calling close() multiple times is safe. Any other owners of the
+        native reader may delay the actual temporary-file cleanup.
+        """
+        self._reader = None
+
+    def __enter__(self) -> "VirgoStarsEvents":
+        if self.closed:
+            raise RuntimeError("VirgoStarsEvents reader is closed")
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        self.close()
+
     @classmethod
     def open(
         cls, path: str | os.PathLike[str], *, expected_sha256: str
@@ -47,8 +68,11 @@ class VirgoStarsEvents:
         Derived phase labels refer to stored thresholds only. The output
         includes unreviewed coverage status and never promises completeness.
         """
+        reader = self._reader
+        if reader is None:
+            raise RuntimeError("VirgoStarsEvents reader is closed")
         requested_us = to_utc_microseconds(instant)
-        result = json.loads(self._reader.get_synods_at_us(requested_us))
+        result = json.loads(reader.get_synods_at_us(requested_us))
         result.pop("requested_at_us", None)
         result["requested_at_utc"] = iso_utc_from_microseconds(requested_us)
 
