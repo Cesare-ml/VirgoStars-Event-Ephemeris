@@ -23,6 +23,15 @@ I64_MAX = (1 << 63) - 1
 FAMILIES = frozenset(("ingress", "motion"))
 
 
+def _archive_sha256(path: str | Path) -> str:
+    """Hash file contents in bounded memory, never trusting a path alone."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _time_value(value: object) -> int:
     if not isinstance(value, str) or not value or (value[0] == "-" and len(value) == 1):
         raise ValueError("coverage times must be signed decimal microsecond strings")
@@ -51,8 +60,14 @@ class ReviewedWindow:
 class CoveragePolicy:
     """Reviewed coverage only; never infer validity from observed min/max."""
 
-    def __init__(self, windows: tuple[ReviewedWindow, ...]):
+    def __init__(self, windows: tuple[ReviewedWindow, ...], archive_sha256: str):
         self.windows = windows
+        self.archive_sha256 = archive_sha256
+
+    def verify_archive(self, archive_path: str | Path) -> None:
+        """Refuse a reader whose current bytes differ from the reviewed snapshot."""
+        if _archive_sha256(archive_path) != self.archive_sha256:
+            raise ValueError("coverage policy archive SHA-256 mismatch (reader or file changed)")
 
     @classmethod
     def load(cls, policy_path: str | Path, archive_path: str | Path) -> "CoveragePolicy":
@@ -64,11 +79,7 @@ class CoveragePolicy:
         sha = doc.get("archive_sha256")
         if not isinstance(sha, str) or len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
             raise ValueError("invalid archive SHA-256")
-        digest = hashlib.sha256()
-        with Path(archive_path).open("rb") as source:
-            for chunk in iter(lambda: source.read(1024 * 1024), b""):
-                digest.update(chunk)
-        if digest.hexdigest() != sha:
+        if _archive_sha256(archive_path) != sha:
             raise ValueError("coverage policy does not match the selected archive SHA-256")
         raw = doc.get("reviewed_windows")
         if not isinstance(raw, list):
@@ -92,7 +103,7 @@ class CoveragePolicy:
         for previous, current in zip(windows, windows[1:]):
             if (previous.family, previous.body) == (current.family, current.body) and previous.end_us_exclusive > current.start_us:
                 raise ValueError("overlapping reviewed intervals")
-        return cls(tuple(windows))
+        return cls(tuple(windows), sha)
 
     def find(self, family: str, body: str, instant_us: int) -> ReviewedWindow | None:
         return next((w for w in self.windows if w.family == family and w.body == body and w.contains(instant_us)), None)
@@ -104,12 +115,19 @@ class CoverageAwareReader:
     def __init__(self, reader, policy: CoveragePolicy):
         self.reader = reader
         self.policy = policy
+        if not isinstance(getattr(reader, "path", None), (str, Path)):
+            raise TypeError("coverage-aware reader requires a file-backed reader.path")
+        self.policy.verify_archive(self.reader.path)
 
     def _state(self, family: str, body: str, instant: str | int) -> dict:
         t = self.reader._time(instant)
         if family not in FAMILIES:
             raise ValueError("state family must be ingress or motion")
+        # The reader can cache blocks; re-check full-file identity on every query.
+        # Verify after reading too, to reject mutations occurring during a query.
+        self.policy.verify_archive(self.reader.path)
         recorded = self.reader.at(family, body, t)
+        self.policy.verify_archive(self.reader.path)
         # The raw event timestamp is useful for diagnostics, but never a certified state.
         last_recorded_at_us = None if recorded is None else recorded[1]
         window = self.policy.find(family, body, t)
