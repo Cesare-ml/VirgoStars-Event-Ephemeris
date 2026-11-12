@@ -21,9 +21,9 @@ py -3 tools\validate_python_sources.py
 py -3 tools\build_python_mvp.py
 ```
 
-The opt-in helper rejects dirty tracked files, regenerates only via **real Cargo**, checks that all three lock packages exist, runs locked Cargo metadata, and refuses unexpected tracked changes. It does **not** revert or commit anything: inspect/commit `Cargo.lock` deliberately on your own development branch. A successful lock preparation alone **does not** demonstrate compilation, wheel installation, or scientific parity. The separate 50-test compiled/native gate and authorized original CSV/P0 checks remain mandatory.
+The opt-in helper rejects dirty tracked files and also requires **`Cargo.lock` to be tracked by Git**: an untracked lockfile would otherwise be invisible to the review diff. It regenerates only via **real Cargo**, checks that all three lock packages exist, runs locked Cargo metadata, and refuses unexpected tracked changes. It does **not** revert or commit anything: inspect/commit `Cargo.lock` deliberately on your own development branch. A successful lock preparation alone **does not** demonstrate compilation, wheel installation, or scientific parity. The separate 50-test compiled/native gate and authorized original CSV/P0 checks remain mandatory.
 
-**Verification 2026-11-12:** exactly the two committed helper files passed **10/10 standalone stdlib unit tests** on Python 3.13.5; local `git hash-object` of both files matched GitHub blobs `52a2c7423dc42cc5a9ae53c1f198339fb4bd5641` and `0a0505208f574db4d4d3987fe1bb11b351e206d9`. This execution mocks Git/Cargo command results; the actual Cargo regeneration and locked build **have NOT run** in this authoring environment.
+**Verification 2026-11-12:** the exact updated helper and regression test files passed **12/12 stdlib tests** on Python 3.13.5; local `git hash-object` matched GitHub blobs `a8a4bff8dcfdce012aa91d16a6117cb4f2b43d0e` and `ecdc84d01926162bb62f342a7fbf72222e500c77`. Two new tests execute **real Git** on disposable committed repositories: reject an untracked `Cargo.lock`, and accept a tracked lockfile changed by simulated Cargo while verifying that it remains **unstaged** and only `Cargo.lock` is modified. Cargo calls are simulated; actual Rust dependency resolution, compilation, wheel installation and the 50-case native acceptance **have NOT run** in this environment.
 
 ## Run Python-only source tests before Rust is available (2026-11-12)
 
@@ -48,7 +48,7 @@ To run its independent stdlib-only unit tests:
 py -3 -m unittest discover -s tools -p "test_validate_python_mvp.py" -v
 ```
 
-Eight repository test cases are committed (bad digest, missing files, wrong argument combinations, preserved suite counts and owner-data smoke wiring). **They have not been executed from a complete source checkout here.** A separate isolated Python 3.13 reproduction exercised the exact preflight predicates with **10/10 PASS**. The required actual wheel acceptance remains **44 non-skipped tests**: 15 Python/time + 8 CLI + 12 CSV oracle + 9 native Rust/PyO3. Do not claim a working wheel without compilation and a clean offline installation.
+Eight repository test cases are committed (bad digest, missing files, wrong argument combinations, preserved suite counts and owner-data smoke wiring). **They have not been executed from a complete source checkout here.** A separate isolated Python 3.13 reproduction exercised the exact preflight predicates with **10/10 PASS**. That historical preliminary checkpoint predated later test additions; the **current** required installed-wheel acceptance is **50 non-skipped tests**: 17 Python/time + 8 CLI + 16 CSV oracle + 9 native Rust/PyO3. Do not claim a working wheel without compilation and a clean offline installation.
 
 ## 1. Safely synchronize the development branch
 
