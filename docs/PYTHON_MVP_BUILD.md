@@ -2,6 +2,18 @@
 
 **Status 2026-11-11: scaffold implemented on draft PR #5; not yet compiled, pip-installed or tested end-to-end with Rust.** Do not call this a released package. No GitHub Actions, dataset redistribution or production replacement.
 
+## Native unittest acceptance cannot silently stop early (2026-11-12)
+
+The installed-wheel validator `tools/validate_python_mvp.py` now requires the Python unittest runner to **execute exactly as many tests as it discovered** in each suite, in addition to requiring passing assertions, no skips and at least the mandatory minimum. This matters because `unittest.TextTestRunner` can print `OK` even after a test calls `result.stop()` and the remaining discovered tests never execute. Two new regression tests in `tools/test_validate_python_mvp.py` use real temporary `unittest` modules: one deliberately stops early, the other runs to completion.
+
+On a developer checkout, these orchestrator tests require **no compiled Rust wheel**:
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_validate_python_mvp.py" -v
+```
+
+The source-only suite already rejects incomplete execution. Five standalone Python 3.13.5 reproductions of the amended native `run_tests` behavior passed (early stop, complete suite, skip, missing test and assertion failure). These reproductions are **not** a complete checkout run of the committed 11 orchestrator tests; the mandatory installed-wheel **50** tests and owner CSV/P0 parity remain unexecuted.
+
 ## Safely regenerate the stale Cargo.lock before the first M0 wheel
 
 A **read-only** dependency-lock report works without Rust/Cargo:
