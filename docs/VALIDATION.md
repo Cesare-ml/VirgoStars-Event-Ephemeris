@@ -2,6 +2,21 @@
 
 **No implementation/tests have been run for this repository as of initial setup.** The following gates become executable as code is added; record actual commands and outcomes in PRs and [WORK_LOG](WORK_LOG.md).
 
+## M0 canonical P0 block digests (2026-11-12, draft PR #5)
+
+The experimental Rust `P0Archive::open()` now rejects a noncanonical `raw_sha256` value in **each TOC block at header parsing time**, rather than accepting uppercase hex and only failing later when comparing against the lowercase computed SHA. A shared `canonical_lowercase_sha256` helper requires **exactly 64 lowercase ASCII hexadecimal characters** both for block digests in the header and the caller's separately trusted archive digest. Valid archived block bytes, decoded records and checksum scope are unchanged.
+
+The Rust source includes two new `#[test]` functions: lower-case digest syntax acceptance/rejection, and an adversarial test based on the repository's independent `synthetic.p0.base64` fixture, changing **only the first TOC digest's letter case**. It requires `P0Archive::open()` itself to return `Invalid` for this file (rather than silently accepting the header). No dataset is published or edited.
+
+**Executed now:** Python 3.13.5 standalone reproduction `python /tmp/vseph_p0_sha_case.py`: **4/4 PASS** on the exact synthetic base64 fixture; original SHA-256 `4b7dbe3171633402b76565df79a31066f58913b52b2839c735ea3e68cb413499`, original **1,470 bytes**, original **1,361-byte header**. Confirmed that the adversarial file retains the identical compressed payload and file length, and all four original block digests are canonical lowercase. This reference reproduction **does not execute Rust**. The two new Rust tests, Cargo validation, compiled PyO3 wheel, 42 source Python cases and 51 native installed-wheel cases remain unexecuted from this authoring environment. On a Cargo-equipped clean checkout (after reviewed Cargo.lock regeneration), run:
+
+```powershell
+cargo test --locked -p virgostars-events-p0 sha256_syntax_tests
+cargo test --locked -p virgostars-events-p0
+py -3 tools\validate_python_sources.py
+py -3 tools\build_python_mvp.py
+```
+
 ## M0 independent P0 audit: physical byte length and Rust format (2026-11-12, draft PR #5)
 
 The Rust `p0-verify` CLI now includes the source archive's **actual on-disk byte length** as `"bytes"` in its JSON output, measured via filesystem metadata. The independent Python `tools/audit_p0_bytes.py` already emitted `"bytes"`; `tools/validate_rust.py --archive ... --sha256 ...` now requires matching positive **integer** lengths in both reports (never accepting absent/matching-null, boolean, float, string or zero values). It also requires the Rust-reported `"format"` to equal `"VSEPH-P0-EXPERIMENTAL"`. Existing trusted SHA-256, decoded block/record/family comparisons and `coverage_certified: false` remain mandatory. Three new `tools/test_validate_rust.py` regression methods cover mismatched lengths, missing/malformed lengths and wrong/missing Rust format.
