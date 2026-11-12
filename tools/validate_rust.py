@@ -24,10 +24,13 @@ RUSTUP_URL = "https://rustup.rs/"
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 GATES = (
+    # Abort before compilation if the reviewed Cargo.lock is stale. A normal
+    # cargo invocation would otherwise silently rewrite the tracked lockfile.
+    ("Cargo lockfile reproducibility", ("metadata", "--locked", "--no-deps", "--format-version", "1")),
     ("Rust format", ("fmt", "--all", "--", "--check")),
-    ("Rust Clippy", ("clippy", "--workspace", "--all-targets", "--", "-D", "warnings")),
-    ("Rust tests", ("test", "--workspace")),
-    ("Rust release build", ("build", "--workspace", "--release")),
+    ("Rust Clippy", ("clippy", "--locked", "--workspace", "--all-targets", "--", "-D", "warnings")),
+    ("Rust tests", ("test", "--locked", "--workspace")),
+    ("Rust release build", ("build", "--locked", "--workspace", "--release")),
 )
 
 
