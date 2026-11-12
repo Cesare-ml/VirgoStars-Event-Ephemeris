@@ -126,8 +126,8 @@ class ValidateRustToolTest(unittest.TestCase):
         ])
         self.assertEqual(python_check[-2:], ["--sha256", DIGEST])
         rust_check = calls[-1][0]
-        self.assertEqual(rust_check[:6], [
-            "mock-cargo", "run", "-p", "virgostars-events-p0", "--bin", "p0-verify",
+        self.assertEqual(rust_check[:7], [
+            "mock-cargo", "run", "--locked", "-p", "virgostars-events-p0", "--bin", "p0-verify",
         ])
         self.assertEqual(rust_check[-3:], [str(archive), "--sha256", DIGEST])
         self.assertTrue(all(kwargs["check"] for _, kwargs in calls))
