@@ -69,3 +69,5 @@ Record deliberate legacy bug fixes separately rather than forcing the new engine
 Measure dataset bytes, memory use, random lookup p50/p95, cold open, repeated queries, interval iteration, Rust crate size, WASM gzip bytes and Python wheel sizes on specified hardware/runtime. No claimed throughput without executed benchmarks.
 
 **No releases, deployments, backend replacement, production DB write, automatic GitHub Actions or merge to main without maintainer's explicit decision and completed applicable gates.**
+
+**Python CLI resource gate (2026-11-12):** `virgostars-events` must close its privately copied verified archive on successful JSON output, lookup error and JSON error. The independently executed GitHub-source **8 CLI + 15 API/time tests PASS** (Python 3.13.5, native mocked). The owner source CSV comparator and native smoke tests also close their readers; their scientific/native execution is still pending. The full mandatory acceptance is **44 cases**, not proof of native readiness.
