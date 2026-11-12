@@ -28,3 +28,5 @@ manifest-path = "crates/python-bindings/Cargo.toml"
 python-source = "python"
 module-name = "virgostars_events._native"
 bindings = "pyo3"
+# Refuse implicit edits to Cargo.lock during pip/PEP 517 and wheel builds.
+locked = true
