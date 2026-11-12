@@ -72,6 +72,13 @@ fn invalid(message: impl Into<String>) -> P0Error {
     P0Error::Invalid(message.into())
 }
 
+fn canonical_lowercase_sha256(digest: &str) -> bool {
+    digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 fn string<'a>(item: &'a Value, key: &str) -> Result<&'a str, P0Error> {
     item.get(key)
         .and_then(Value::as_str)
@@ -297,8 +304,8 @@ impl P0Archive {
                 .checked_add(len as u64)
                 .ok_or_else(|| invalid("compressed offset overflow"))?;
             let sha256 = string(entry, "raw_sha256")?.to_owned();
-            if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
-                return Err(invalid("bad block SHA-256 digest"));
+            if !canonical_lowercase_sha256(&sha256) {
+                return Err(invalid("bad block SHA-256 digest: expected 64 lower-case hex characters"));
             }
             if let Some(previous) = blocks.get(&key).and_then(|series| series.last()) {
                 if previous.last >= first {
@@ -381,11 +388,7 @@ impl P0Archive {
     /// This checks bytes of the full archive and does not certify scientific
     /// completeness of astronomical event dates.
     pub fn verify_archive_sha256(&self, expected: &str) -> Result<String, P0Error> {
-        if expected.len() != 64
-            || !expected
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-        {
+        if !canonical_lowercase_sha256(expected) {
             return Err(invalid(
                 "expected archive SHA-256 must be 64 lower-case hex characters",
             ));
@@ -899,4 +902,28 @@ fn decode_records(
         return Err(invalid("unexpected trailing block bytes"));
     }
     Ok(records)
+}
+
+#[cfg(test)]
+mod sha256_syntax_tests {
+    use super::canonical_lowercase_sha256;
+
+    #[test]
+    fn sha256_is_exactly_64_lowercase_ascii_hex_digits() {
+        assert!(canonical_lowercase_sha256(&"a0".repeat(32)));
+        assert!(canonical_lowercase_sha256(&"0123456789abcdef".repeat(4)));
+        assert!(canonical_lowercase_sha256(&"0".repeat(64)));
+        for invalid in [
+            "a".repeat(63),
+            "a".repeat(65),
+            "A".repeat(64),
+            "0123456789abcdef".repeat(3) + "ABCDEF0123456789",
+            "g".repeat(64),
+            "0".repeat(63) + "\n",
+            "0".repeat(63) + "é",
+            String::new(),
+        ] {
+            assert!(!canonical_lowercase_sha256(&invalid), "incorrectly accepted: {invalid:?}");
+        }
+    }
 }
