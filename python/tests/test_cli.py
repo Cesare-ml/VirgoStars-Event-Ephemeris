@@ -77,21 +77,36 @@ class CommandLineTests(unittest.TestCase):
 
     def test_cli_closes_verified_snapshot_after_query_failure(self) -> None:
         class FaultyReader(FakeReader):
-            def get_synods_at(self, instant):
-                raise ValueError("fixture lookup failed")
+            def __init__(self, failure):
+                super().__init__()
+                self.failure = failure
 
-        fake = FaultyReader()
-        stdout, stderr = StringIO(), StringIO()
-        with patch.object(cli.VirgoStarsEvents, "open", return_value=fake):
-            with redirect_stdout(stdout), redirect_stderr(stderr):
-                result = cli.main([
-                    "archive.p0", "2026-11-11T12:00:00Z",
-                    "--sha256", "b" * 64,
-                ])
-        self.assertEqual(result, 1)
-        self.assertTrue(fake.closed)
-        self.assertEqual(stdout.getvalue(), "")
-        self.assertIn("fixture lookup failed", stderr.getvalue())
+            def get_synods_at(self, instant):
+                if isinstance(self.failure, Exception):
+                    raise self.failure
+                # A syntactically valid query may still produce data that
+                # cannot be serialized as JSON. It must release its snapshot.
+                return {"unserializable": {1, 2}}
+
+        for fault, message in (
+            (ValueError("fixture lookup failed"), "fixture lookup failed"),
+            (KeyError("phase_thresholds_us"), "phase_thresholds_us"),
+            ("bad-json-payload", "not JSON serializable"),
+        ):
+            with self.subTest(fault=repr(fault)):
+                fake = FaultyReader(fault)
+                stdout, stderr = StringIO(), StringIO()
+                with patch.object(cli.VirgoStarsEvents, "open", return_value=fake):
+                    with redirect_stdout(stdout), redirect_stderr(stderr):
+                        result = cli.main([
+                            "archive.p0", "2026-11-11T12:00:00Z",
+                            "--sha256", "b" * 64,
+                        ])
+                self.assertEqual(result, 1)
+                self.assertTrue(fake.closed)
+                self.assertEqual(stdout.getvalue(), "")
+                self.assertIn(message, stderr.getvalue())
+                self.assertNotIn("Traceback", stderr.getvalue())
 
     def test_compact_output_is_one_valid_json_line(self) -> None:
         stdout = StringIO()
