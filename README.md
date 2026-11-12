@@ -39,6 +39,8 @@ To run **all required local build and installation checks together** (on a sourc
 
 **Explicit resource cleanup:** `VirgoStarsEvents.close()` releases the Rust-owned private archive snapshot as soon as the wrapper no longer has other native owners; `with VirgoStarsEvents.open(...) as events:` automatically closes it even on exceptions. `events.closed` reports the state, and querying or re-entering a closed wrapper raises `RuntimeError`. The three new lifecycle tests pass in an isolated Python reproduction; the compiled PyO3 wheel has **not** been tested. The baseline is **40 required non-skipped tests** (15 API/time + 6 CLI + 10 source oracle + 9 native golden fixture). Context management helps avoid retaining temporary disk copies longer than needed.
 
+**Lockfile gate before the first Windows wheel:** the tracked `Cargo.lock` currently omits the PyO3 binding crate and `tempfile` and has **not** been regenerated here. On your Cargo-enabled development checkout run `cargo generate-lockfile`, inspect/commit the reviewed `Cargo.lock`, then `py -3 tools\build_python_mvp.py`. Rust validation starts with `cargo metadata --locked`; Cargo compile/test commands, maturin wheel builds and PEP 517 packaging all require a current lockfile and refuse implicit updates. This is source reproducibility, not successful native compilation or an offline crates.io guarantee. See [Rust validation](docs/LOCAL_RUST_CHECKS.md).
+
 See [Python-first MVP specification and acceptance tests](docs/PYTHON_FIRST_MVP.md), [delivery milestones M0–M5](docs/DELIVERY_MILESTONES.md), [roadmap](docs/ROADMAP.md) and [backend compatibility](docs/BACKEND_COMPATIBILITY.md). Public PyPI publication and redistribution of the separately licensed dataset are **not approved yet**.
 
 ## Scope
