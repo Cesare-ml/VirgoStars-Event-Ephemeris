@@ -7,6 +7,7 @@ compiled Rust/PyO3 wheel or scientific archive can pass the native acceptance ga
 """
 from __future__ import annotations
 
+import ast
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
@@ -102,6 +103,38 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
                 ("test_native_fixture.py", 9),
             ],
         )
+
+    def test_mandatory_minima_match_the_authored_repository_suites(self):
+        # Prevent parallel agents from adding coverage while leaving the
+        # mandatory installed-wheel acceptance gate silently out of date.
+        suites = (
+            ("test_python_api.py", 15, validator.TESTS),
+            ("test_cli.py", 8, validator.TESTS),
+            ("test_verify_python_synods.py", 14, validator.TOOLS_TESTS),
+            ("test_native_fixture.py", 9, validator.TESTS),
+        )
+        with patch.dict(sys.modules, fake_native_modules()), patch.object(
+            validator, "run_tests", return_value=True
+        ) as mocked:
+            self.assertEqual(validator.main([]), 0)
+        self.assertEqual(
+            [call.args[:2] for call in mocked.call_args_list],
+            [(pattern, count) for pattern, count, _ in suites],
+        )
+        for pattern, minimum, directory in suites:
+            with self.subTest(suite=pattern):
+                source = (directory / pattern).read_text(encoding="utf-8")
+                tree = ast.parse(source, filename=str(directory / pattern))
+                test_methods = [
+                    method for cls in ast.walk(tree) if isinstance(cls, ast.ClassDef)
+                    for method in cls.body
+                    if isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and method.name.startswith("test_")
+                ]
+                self.assertEqual(
+                    len(test_methods), minimum,
+                    f"{pattern}: update the required gate when adding/removing tests",
+                )
 
     def test_valid_archive_path_allows_owner_smoke_after_baseline(self):
         with tempfile.TemporaryDirectory() as temp:
