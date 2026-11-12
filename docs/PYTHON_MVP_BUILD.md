@@ -11,7 +11,7 @@ py -3 tools\prepare_cargo_lock.py
 py -3 -m unittest discover -s tools -p "test_prepare_cargo_lock.py" -v
 ```
 
-If that report lists missing \`pyo3\`, \`tempfile\` or \`virgostars-events-python\`, first safely synchronize the **draft PR #5 branch**, inspect \`git status\`, and preserve all local edits. After installing Cargo and reaching a **clean tracked working tree**, explicitly run:
+If that report lists missing `pyo3`, `tempfile` or `virgostars-events-python`, first safely synchronize the **draft PR #5 branch**, inspect `git status`, and preserve all local edits. After installing Cargo and reaching a **clean tracked working tree**, explicitly run:
 
 ```powershell
 py -3 tools\prepare_cargo_lock.py --apply
@@ -21,9 +21,9 @@ py -3 tools\validate_python_sources.py
 py -3 tools\build_python_mvp.py
 ```
 
-The opt-in helper rejects dirty tracked files, regenerates only via **real Cargo**, checks that all three lock packages exist, runs locked Cargo metadata, and refuses unexpected tracked changes. It does **not** revert or commit anything: inspect/commit \`Cargo.lock\` deliberately on your own development branch. A successful lock preparation alone **does not** demonstrate compilation, wheel installation, or scientific parity. The separate 50-test compiled/native gate and authorized original CSV/P0 checks remain mandatory.
+The opt-in helper rejects dirty tracked files, regenerates only via **real Cargo**, checks that all three lock packages exist, runs locked Cargo metadata, and refuses unexpected tracked changes. It does **not** revert or commit anything: inspect/commit `Cargo.lock` deliberately on your own development branch. A successful lock preparation alone **does not** demonstrate compilation, wheel installation, or scientific parity. The separate 50-test compiled/native gate and authorized original CSV/P0 checks remain mandatory.
 
-**Verification 2026-11-12:** exactly the two committed helper files passed **10/10 standalone stdlib unit tests** on Python 3.13.5; local \`git hash-object\` of both files matched GitHub blobs \`52a2c7423dc42cc5a9ae53c1f198339fb4bd5641\` and \`0a0505208f574db4d4d3987fe1bb11b351e206d9\`. This execution mocks Git/Cargo command results; the actual Cargo regeneration and locked build **have NOT run** in this authoring environment.
+**Verification 2026-11-12:** exactly the two committed helper files passed **10/10 standalone stdlib unit tests** on Python 3.13.5; local `git hash-object` of both files matched GitHub blobs `52a2c7423dc42cc5a9ae53c1f198339fb4bd5641` and `0a0505208f574db4d4d3987fe1bb11b351e206d9`. This execution mocks Git/Cargo command results; the actual Cargo regeneration and locked build **have NOT run** in this authoring environment.
 
 ## Run Python-only source tests before Rust is available (2026-11-12)
 
