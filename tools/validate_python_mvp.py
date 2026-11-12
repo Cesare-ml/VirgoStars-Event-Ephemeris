@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from pathlib import Path
 import sys
 import unittest
+from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / "python" / "tests"
@@ -47,19 +49,28 @@ def run_tests(pattern: str, minimum_tests: int, test_dir: Path = TESTS) -> bool:
     return True
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Require real, non-skipped Rust-backed Python synod tests"
     )
     parser.add_argument("--archive", help="Optional owner-authorized local P0 archive")
     parser.add_argument("--sha256", help="Trusted lower-case 64-digit SHA-256 for archive")
     parser.add_argument("--synods-csv", help="Optional authorized normalized sinodi.csv for API parity")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
+    # Reject invalid owner-data arguments BEFORE importing PyO3 or spending
+    # time running the mandatory 44 tests. Never silently normalize a
+    # potentially mistyped digest: the original snapshot identity is trusted.
     if bool(args.archive) != bool(args.sha256):
         parser.error("--archive and --sha256 must be given together")
     if args.synods_csv and not args.archive:
         parser.error("--synods-csv requires --archive and --sha256")
+    if args.sha256 is not None and re.fullmatch(r"[0-9a-f]{64}", args.sha256) is None:
+        parser.error("--sha256 must be exactly 64 lowercase hexadecimal characters")
+    if args.archive and not Path(args.archive).is_file():
+        parser.error("--archive must name an existing local file")
+    if args.synods_csv and not Path(args.synods_csv).is_file():
+        parser.error("--synods-csv must name an existing local CSV file")
 
     try:
         import virgostars_events  # noqa: F401
@@ -89,9 +100,6 @@ def main() -> int:
         return 1
 
     if args.archive is not None:
-        if not Path(args.archive).is_file():
-            print("FAIL: supplied archive does not exist", file=sys.stderr)
-            return 1
         os.environ["VSEPH_P0_PATH"] = str(Path(args.archive).resolve())
         os.environ["VSEPH_P0_SHA256"] = args.sha256
         if not run_tests("test_native_smoke.py", 3):
