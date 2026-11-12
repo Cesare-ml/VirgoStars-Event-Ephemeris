@@ -3,7 +3,7 @@
 # Powered by VirgoStars — https://www.virgostars.it/
 """Run the three real source-only Python MVP suites, without Rust or pip.
 
-This developer preflight is deliberately NOT the 48-case native/wheel
+This developer preflight is deliberately NOT the 49-case native/wheel
 acceptance gate. The mandatory native fixture, archive integrity and original
 CSV/P0 parity must still pass via validate_python_mvp.py after wheel install.
 """
