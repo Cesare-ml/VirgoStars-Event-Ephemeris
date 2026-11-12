@@ -137,7 +137,7 @@ The sample uses placeholders and fabricated IDs; **it is not a real ephemeris re
 
 - `python/virgostars_events/_time.py` now rejects unsupported ISO formats and more than **six** fractional-second digits, avoiding `datetime.fromisoformat` silently discarding sub-microsecond digits. Aware Python `datetime` remains supported. Two regression tests added.
 - `python/virgostars_events/__main__.py` and `[project.scripts]` provide `python -m virgostars_events` and `virgostars-events` to query the same Rust-backed API from a shell, returning JSON with explicit checksum and no bundled data. Five CLI unit tests added.
-- **Current required suite counts:** 15 Python/time tests + 8 CLI tests + 16 CSV oracle tests + 9 native synthetic P0 tests = **48 checks** before optional real-data and SQL parity. These **new tests and CLI have NOT yet been executed on a compiled wheel**. Earlier results for 8 tests are historical.
+- **Current required suite counts:** 16 Python/time tests + 8 CLI tests + 16 CSV oracle tests + 9 native synthetic P0 tests = **49 checks** before optional real-data and SQL parity. These **new tests and CLI have NOT yet been executed on a compiled wheel**. Earlier results for 8 tests are historical.
 
 ## Implementation checkpoint — 2026-11-11
 
