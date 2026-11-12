@@ -133,45 +133,63 @@ class GoldenNativeIntegrationTests(unittest.TestCase):
         self.assertEqual(bad.stdout, "")
         self.assertIn("sha", bad.stderr.lower())
 
-    def test_modified_archive_after_open_is_rejected_at_query_time(self) -> None:
-        # This is an independent copy: never alter the class-level fixture
-        # shared by the other native end-to-end tests.
+    def test_source_in_place_edit_cannot_mutate_reader_snapshot(self) -> None:
+        # A query must return only the bytes verified at reader construction.
         original = base64.b64decode(FIXTURE_BASE64.read_text(encoding="utf-8").strip())
+        instant = "1970-01-01T00:00:01.700000Z"
         with tempfile.TemporaryDirectory(prefix="vseph-mutate-fixture-") as folder:
             path = Path(folder) / "synods.p0"
             path.write_bytes(original)
             reader = VirgoStarsEvents.open(path, expected_sha256=FIXTURE_SHA256)
-            self.assertEqual(reader.get_synods_at("1970-01-01T00:00:01.700000Z")["new_moon"]["source_id"], 12)
+            before = reader.get_synods_at(instant)
+            self.assertEqual(before["new_moon"]["source_id"], 12)
 
             altered = bytearray(original)
-            altered[-1] ^= 1  # change an unrelated byte, leaving cached TOC intact
+            altered[-1] ^= 1  # original source is not the reader's private copy
             path.write_bytes(altered)
+            self.assertEqual(reader.get_synods_at(instant), before)
+            self.assertEqual(reader.get_synods_at(instant)["dataset"]["sha256"], FIXTURE_SHA256)
             with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
-                reader.get_synods_at("1970-01-01T00:00:01.700000Z")
+                VirgoStarsEvents.open(path, expected_sha256=FIXTURE_SHA256)
 
-    def test_archive_path_replacement_does_not_inherit_verified_identity(self) -> None:
-        # A P0Archive stores the path, not a permanently locked snapshot.
+    def test_source_path_replacement_cannot_mutate_reader_snapshot(self) -> None:
         original = base64.b64decode(FIXTURE_BASE64.read_text(encoding="utf-8").strip())
+        instant = "1970-01-01T00:00:01.700000Z"
         with tempfile.TemporaryDirectory(prefix="vseph-replace-fixture-") as folder:
             path = Path(folder) / "synods.p0"
             replacement = Path(folder) / "replacement.p0"
             path.write_bytes(original)
             reader = VirgoStarsEvents.open(path, expected_sha256=FIXTURE_SHA256)
+            before = reader.get_synods_at(instant)
 
             altered = bytearray(original)
             altered[-2] ^= 1
             replacement.write_bytes(altered)
             replacement.replace(path)
+            self.assertEqual(reader.get_synods_at(instant), before)
             with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
-                reader.get_synods_at("1970-01-01T00:00:01.700000Z")
+                VirgoStarsEvents.open(path, expected_sha256=FIXTURE_SHA256)
 
-            # Returning the original bytes restores the same trusted identity;
-            # a failed read must not leave an invalid cached result behind.
             path.write_bytes(original)
+            self.assertEqual(reader.get_synods_at(instant), before)
             self.assertEqual(
-                reader.get_synods_at("1970-01-01T00:00:01.700000Z")["new_moon"]["source_id"],
-                12,
+                VirgoStarsEvents.open(path, expected_sha256=FIXTURE_SHA256)
+                .get_synods_at(instant),
+                before,
             )
+
+    def test_source_path_deletion_does_not_break_open_reader(self) -> None:
+        original = base64.b64decode(FIXTURE_BASE64.read_text(encoding="utf-8").strip())
+        instant = "1970-01-01T00:00:01.700000Z"
+        with tempfile.TemporaryDirectory(prefix="vseph-delete-fixture-") as folder:
+            path = Path(folder) / "synods.p0"
+            path.write_bytes(original)
+            reader = VirgoStarsEvents.open(path, expected_sha256=FIXTURE_SHA256)
+            before = reader.get_synods_at(instant)
+            path.unlink()
+            self.assertEqual(reader.get_synods_at(instant), before)
+            with self.assertRaises(OSError):
+                VirgoStarsEvents.open(path, expected_sha256=FIXTURE_SHA256)
 
     def test_offset_equivalence_and_digest_mismatch_fail_closed(self) -> None:
         zulu = self.reader.get_synods_at("1970-01-01T00:00:01.700000Z")
