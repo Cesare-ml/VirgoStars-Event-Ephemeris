@@ -9,6 +9,10 @@
 - Clearly mark proposed vs implemented behavior and separate code/dataset license.
 - Record changed source paths and any uncertain assumptions; validate link targets.
 
+### Reproducible dependency lock preflight
+
+Mandatory before Rust gates and PyO3 builds: `cargo metadata --locked --no-deps --format-version 1`; this must fail if dependency resolution would change the tracked `Cargo.lock`. If it fails, on a reviewed local development branch run `cargo generate-lockfile`, inspect `git diff -- Cargo.lock`, verify MSRV, and commit the generated lock. Do not hand-edit registry checksums. Cargo fmt may run normally; Clippy/tests/build and Rust P0 archive audit must use `--locked`. The maturin wheel workflow also uses `--locked` via CLI and `pyproject.toml`. First compilation and 40-test PyO3 gate still require a developer machine with Cargo; no claim that the current lock passes.
+
 ## Gate B: Rust format parser and core
 
 Once Cargo workspace exists, standard commands (exact feature flags may change):
