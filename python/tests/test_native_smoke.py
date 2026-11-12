@@ -24,8 +24,8 @@ _SHA256 = os.environ.get("VSEPH_P0_SHA256")
                      "requires compiled PyO3 wheel and explicit trusted P0 dataset")
 class NativeSmokeTests(unittest.TestCase):
     def test_latest_synods_new_moon_and_phase_codes_are_json_compatible(self):
-        reader = VirgoStarsEvents.open(_ARCHIVE, expected_sha256=_SHA256)
-        result = reader.get_synods_at("2026-11-11T12:00:00Z")
+        with VirgoStarsEvents.open(_ARCHIVE, expected_sha256=_SHA256) as reader:
+            result = reader.get_synods_at("2026-11-11T12:00:00Z")
         self.assertEqual(result["dataset"]["sha256"], _SHA256.lower())
         self.assertFalse(result["dataset"]["coverage_certified"])
         self.assertIn("Moon", result["synods"])
@@ -38,7 +38,6 @@ class NativeSmokeTests(unittest.TestCase):
         json.dumps(result)
 
     def test_known_source_moon_gaps_do_not_fabricate_a_year_long_phase(self):
-        reader = VirgoStarsEvents.open(_ARCHIVE, expected_sha256=_SHA256)
         # The authorized 2026-11-10 owner snapshot has no Moon anchors
         # in calendar years 1919 or 2018; next recorded anchors are in
         # 1920/2019 respectively. Do not classify those years as CAL2.
@@ -46,7 +45,9 @@ class NativeSmokeTests(unittest.TestCase):
             ("1919-06-01T00:00:00Z", 44934),
             ("2018-06-01T00:00:00Z", 46146),
         ]:
-            with self.subTest(instant=instant):
+            with self.subTest(instant=instant), VirgoStarsEvents.open(
+                _ARCHIVE, expected_sha256=_SHA256
+            ) as reader:
                 result = reader.get_synods_at(instant)
                 moon = result["new_moon"]
                 self.assertIsNotNone(moon)
@@ -63,9 +64,9 @@ class NativeSmokeTests(unittest.TestCase):
                 self.assertFalse(result["dataset"]["coverage_certified"])
 
     def test_explicit_timezone_offset_preserves_identical_source_records(self):
-        reader = VirgoStarsEvents.open(_ARCHIVE, expected_sha256=_SHA256)
-        utc = reader.get_synods_at("2026-11-11T12:00:00.123456Z")
-        offset = reader.get_synods_at("2026-11-11T13:00:00.123456+01:00")
+        with VirgoStarsEvents.open(_ARCHIVE, expected_sha256=_SHA256) as reader:
+            utc = reader.get_synods_at("2026-11-11T12:00:00.123456Z")
+            offset = reader.get_synods_at("2026-11-11T13:00:00.123456+01:00")
         self.assertEqual(utc, offset)
 
 
