@@ -16,6 +16,21 @@ git fetch origin
 
 **Important:** Git conflict markers were found and removed from the remote PR #5 Rust sources in this increment; a stale local working tree may still contain them. Check that `git grep -n -E '^(<<<<<<< |=======|>>>>>>> )' -- '*.rs'` has no matches before compiling.
 
+## Reproducible Cargo.lock required before any M0 wheel build
+
+On this draft branch the checked-in `Cargo.lock` still lacks the Rust PyO3 binding crate and `tempfile`. The new validation pipeline **refuses** to compile or create a wheel while it is stale. With Cargo installed, regenerate and review the lock on your **development branch**, without silently modifying `main`:
+
+```powershell
+cargo generate-lockfile
+git diff -- Cargo.lock
+py -3 -m unittest discover -s tools -p "test_validate_rust.py" -v
+py -3 tools\build_python_mvp.py
+```
+
+After successful Windows compilation, commit the *reviewed*, compiler-generated `Cargo.lock` onto PR #5. Do not hand-author crate digests. `tools/validate_rust.py` begins with `cargo metadata --locked --no-deps --format-version 1` and all subsequent cargo compile/test commands use `--locked`. `tools/build_python_mvp.py` runs `maturin build --locked`, and `pyproject.toml` sets `[tool.maturin] locked = true` so even source `pip install .` cannot update dependency resolution silently. This uses the documented maturin option; `--locked` is **not** an offline-mode guarantee. 
+
+**Status:** lock regeneration and the real Rust/PyO3/40-test Windows acceptance **NOT RUN here**; the authoring container lacks Cargo/rustc/maturin.
+
 ## 2. Rust baseline gates (mandatory)
 
 ```powershell
