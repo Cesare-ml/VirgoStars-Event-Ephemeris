@@ -81,10 +81,26 @@ class VirgoStarsEvents:
         native_us = result.get("requested_at_us")
         if type(native_us) is not int or native_us != requested_us:
             raise ValueError("native synod response instant does not match the request")
+        # Validate the Rust convenience field BEFORE reprojecting records.
+        # Silently overwriting a divergent native new_moon would mask a
+        # cross-language binding regression even if every Moon row is valid.
+        synods = result.get("synods")
+        if not isinstance(synods, dict) or any(
+            not isinstance(record, dict) for record in synods.values()
+        ):
+            raise ValueError("native synod response must contain a synods object of records")
+        moon_raw = synods.get("Moon")
+        expected_native_moon = (
+            moon_raw if moon_raw is not None and moon_raw.get("cycle_start_us") is not None
+            else None
+        )
+        if "new_moon" not in result or result["new_moon"] != expected_native_moon:
+            raise ValueError("native synod response new_moon disagrees with Moon record")
+
         result.pop("requested_at_us")
         result["requested_at_utc"] = iso_utc_from_microseconds(requested_us)
 
-        for body, record in result["synods"].items():
+        for body, record in synods.items():
             # The Rust index promises a latest anchor <= X and a strictly
             # later next anchor. Never display a future start as recorded
             # current state, or a stale end boundary, if transport regresses.
