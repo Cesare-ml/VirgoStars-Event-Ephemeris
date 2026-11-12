@@ -1,3 +1,12 @@
+## 2026-11-12 — Reject malformed quoted fields in independent normalized synod CSV (draft PR #5)
+
+- **Issue/PR/branch:** Continued existing draft PR #5, `feat/p0-2-rust-workspace`, after checking branch head and PR/issue coordination. Owner snapshot PR #6 and Rust reader unchanged.
+- **Bug:** Python `csv.DictReader` defaults to permissive quoting: an unterminated quoted field can absorb subsequent normalized scientific source rows. The independent parity CSV oracle could consequently consume malformed input until later normalization, without an explicit CSV syntax failure.
+- **Fix:** `tools/verify_python_synods.py::load_synod_csv` now uses `csv.DictReader(file, strict=True)` and catches `csv.Error`, raising `ValueError` with the input line number. Properly quoted multiline JSON phase arrays remain valid; source IDs, sorting and duplicates are still checked exactly as before.
+- **Regression:** Extended existing `tools/test_verify_python_synods.py::test_csv_duplicate_source_ids_fail_closed` with unterminated-quote rejection and quoted multiline phase JSON acceptance, preserving **16** authored CSV-oracle test methods. Source-only requirement stays **42** (18 API + 8 CLI + 16 oracle); installed-wheel requirement stays **51** (+9 compiled native).
+- **Validation actually run:** Python **3.13.5**, `python3 /tmp/vseph_strict_csv_validation.py` -> **5/5 PASS** for malformed quotation, valid multiline JSON, repeated IDs, malformed header and empty CSV; the full loader function body from GitHub was run with a **test-only normalization substitute**, not the complete repository suite, compiled PyO3 or original owner data. GitHub readback confirmed source blob `15f8191711bbed50783cf5ec1213037a155d4a0c`, regression blob `ee52d1c13059c13387e745cfd463c7bb53399e40`.
+- **Remaining:** Reviewed Cargo.lock regeneration, real Rust compilation, complete 42 source-only / 51 installed native tests and owner-authorized CSV/P0 parity remain **NOT RUN** in this tool runtime (no Cargo/rustc/maturin; direct GitHub clone DNS blocked). PR #5 remains draft; no main merge, GitHub Actions, publishing or data redistribution.
+
 ## 2026-11-12 — P0 exhaustive Rust audit includes physical bytes and rejects wrong format (draft PR #5)
 
 - **Scope/coordination:** Continued existing [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) on `feat/p0-2-rust-workspace`; checked PRs/issues, current Rust `p0-verify`, full Python auditor and `tools/validate_rust.py`. No alterations to the owner's 380,844-event snapshot or other open PRs.
