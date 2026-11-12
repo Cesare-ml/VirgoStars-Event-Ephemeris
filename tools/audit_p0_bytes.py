@@ -38,6 +38,10 @@ def _varint(data: bytes, pos: int) -> tuple[int, int]:
             raise ValueError("varint overflow")
         value |= (byte & 127) << (7 * step)
         if byte < 128:
+            # Shortest unsigned LEB128 only: a redundant zero high group
+            # must not produce a second binary encoding for the same record.
+            if step > 0 and byte == 0:
+                raise ValueError("non-canonical unsigned varint")
             return value, pos
     raise ValueError("varint too long")
 
