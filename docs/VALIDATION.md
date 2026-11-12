@@ -2,6 +2,21 @@
 
 **No implementation/tests have been run for this repository as of initial setup.** The following gates become executable as code is added; record actual commands and outcomes in PRs and [WORK_LOG](WORK_LOG.md).
 
+## M0 canonical unsigned varints in the experimental P0 decoder (2026-11-12, PR #5)
+
+**Binary contract:** P0 uses unsigned LEB128 for source-row IDs, event timestamp deltas, synod extra-count markers and recorded phase deltas. Each value must have its **shortest encoding**: a multi-byte varint ending in a zero high group (for example `80 00`, `81 00` or `80 80 00`) is invalid, even if it decodes numerically to an otherwise allowed value. An encoding representing 128 as `80 01` is valid. Existing truncated/10-byte overflow checks remain mandatory. This tightens the experimental P0 parser only; it does **not** freeze the future VSEPH v1 specification or calculate astronomical events.
+
+The Rust `crates/events-p0/src/lib.rs::take_varint` and independent Python `tools/audit_p0_bytes.py::_varint` now reject such redundant encodings. The Rust source includes **3 new unit tests** for canonical values (including `u64::MAX`), malformed/truncated/overflow values, and complete record decoding with noncanonical source IDs/deltas. The Python auditor adds **2 test methods** in `tools/test_audit_p0_bytes.py`: direct numeric cases and **four complete synthetic archives** with valid JSON TOCs, zlib blocks and SHA-256 checksums, but noncanonical original ID, timestamp delta, phase count or phase offset. A canonical archive control remains accepted. The independent byte auditor is a validation oracle only, not a second scientific runtime.
+
+**Actually executed in this authoring environment:** Python 3 stdlib focused reproduction of the exact new shortest-varint predicate and checksum-valid P0 test construction, `python /tmp/check_p0_canonical_varint.py`: **8/8 PASS** (no skips). **Not executed here:** the exact committed `tools/test_audit_p0_bytes.py` module, the three added Rust tests, Cargo fmt/Clippy/build, the full 42 Python source tests, 51 installed-native wheel tests, or owner-authorized original dataset parity. Cargo/rustc/maturin remain unavailable. On a Rust-equipped clone, run:
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_audit_p0_bytes.py" -v
+cargo test --locked -p virgostars-events-p0 canonical_varint_tests
+py -3 tools\validate_python_sources.py
+py -3 tools\build_python_mvp.py
+```
+
 ## M0 canonical P0 block digests (2026-11-12, draft PR #5)
 
 The experimental Rust `P0Archive::open()` now rejects a noncanonical `raw_sha256` value in **each TOC block at header parsing time**, rather than accepting uppercase hex and only failing later when comparing against the lowercase computed SHA. A shared `canonical_lowercase_sha256` helper requires **exactly 64 lowercase ASCII hexadecimal characters** both for block digests in the header and the caller's separately trusted archive digest. Valid archived block bytes, decoded records and checksum scope are unchanged.
