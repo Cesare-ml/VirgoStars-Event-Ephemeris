@@ -110,21 +110,21 @@ class AuditP0BytesTest(unittest.TestCase):
 
     def test_unsigned_leb128_is_shortest_and_bounded(self):
         for encoded, expected in (
-            (b"\\x00", 0), (b"\\x7f", 127),
-            (b"\\x80\\x01", 128),
-            (b"\\xff\\x7f", 16_383),
-            (b"\\xff" * 9 + b"\\x01", (1 << 64) - 1),
+            (b"\x00", 0), (b"\x7f", 127),
+            (b"\x80\x01", 128),
+            (b"\xff\x7f", 16_383),
+            (b"\xff" * 9 + b"\x01", (1 << 64) - 1),
         ):
             with self.subTest(encoded=encoded):
                 self.assertEqual(_varint(encoded, 0), (expected, len(encoded)))
         for malformed in (
-            b"\\x80\\x00", b"\\x81\\x00",
-            b"\\xff\\x00", b"\\x80\\x80\\x00",
+            b"\x80\x00", b"\x81\x00",
+            b"\xff\x00", b"\x80\x80\x00",
         ):
             with self.subTest(malformed=malformed):
                 with self.assertRaisesRegex(ValueError, "non-canonical unsigned varint"):
                     _varint(malformed, 0)
-        for malformed in (b"\\x80", b"\\x80\\x80", b"\\xff" * 9 + b"\\x02"):
+        for malformed in (b"\x80", b"\x80\x80", b"\xff" * 9 + b"\x02"):
             with self.subTest(malformed=malformed):
                 with self.assertRaises(ValueError):
                     _varint(malformed, 0)
@@ -134,10 +134,10 @@ class AuditP0BytesTest(unittest.TestCase):
         # SHA-256 over their malformed uncompressed blocks. An integrity
         # checksum failure must not mask the canonical varint rule.
         cases = (
-            ("ingress ID", "ingress", b"\\x84\\x00\\x00\\x00"),
-            ("ingress delta", "ingress", b"\\x04\\x80\\x00\\x00"),
-            ("synod phase count", "synod", b"\\x04\\x00\\x81\\x00"),
-            ("synod phase offset", "synod", b"\\x04\\x00\\x02\\x81\\x00"),
+            ("ingress ID", "ingress", b"\x84\x00\x00\x00"),
+            ("ingress delta", "ingress", b"\x04\x80\x00\x00"),
+            ("synod phase count", "synod", b"\x04\x00\x81\x00"),
+            ("synod phase offset", "synod", b"\x04\x00\x02\x81\x00"),
         )
         for label, family, payload in cases:
             with self.subTest(label=label):
@@ -148,7 +148,7 @@ class AuditP0BytesTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "non-canonical unsigned varint"):
                     self.audit(archive)
         # Control: the same source event encoded canonically remains readable.
-        valid_raw = struct.pack("<q", 0) + b"\\x04\\x00\\x00"
+        valid_raw = struct.pack("<q", 0) + b"\x04\x00\x00"
         archive = self.build_semantic_fixture([
             ("ingress", "Moon", 0, 0, 1, valid_raw),
         ])
