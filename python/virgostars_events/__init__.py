@@ -73,7 +73,13 @@ class VirgoStarsEvents:
             raise RuntimeError("VirgoStarsEvents reader is closed")
         requested_us = to_utc_microseconds(instant)
         result = json.loads(reader.get_synods_at_us(requested_us))
-        result.pop("requested_at_us", None)
+        # Do not silently replace a mismatched timestamp from the native
+        # extension. A Rust/Python transport regression must fail closed,
+        # rather than mislabeling synod results with the requested instant.
+        native_us = result.get("requested_at_us")
+        if type(native_us) is not int or native_us != requested_us:
+            raise ValueError("native synod response instant does not match the request")
+        result.pop("requested_at_us")
         result["requested_at_utc"] = iso_utc_from_microseconds(requested_us)
 
         for record in result["synods"].values():
