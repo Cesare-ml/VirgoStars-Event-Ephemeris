@@ -10,7 +10,7 @@ Applies to all human contributors and AI agents in the entire repository. The go
 4. `docs/ROADMAP.md`, `docs/WORK_LOG.md` and any relevant issue/PR already in progress.
 5. Recent commits, open issues, open draft PRs and project configuration; check whether another agent is working on the same deliverable.
 
-**Current status (2026-11-10):** initial documentation and license only; Rust engine, exporter, bindings and datasets are NOT yet implemented. Never infer functionality from design examples.
+**Current status (2026-11-10):** public scientific snapshot data has been authorized by the owner and is prepared under [dataset PR](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pulls) using a byte-for-byte multipart Git storage mechanism; see `datasets/2026-11-10/README.md` and `docs/DATASET_UPLOAD.md`. `VSEPH-P0` is an experimental Python proof of concept, not finished Rust VSEPH v1. Draft PR #4 (synthetic fixtures) and #5 (Rust foundations) have not been merged. Never infer functionality from design examples or draft PRs.
 
 ## Task selection for each run
 
@@ -28,8 +28,8 @@ Applies to all human contributors and AI agents in the entire repository. The go
 - **Authoritative Rust core:** same decoder/query semantics exposed to Rust, JS/TS (WASM) and Python (PyO3); no parallel astronomical or index algorithms per language.
 - **Reader vs exporter:** read-only PostgreSQL export is an optional development tool. Use parameterized queries, repeatable snapshot/transaction, limited credentials and streaming. Never write to the source database.
 - **No astronomic recomputation** of stations, synods or ingresses in the reader. No copying Swiss Ephemeris or third-party proprietary source.
-- **Dataset ownership:** maintainer reports the source data were generated independently with their algorithms; this statement is not independent verification. Do not invent provenance, licenses, ranges or precision. No full dataset, secrets, private dumps, connection strings, personal information, Telegram content, copyrighted material or snapshots in commits without explicit release clearance.
-- **Licensing:** code is CPAL-1.0 including completed attribution Exhibits A/B. Add the Exhibit A notice to each new source file (or clear, discoverable equivalent when syntax prevents it). Maintain NOTICE and `docs/LICENSING_AND_CREDITS.md`. Dataset license is **not selected**; do not apply CPAL to exported binary data by assumption.
+- **Dataset ownership:** maintainer reports the source data were generated independently with their algorithms; this statement is not independent verification. Do not invent provenance, licenses, ranges or precision. The owner has explicitly cleared the **scientific** 2026-11-10 dataset snapshot for publication; do not commit unrelated private dumps, credentials, message IDs, Telegram content, personal information or unapproved newer snapshots.
+- **Licensing:** code is CPAL-1.0 including completed attribution Exhibits A/B. Add the Exhibit A notice to each new source file (or clear, discoverable equivalent when syntax prevents it). Maintain NOTICE and `docs/LICENSING_AND_CREDITS.md`. Dataset license is **not selected** even though owner authorized public publication; do not misrepresent CPAL as covering scientific data by assumption.
 - **Integrity first:** never silently round timestamps, invent missing events, interpolate an unverified event, silently replace an out-of-range result, or treat a missing phase as a successful full cycle.
 - **Compatibility:** preserve legacy requirements deliberately, not legacy bugs. The concrete use-case map is in `docs/BACKEND_COMPATIBILITY.md`.
 - **Time:** UTC/POSIX timestamps, explicit offsets for ISO instants; document PostgreSQL timestamp semantics and local-date DST behavior. No host-local-time defaults in core.
@@ -50,3 +50,11 @@ Each agent handoff/PR must include: `task / issue`, `base commit and branch`, `s
 ## Priority queue
 
 Use `docs/ROADMAP.md` for exact acceptance criteria and `docs/WORK_LOG.md` for latest handoffs. Start with P0 fixture schema + strict Rust query model, followed by minimal file parsing and edge-case tests. Data export requires authorized database access; without it, work on synthetic fixtures and validation tooling, not fake real data.
+
+## Public scientific snapshot rules
+
+- Treat `datasets/2026-11-10` as an **immutable audited import**. All 380,844 event records and their scientific fields are preserved; read `manifest-publication.json` and verify per-file SHA-256 before use.
+- Large tracked files may live as `*.parts/part-NNN` binary Git blobs. Run `python tools/assemble_dataset.py` and read `docs/DATASET_UPLOAD.md`. Do not commit generated `_assembled` files.
+- Use `yearly_counts.csv` and `candidate_large_intervals.csv` to prioritize missing-coverage work. An interval is a **candidate anomaly**, not proof of uncomputed physical phenomena. Moon sign ingresses have a 2099-to-4836 gap and an isolated Aries-only tail.
+- New events require reproducible algorithm provenance, explicit owner-reviewed data licensing, independent comparisons, and a new versioned snapshot; never overwrite existing records silently.
+- A recorded `sign_state` or `motion_state` is not evidence of **continuous** coverage. Use [the SHA-bound coverage policy](docs/COVERAGE_SAFETY.md) for any state presented as verified. The current snapshot has **zero reviewed intervals**. New windows need named reviewer, reproducible evidence and maintainer approval; do not auto-approve them based on year counts or medians.
