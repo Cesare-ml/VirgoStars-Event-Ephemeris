@@ -27,6 +27,19 @@ py -3 tools\prepare_cargo_lock.py --apply
 
 **Executed:** **15/15** exact helper unit tests passed under Python 3.13.5. One new cross-platform test simulates a symlink without OS privileges; a second runs real Git with a tracked symlink pointing to an external file and verifies the external bytes remain untouched and Cargo is never called. Both committed sources match local Git blob IDs: `b157f181c76f2a94f445b372cfea6b5e1ebd3046` (helper) and `0aee337d35dc016d177b9543ac367c3ebbb7c780` (tests). **Cargo commands are simulated in these tests**; Rust compilation, wheel build, the 50-case native acceptance, and scientific parity are still separate, unverified gates.
 
+## Independent synthetic P0 audit gate before Cargo (2026-11-12)
+
+The first Python/Rust wheel builder now runs **two separate fail-closed Python gates**, before invoking Cargo:
+
+```powershell
+py -3 tools\validate_python_sources.py
+py -3 tools\validate_p0_synthetic.py
+```
+
+The first gate requires **42 non-skipped Python API/time, CLI and independent source-CSV-oracle cases**. The new second gate runs exactly **14 synthetic file-integrity tests** from `tools/test_audit_p0_bytes.py` without silently accepting any skip, expected failure, incomplete execution or changed count. It deliberately **excludes** `test_real_snapshot_full_block_audit`, which requires the separately authorized owner dataset and is not a portable synthetic acceptance test. It checks golden P0 decoding, byte/hash corruption, duplicate original IDs across blocks/bodies, and canonical unsigned-varint checks including complete malformed-but-checksum-valid P0 archives. The existing **51-case installed-wheel/native gate** is unchanged and must still pass separately.
+
+**Execution evidence:** A byte-identical checkout of these three GitHub files was reconstructed in an isolated Python 3.13.5 environment: `audit_p0_bytes.py` blob `77f8f963a2a40fa41faaf9ca49a49e7193d09c7f`, `test_audit_p0_bytes.py` blob `53c03f9144534f706123a0e3b1c69f490640df0e`, fixture blob `64f38ded0a336f0d2652e994bf87b8e16ce8d393`. The full audit module yielded **15 tests: 14 passed, 1 optional owner-data test skipped**. The new `validate_p0_synthetic.py` gate instead ran **14/14 PASS with zero skips**, and its own **4/4 regression tests PASS**, using exact GitHub-blob-matching gate/test files `894a22d2f645db27783a84ea527624243769e4e1` and `cc32c3e995f257371f1ace77d6dcffa9c12b709d`. These are **actual Python test runs**, not Rust compilation or original source parity. The Rust and wheel gates still require developer validation.
+
 ## Safely regenerate the stale Cargo.lock before the first M0 wheel
 
 A **read-only** dependency-lock report works without Rust/Cargo:
