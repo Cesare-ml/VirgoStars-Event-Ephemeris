@@ -22,8 +22,11 @@ __version__ = "0.1.0"
 class VirgoStarsEvents:
     """A read-only indexed event archive, not a live astronomy calculator."""
 
-    def __init__(self, native_reader: Any) -> None:
+    def __init__(self, native_reader: Any, *, expected_sha256: str | None = None) -> None:
         self._reader = native_reader
+        # Only open() supplies a separately trusted digest. Direct test
+        # readers can still use the wrapper without a local archive.
+        self._trusted_sha256 = expected_sha256
 
     @property
     def closed(self) -> bool:
@@ -60,7 +63,11 @@ class VirgoStarsEvents:
             raise ValueError("expected_sha256 must be a 64-digit hexadecimal SHA-256")
         from ._native import NativeReader
 
-        return cls(NativeReader(os.fspath(path), expected_sha256.lower()))
+        canonical_sha256 = expected_sha256.lower()
+        return cls(
+            NativeReader(os.fspath(path), canonical_sha256),
+            expected_sha256=canonical_sha256,
+        )
 
     def get_synods_at(self, instant: datetime | str) -> dict[str, Any]:
         """Return the latest recorded synod per body plus the previous new moon.
@@ -81,6 +88,24 @@ class VirgoStarsEvents:
         native_us = result.get("requested_at_us")
         if type(native_us) is not int or native_us != requested_us:
             raise ValueError("native synod response instant does not match the request")
+        # A native transport regression must not silently change the archive
+        # identity supplied by the owner. Check the full experimental P0
+        # envelope before exposing even otherwise plausible event rows.
+        dataset = result.get("dataset")
+        if (
+            not isinstance(dataset, dict)
+            or dataset.get("format") != "VSEPH-P0"
+            or "id" not in dataset
+            or dataset["id"] is not None
+            or dataset.get("coverage_certified") is not False
+            or not isinstance(dataset.get("sha256"), str)
+            or re.fullmatch(r"[0-9a-f]{64}", dataset["sha256"]) is None
+            or (
+                self._trusted_sha256 is not None
+                and dataset["sha256"] != self._trusted_sha256
+            )
+        ):
+            raise ValueError("native synod response dataset identity is invalid")
         # Validate the Rust convenience field BEFORE reprojecting records.
         # Silently overwriting a divergent native new_moon would mask a
         # cross-language binding regression even if every Moon row is valid.
