@@ -20,6 +20,7 @@ import csv
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -50,10 +51,27 @@ def iso_utc(us: int) -> str:
     ).replace("+00:00", "Z")
 
 
+# Only canonical UTC instants with at most six fractional digits may enter
+# the parity oracle. datetime.fromisoformat() otherwise silently truncates
+# sub-microsecond digits on supported Python versions.
+_UTC_PROBE_RE = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+    r"[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\\.[0-9]{1,6})?Z"
+)
+
+
 def instant_us(value: str) -> int:
-    if "T" not in value or not value.endswith("Z"):
-        raise ValueError("parity probe must have a UTC ISO-8601 Z suffix")
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    """Parse an exact UTC microsecond probe without silent truncation."""
+    if not isinstance(value, str) or _UTC_PROBE_RE.fullmatch(value) is None:
+        raise ValueError(
+            "parity probe must be strict YYYY-MM-DDTHH:MM:SS[.ffffff]Z "
+            "with at most six fractional digits"
+        )
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as exc:
+        raise ValueError("invalid UTC parity probe") from exc
     delta = parsed - EPOCH
     return (delta.days * 86_400 + delta.seconds) * 1_000_000 + delta.microseconds
 
