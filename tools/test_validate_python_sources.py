@@ -88,10 +88,10 @@ class PythonSourceGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)
             (directory / "test_m0_source_expected_fail.py").write_text(
-                "import unittest\\n"
-                "class KnownFailure(unittest.TestCase):\\n"
-                "    @unittest.expectedFailure\\n"
-                "    def test_must_be_fixed(self): self.assertEqual(1, 2)\\n",
+                "import unittest\n"
+                "class KnownFailure(unittest.TestCase):\n"
+                "    @unittest.expectedFailure\n"
+                "    def test_must_be_fixed(self): self.assertEqual(1, 2)\n",
                 encoding="utf-8",
             )
             with redirect_stdout(StringIO()) as output, redirect_stderr(StringIO()) as errors:
