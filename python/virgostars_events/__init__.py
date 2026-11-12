@@ -141,6 +141,19 @@ class VirgoStarsEvents:
                 )
             ):
                 raise ValueError(f"native synod source ID inconsistent with cycle for {body}")
+            # The P0 archive has no reviewed coverage policy. Reject any
+            # transport payload that omits the mandatory warning or falsely
+            # claims a scientifically certified body-specific event history.
+            coverage = record.get("coverage")
+            if (
+                not isinstance(coverage, dict)
+                or coverage.get("status") != "unreviewed"
+                or not isinstance(coverage.get("warnings"), list)
+                or "no_reviewed_coverage_policy" not in coverage["warnings"]
+            ):
+                raise ValueError(f"native synod coverage claim invalid for {body}")
+            if not isinstance(record.get("phase"), dict):
+                raise ValueError(f"native synod phase must be an object for {body}")
             # The Rust index promises a latest anchor <= X and a strictly
             # later next anchor. Never display a future start as recorded
             # current state, or a stale end boundary, if transport regresses.
