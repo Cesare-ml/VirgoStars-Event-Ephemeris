@@ -38,14 +38,22 @@ def run_tests(pattern: str, minimum_tests: int, test_dir: Path = TESTS) -> bool:
         )
         return False
     result = unittest.TextTestRunner(verbosity=2).run(suite)
-    if not result.wasSuccessful() or result.skipped:
+    # unittest may report OK even if a test calls result.stop() and the
+    # remaining discovered tests never run. Require full execution, not
+    # merely wasSuccessful() and zero skipped tests.
+    if (
+        not result.wasSuccessful()
+        or result.skipped
+        or result.testsRun != count
+    ):
         print(
-            f"FAIL: {pattern}: failures={len(result.failures)}, "
-            f"errors={len(result.errors)}, skipped={len(result.skipped)}",
+            f"FAIL: {pattern}: discovered={count}, ran={result.testsRun}, "
+            f"failures={len(result.failures)}, errors={len(result.errors)}, "
+            f"skipped={len(result.skipped)}",
             file=sys.stderr,
         )
         return False
-    print(f"PASS: {pattern}: {result.testsRun}/{result.testsRun} without skips")
+    print(f"PASS: {pattern}: {result.testsRun}/{count} without skips")
     return True
 
 
