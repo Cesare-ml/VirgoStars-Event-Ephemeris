@@ -183,12 +183,12 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)
             (directory / "test_m0_early_stop.py").write_text(
-                "import unittest\\n"
-                "class EarlyStop(unittest.TestCase):\\n"
-                "    def test_01_stop(self):\\n"
-                "        self._outcome.result.stop()\\n"
-                "    def test_02_must_run(self):\\n"
-                "        self.assertTrue(True)\\n",
+                "import unittest\n"
+                "class EarlyStop(unittest.TestCase):\n"
+                "    def test_01_stop(self):\n"
+                "        self._outcome.result.stop()\n"
+                "    def test_02_must_run(self):\n"
+                "        self.assertTrue(True)\n",
                 encoding="utf-8",
             )
             with patch("sys.stdout", new_callable=StringIO) as output, redirect_stderr(StringIO()) as error:
@@ -200,10 +200,10 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)
             (directory / "test_m0_complete_suite.py").write_text(
-                "import unittest\\n"
-                "class Complete(unittest.TestCase):\\n"
-                "    def test_01(self): self.assertTrue(True)\\n"
-                "    def test_02(self): self.assertEqual(1 + 1, 2)\\n",
+                "import unittest\n"
+                "class Complete(unittest.TestCase):\n"
+                "    def test_01(self): self.assertTrue(True)\n"
+                "    def test_02(self): self.assertEqual(1 + 1, 2)\n",
                 encoding="utf-8",
             )
             with patch("sys.stdout", new_callable=StringIO) as output, redirect_stderr(StringIO()):
