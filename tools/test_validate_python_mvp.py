@@ -99,7 +99,7 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
             [
                 ("test_python_api.py", 15),
                 ("test_cli.py", 8),
-                ("test_verify_python_synods.py", 14),
+                ("test_verify_python_synods.py", 16),
                 ("test_native_fixture.py", 9),
             ],
         )
@@ -110,7 +110,7 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
         suites = (
             ("test_python_api.py", 15, validator.TESTS),
             ("test_cli.py", 8, validator.TESTS),
-            ("test_verify_python_synods.py", 14, validator.TOOLS_TESTS),
+            ("test_verify_python_synods.py", 16, validator.TOOLS_TESTS),
             ("test_native_fixture.py", 9, validator.TESTS),
         )
         with patch.dict(sys.modules, fake_native_modules()), patch.object(
