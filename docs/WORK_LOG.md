@@ -2,6 +2,16 @@
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
+## 2026-11-12 — bounded policy JSON and Python/Rust parser alignment (draft PR #6)
+
+- **Existing PR / branch:** [#6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6), `data/2026-11-10-snapshot`. Same Python reference prototype; no overlapping branch, merge, or dataset edits.
+- **Code:** `prototype/coverage_policy.py` now reads at most 1,000,001 policy bytes (maximum accepted: 1,000,000), caps reviewed windows at 4,096 as in provisional Rust P0, rejects Unicode/non-ASCII decimal timestamps, and fails on duplicate JSON object keys at any nesting depth.
+- **Tests:** six synthetic standard-library cases added to `prototype/test_coverage_identity.py`: policy over-size, exact boundary, excess windows, non-ASCII microseconds, duplicate top-level key and duplicate nested key. Existing six identity tests are unchanged.
+- **Execution:** local `python -m py_compile coverage_policy.py test_coverage_identity.py` → **PASS**; `python -m unittest discover -s . -p 'test_*.py' -v` from the isolated two-file directory on Python 3.13.5 → **12/12 PASS**. Local `git hash-object` returned `76451e886b9f0ffb249c7130910629587beaa068` and `b90cb6f507d0431d0e6c0b61db1443ad2845e2cd`, exactly matching the GitHub commit blobs after upload.
+- **Not run:** the full P0 packer/reader integration suite or Rust Cargo tests: direct GitHub checkout failed due DNS resolution in this execution container; the 12 tests use a synthetic fake file-backed reader, not a real dataset decoder.
+- **Known parity gap:** Rust provisional parser already has the size/window caps and ASCII timestamp parsing, but uses `serde_json::Value` which does not reject duplicate keys like the new Python parser. Carry this into Rust parity tests before merge.
+- **Next:** enforce strict duplicate-key handling in Rust; run full Python prototype/real archive integrity and Rust gate tests on a machine with repo checkout and Cargo. Original 2026-11-10 coverage policy still has **zero reviewed intervals**. No actions/deployment/production changes.
+
 ## 2026-11-12 — bind coverage reader to immutable archive identity (draft PR #6)
 
 - **Scope / existing PR:** [#6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6), branch `data/2026-11-10-snapshot`; focused extension to the experimental `prototype/coverage_policy.py`, not a competing PR.
