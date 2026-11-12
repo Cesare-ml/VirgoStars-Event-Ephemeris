@@ -50,7 +50,7 @@ Once `pip install .` succeeds, run:
 .\.venv\Scripts\python.exe tools\validate_python_mvp.py
 ```
 
-This gate now requires **12 pure-Python API/time tests, 6 CLI tests, 10 independent CSV-oracle tests and 6 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
+This gate now requires **15 pure-Python API/time tests, 6 CLI tests, 10 independent CSV-oracle tests and 9 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
 
 **Unlike standard `unittest`, the validator exits with failure if a native test is skipped**, if the compiled `virgostars_events._native` module cannot be imported, or if fewer than the expected cases are discovered. An `OK (skipped=5)` from a basic unittest run is **not** a successful native gate.
 
@@ -84,7 +84,7 @@ The smoke tests must **run**, not skip, and return source IDs/recorded phases pl
 
 The real-data smoke suite now contains **3 owner-snapshot tests**, including the two source gaps (1919 and 2018). Using the owner-approved 2026-11-10 P0 snapshot, the smoke test must prove that `get_synods_at("1919-06-01T00:00:00Z")` and `get_synods_at("2018-06-01T00:00:00Z")` retain recorded Moon source IDs **44934** and **46146**, report `phase.code=None` / `phase.status="unknown_discontinuous_moon_anchors"`, and include the `moon_recorded_cycle_gap_over_45_days` warning. Normal Moon cycles must still classify their source thresholds. A gap guard is not scientific completeness certification; see [Moon gaps](MOON_SYNOD_SOURCE_GAPS.md).
 
-The independent CSV oracle contains **10 tests** (including a year-long gap regression); the mandatory base Python/PyO3 suite contains **37 non-skipped tests** (12 API/time + 6 CLI + 10 oracle + 9 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
+The independent CSV oracle contains **10 tests** (including a year-long gap regression); the mandatory base Python/PyO3 suite contains **40 non-skipped tests** (15 API/time + 6 CLI + 10 oracle + 9 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
 
 ## 4a. Independent source-CSV parity of the installed Python API
 
@@ -196,7 +196,7 @@ The Python surface is a prototype **for precomputed recorded events**, not a new
 
 The Rust Python binding now creates a secure private temporary directory, copies the separately authorized source P0 file into it, and checks **the copied bytes** against the independently trusted whole-file SHA-256 at reader creation. Queries use only the private copy; modifying/replacing/deleting the source path later no longer affects an open reader. No per-query full-file checksum scans are required. Temporary copies persist for as long as native readers are alive and are cleaned up when released. Budget extra free disk space roughly equal to one archive per live reader and use a trusted temp directory; this is not an adversary-proof file lock.
 
-**Required native regression count: 9; total mandatory: 37 = 12 API/time + 6 CLI + 10 source oracle + 9 PyO3 golden fixture.** The native fixture cases exercise source in-place alteration, atomic replacement and deletion after construction. The modified native binding and these tests **have not been compiled or run** in this authoring environment.
+**Required native regression count: 9; total mandatory: 40 = 15 API/time + 6 CLI + 10 source oracle + 9 PyO3 golden fixture.** The native fixture cases exercise source in-place alteration, atomic replacement and deletion after construction. The modified native binding and these tests **have not been compiled or run** in this authoring environment.
 
 **Cargo.lock checkpoint:** introducing the new Rust `tempfile` crate requires regenerating the tracked `Cargo.lock`. That lockfile did not include PyO3's workspace dependencies previously either. Do not hand-edit checksums. On the Windows developer checkout with Cargo available, run `cargo generate-lockfile`, review/commit the result, then validate and build:
 
@@ -206,3 +206,17 @@ py -3 tools\build_python_mvp.py
 ```
 
 Only report successful compiled wheel/native test results after the commands actually pass. Scientific owner archive parity requires the additional trusted P0/CSV arguments documented above.
+
+## 9. Close the Python reader to release its private archive copy
+
+Each `VirgoStarsEvents.open()` keeps a per-reader private P0 snapshot in temporary storage. Prefer an explicit context manager for scripts and long-lived services:
+
+```python
+from virgostars_events import VirgoStarsEvents
+
+with VirgoStarsEvents.open(path, expected_sha256=trusted_sha256) as events:
+    result = events.get_synods_at("2026-11-11T12:00:00Z")
+# Reader closed even if the query raises an exception.
+```
+
+Or call `events.close()` when finished; repeated calls are safe. `events.closed` becomes `True`. Attempting `events.get_synods_at(...)` or re-entering a closed reader raises a descriptive `RuntimeError`. Clearing the native reference allows Rust `tempfile::TempDir` cleanup when no other references remain. No underlying P0 data are deleted. Three new Python lifecycle regressions raise the required gate from 37 to **40 tests** (15 pure-Python/time, 6 CLI, 10 source oracle, 9 compiled native fixtures). Three cases in an *isolated local reproduction* passed Python 3.13, **not** the compiled wheel or full repository suite. `Cargo.lock` regeneration remains required before compiling the PyO3 crate.
