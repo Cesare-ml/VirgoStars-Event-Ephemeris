@@ -165,6 +165,29 @@ def fake_response():
 
 
 class PythonApiTests(unittest.TestCase):
+    def test_native_requested_instant_must_match_exact_microseconds(self):
+        requested = "1970-01-01T01:00:00.000001+01:00"
+        for native_us in (None, True, False, "1", -1, 0, 2, 1.0):
+            with self.subTest(native_us=native_us):
+                raw = fake_response()
+                raw["requested_at_us"] = native_us
+                native = DummyNative(raw)
+                with self.assertRaisesRegex(ValueError, "native synod response instant"):
+                    VirgoStarsEvents(native).get_synods_at(requested)
+                self.assertEqual(native.received, 1)
+        missing = fake_response()
+        del missing["requested_at_us"]
+        with self.assertRaisesRegex(ValueError, "native synod response instant"):
+            VirgoStarsEvents(DummyNative(missing)).get_synods_at(requested)
+
+        exact = fake_response()
+        exact["requested_at_us"] = 1
+        native = DummyNative(exact)
+        response = VirgoStarsEvents(native).get_synods_at(requested)
+        self.assertEqual(response["requested_at_utc"], "1970-01-01T00:00:00.000001Z")
+        self.assertNotIn("requested_at_us", response)
+        self.assertEqual(native.received, 1)
+
     def test_response_is_json_serializable_and_new_moon_same_object(self):
         native = DummyNative(fake_response())
         data = VirgoStarsEvents(native).get_synods_at("1970-01-01T00:00:00Z")
