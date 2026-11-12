@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: CPAL-1.0
 # Powered by VirgoStars — https://www.virgostars.it/
 """Unit tests for the Python surface; native Rust wheel needs separate tests."""
+import gc
 import json
 import sys
+import weakref
 import types
 import unittest
 from datetime import datetime, timedelta, timezone, tzinfo
@@ -191,6 +193,43 @@ class PythonApiTests(unittest.TestCase):
         self.assertEqual(
             data["synods"]["Moon"]["status"], "no_preceding_recorded_cycle"
         )
+
+    def test_context_manager_closes_and_releases_native_reader(self):
+        native = DummyNative(fake_response())
+        native_ref = weakref.ref(native)
+        events = VirgoStarsEvents(native)
+        del native  # the wrapper must be the only live native owner
+        self.assertFalse(events.closed)
+        with events as opened:
+            self.assertIs(opened, events)
+            self.assertEqual(
+                opened.get_synods_at("1970-01-01T00:00:00Z")["new_moon"]["source_id"],
+                11,
+            )
+        self.assertTrue(events.closed)
+        gc.collect()
+        self.assertIsNone(native_ref())  # no retained private snapshot
+        with self.assertRaisesRegex(RuntimeError, "reader is closed"):
+            events.get_synods_at("1970-01-01T00:00:00Z")
+
+    def test_close_idempotent_and_closed_reader_cannot_be_reentered(self):
+        events = VirgoStarsEvents(DummyNative(fake_response()))
+        self.assertFalse(events.closed)
+        events.close()
+        events.close()
+        self.assertTrue(events.closed)
+        with self.assertRaisesRegex(RuntimeError, "reader is closed"):
+            events.get_synods_at("not-even-an-instant")
+        with self.assertRaisesRegex(RuntimeError, "reader is closed"):
+            with events:
+                self.fail("closed context must not run")
+
+    def test_context_exit_closes_reader_without_suppressing_errors(self):
+        events = VirgoStarsEvents(DummyNative(fake_response()))
+        with self.assertRaisesRegex(ValueError, "example failure"):
+            with events:
+                raise ValueError("example failure")
+        self.assertTrue(events.closed)
 
     def test_invalid_sha256_never_constructs_a_native_reader(self):
         class FakeReader:
