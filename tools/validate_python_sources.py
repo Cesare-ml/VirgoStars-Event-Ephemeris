@@ -25,7 +25,7 @@ SOURCE_SUITES = (
 
 
 def run_suite(pattern: str, required: int, directory: Path) -> bool:
-    """Never count a skipped, missing or failed source test as a pass."""
+    """Never count skipped, expected-failed, missing or failed source tests as a pass."""
     suite = unittest.defaultTestLoader.discover(
         start_dir=str(directory), pattern=pattern
     )
@@ -39,11 +39,21 @@ def run_suite(pattern: str, required: int, directory: Path) -> bool:
         )
         return False
     result = unittest.TextTestRunner(verbosity=2).run(suite)
-    if not result.wasSuccessful() or result.skipped or result.testsRun != required:
+    # unittest reports "OK (expected failures=N)" as wasSuccessful().
+    # A pending/expected-failing test is NOT a passed MVP acceptance case.
+    if (
+        not result.wasSuccessful()
+        or result.skipped
+        or result.expectedFailures
+        or result.unexpectedSuccesses
+        or result.testsRun != required
+    ):
         print(
             f"FAIL: {pattern}: ran={result.testsRun}, "
             f"failures={len(result.failures)}, errors={len(result.errors)}, "
-            f"skipped={len(result.skipped)}",
+            f"skipped={len(result.skipped)}, "
+            f"expected_failures={len(result.expectedFailures)}, "
+            f"unexpected_successes={len(result.unexpectedSuccesses)}",
             file=sys.stderr,
         )
         return False
