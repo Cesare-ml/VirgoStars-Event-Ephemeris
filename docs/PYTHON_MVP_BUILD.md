@@ -29,7 +29,7 @@ py -3 tools\build_python_mvp.py
 
 After successful Windows compilation, commit the *reviewed*, compiler-generated `Cargo.lock` onto PR #5. Do not hand-author crate digests. `tools/validate_rust.py` begins with `cargo metadata --locked --no-deps --format-version 1` and all subsequent cargo compile/test commands use `--locked`. `tools/build_python_mvp.py` runs `maturin build --locked`, and `pyproject.toml` sets `[tool.maturin] locked = true` so even source `pip install .` cannot update dependency resolution silently. This uses the documented maturin option; `--locked` is **not** an offline-mode guarantee. 
 
-**Status:** lock regeneration and the real Rust/PyO3/42-test Windows acceptance **NOT RUN here**; the authoring container lacks Cargo/rustc/maturin.
+**Status:** lock regeneration and the real Rust/PyO3/44-test Windows acceptance **NOT RUN here**; the authoring container lacks Cargo/rustc/maturin.
 
 ## 2. Rust baseline gates (mandatory)
 
@@ -67,7 +67,7 @@ Once `pip install .` succeeds, run:
 .\.venv\Scripts\python.exe tools\validate_python_mvp.py
 ```
 
-This gate now requires **15 pure-Python API/time tests, 6 CLI tests, 12 independent CSV-oracle tests and 9 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
+This gate now requires **15 pure-Python API/time tests, 8 CLI tests, 12 independent CSV-oracle tests and 9 actual PyO3/Rust-to-Python tests** against the repository's independently generated synthetic 8-event golden P0 fixture. It checks exact source IDs, Moon new-moon equality boundaries, phase-label transitions, `NULL` vs `[]` extras, ISO timezone-offset equivalence, JSON serialization, and rejection of a wrong whole-file SHA-256.
 
 **Unlike standard `unittest`, the validator exits with failure if a native test is skipped**, if the compiled `virgostars_events._native` module cannot be imported, or if fewer than the expected cases are discovered. An `OK (skipped=5)` from a basic unittest run is **not** a successful native gate.
 
@@ -101,7 +101,7 @@ The smoke tests must **run**, not skip, and return source IDs/recorded phases pl
 
 The real-data smoke suite now contains **3 owner-snapshot tests**, including the two source gaps (1919 and 2018). Using the owner-approved 2026-11-10 P0 snapshot, the smoke test must prove that `get_synods_at("1919-06-01T00:00:00Z")` and `get_synods_at("2018-06-01T00:00:00Z")` retain recorded Moon source IDs **44934** and **46146**, report `phase.code=None` / `phase.status="unknown_discontinuous_moon_anchors"`, and include the `moon_recorded_cycle_gap_over_45_days` warning. Normal Moon cycles must still classify their source thresholds. A gap guard is not scientific completeness certification; see [Moon gaps](MOON_SYNOD_SOURCE_GAPS.md).
 
-The independent CSV oracle contains **12 tests** (including UTC probe precision and a year-long gap regression); the mandatory base Python/PyO3 suite contains **42 non-skipped tests** (15 API/time + 6 CLI + 12 oracle + 9 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
+The independent CSV oracle contains **12 tests** (including UTC probe precision and a year-long gap regression); the mandatory base Python/PyO3 suite contains **44 non-skipped tests** (15 API/time + 8 CLI + 12 oracle + 9 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
 
 ## 4a. Independent source-CSV parity of the installed Python API
 
@@ -196,7 +196,7 @@ py -3 tools\build_python_mvp.py --archive $env:VSEPH_P0_PATH --sha256 $env:VSEPH
 | Check | Status as documented here |
 | --- | --- |
 | Python UTC microseconds + dictionary projection, now 10 tests | **8/8 passed on an earlier revision**; two new precision/strict-ISO tests **NOT RUN** on the current branch |
-| Python CLI JSON/exit behavior, 5 tests | **WRITTEN, NOT RUN** — requires no native extension for these mocked tests |
+| Python CLI JSON/exit/context cleanup, 8 tests | **WRITTEN, NOT RUN** — requires no native extension for these mocked tests |
 | Synthetic native P0 fixture + PyO3 binding, 9 tests | **WRITTEN, NOT RUN** — `tools/validate_python_mvp.py` fails on a skip |
 | Rust synod phase classifier, 5 new tests | **NOT RUN** |
 | Rust latest-synods P0 batch query, 4 new tests | **NOT RUN** |
@@ -215,7 +215,7 @@ The Python surface is a prototype **for precomputed recorded events**, not a new
 
 The Rust Python binding now creates a secure private temporary directory, copies the separately authorized source P0 file into it, and checks **the copied bytes** against the independently trusted whole-file SHA-256 at reader creation. Queries use only the private copy; modifying/replacing/deleting the source path later no longer affects an open reader. No per-query full-file checksum scans are required. Temporary copies persist for as long as native readers are alive and are cleaned up when released. Budget extra free disk space roughly equal to one archive per live reader and use a trusted temp directory; this is not an adversary-proof file lock.
 
-**Required native regression count: 9; total mandatory: 40 = 15 API/time + 6 CLI + 12 source oracle + 9 PyO3 golden fixture.** The native fixture cases exercise source in-place alteration, atomic replacement and deletion after construction. The modified native binding and these tests **have not been compiled or run** in this authoring environment.
+**Required native regression count: 9; total mandatory: 44 = 15 API/time + 8 CLI + 12 source oracle + 9 PyO3 golden fixture.** The native fixture cases exercise source in-place alteration, atomic replacement and deletion after construction. The modified native binding and these tests **have not been compiled or run** in this authoring environment.
 
 **Cargo.lock checkpoint:** introducing the new Rust `tempfile` crate requires regenerating the tracked `Cargo.lock`. That lockfile did not include PyO3's workspace dependencies previously either. Do not hand-edit checksums. On the Windows developer checkout with Cargo available, run `cargo generate-lockfile`, review/commit the result, then validate and build:
 
@@ -239,3 +239,13 @@ with VirgoStarsEvents.open(path, expected_sha256=trusted_sha256) as events:
 ```
 
 Or call `events.close()` when finished; repeated calls are safe. `events.closed` becomes `True`. Attempting `events.get_synods_at(...)` or re-entering a closed reader raises a descriptive `RuntimeError`. Clearing the native reference allows Rust `tempfile::TempDir` cleanup when no other references remain. No underlying P0 data are deleted. Three new Python lifecycle regressions raise the required gate from 37 to **40 tests** (15 pure-Python/time, 6 CLI, 10 source oracle, 9 compiled native fixtures). Three cases in an *isolated local reproduction* passed Python 3.13, **not** the compiled wheel or full repository suite. `Cargo.lock` regeneration remains required before compiling the PyO3 crate.
+
+## 10. Verified Python source tests and CLI context cleanup (2026-11-12)
+
+The offline command module now enters `VirgoStarsEvents.open` as a context manager and releases the private verified archive after query/JSON output and during exceptions. Owner native smoke tests and independent source-CSV parity likewise close their readers deterministically. The CLI regression module adds success/failure cleanup tests: **8/8 PASS** on Python 3.13.5. All **15 Python API/time tests** also passed on the same run, for **23/23 pure-Python tests passing**, using **exact file bytes matching the GitHub blob hashes**. Test command executed locally:
+
+```bash
+PYTHONPATH=/mnt/data/ve-verify/python python3 -m unittest discover -s /mnt/data/ve-verify/python/tests -p 'test_*.py' -v
+```
+
+The path above is the agent's isolated test checkout, not a command for Windows users; from a local repository checkout run `py -3 -m unittest discover -s python\\tests -p test_cli.py -v` after installing the package. The suite stubs native readers for API and CLI tests. It is **not** a compiled Rust/PyO3 integration pass. `tools/validate_python_mvp.py` now fails unless **44 mandatory tests** run without skips: 15 API/time + 8 CLI + 12 CSV oracle + 9 native golden P0. Cargo regeneration, real Windows wheel installation and owner dataset parity remain required.
