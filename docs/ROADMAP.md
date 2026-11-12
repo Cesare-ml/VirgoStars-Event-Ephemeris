@@ -15,6 +15,8 @@
 
 **M0.2 Rust/Python original source identity (2026-11-12, draft PR #5):** The Python facade now checks every native synod body's key matches its `body` field and requires a positive integer original `source_id` exactly when a recorded cycle exists. One new API test method covers cross-body swaps, missing/boolean/negative/floating source IDs and legitimate absent cycles; the no-predecessor test fixture was corrected. **18** API/time + 8 CLI + 16 source CSV oracle = **42 source-only tests**; 9 compiled native fixture tests bring wheel acceptance to **51**. Five isolated predicate tests passed, but the full repository source/native suites have NOT RUN here.
 
+**P0 header SHA-256 canonicalization (2026-11-12, draft PR #5):** Rust `P0Archive::open` now rejects uppercase or otherwise noncanonical `raw_sha256` TOC entries **before** decoding any block; its trusted whole-archive hash format uses the same strictly 64-lowercase-ASCII-hex predicate. Added two Rust tests (syntax + mutated golden P0 header, identical compressed payload). A 4-case independent Python verification of the fixture and mutation passed; **actual Rust tests and wheel compile remain pending** because Cargo is not installed here and `Cargo.lock` is stale. This is format-integrity hardening, not M0 delivery.
+
 ## M0 — FIRST user-facing deliverable: installable Python synod MVP
 
 **Deliver this BEFORE JS/TS WASM, production backend migration or frozen VSEPH v1.** Full acceptance criteria and proposed dictionary API: [Python-first MVP](PYTHON_FIRST_MVP.md). End-to-end delivery order including post-MVP features: [Delivery milestones M0–M5](DELIVERY_MILESTONES.md).
