@@ -103,7 +103,6 @@ class WheelGateTests(unittest.TestCase):
                     self.assertEqual(wheel_check.main(["--wheel", str(wheel)]), 1)
                 self.assertIn("native failure", stderr.getvalue())
 
-
     def test_venv_bootstrap_failure_returns_nonzero_not_success(self):
         with tempfile.TemporaryDirectory() as temp:
             wheel = self.make_wheel(Path(temp))
