@@ -97,7 +97,7 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
         self.assertEqual(
             [call.args[:2] for call in runner.call_args_list],
             [
-                ("test_python_api.py", 15),
+                ("test_python_api.py", 16),
                 ("test_cli.py", 8),
                 ("test_verify_python_synods.py", 16),
                 ("test_native_fixture.py", 9),
