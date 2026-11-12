@@ -2,6 +2,18 @@
 
 **Status 2026-11-11: scaffold implemented on draft PR #5; not yet compiled, pip-installed or tested end-to-end with Rust.** Do not call this a released package. No GitHub Actions, dataset redistribution or production replacement.
 
+## M0: fail-fast owner-data input checks (2026-11-12)
+
+The native acceptance command `py -3 tools\\validate_python_mvp.py` now checks its optional owner inputs **before** importing PyO3 or running tests. An archive requires a trusted **64-character lowercase hexadecimal SHA-256**, and each optional `--archive` / `--synods-csv` argument must name an existing regular file. An absent or malformed pairing exits with argparse status 2 immediately; valid files continue to the full native acceptance, including the independent CSV comparison when requested. This is an input preflight, **not** a replacement for decoding or SHA verification by the compiled Rust reader.
+
+To run its independent stdlib-only unit tests:
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_validate_python_mvp.py" -v
+```
+
+Eight repository test cases are committed (bad digest, missing files, wrong argument combinations, preserved suite counts and owner-data smoke wiring). **They have not been executed from a complete source checkout here.** A separate isolated Python 3.13 reproduction exercised the exact preflight predicates with **10/10 PASS**. The required actual wheel acceptance remains **44 non-skipped tests**: 15 Python/time + 8 CLI + 12 CSV oracle + 9 native Rust/PyO3. Do not claim a working wheel without compilation and a clean offline installation.
+
 ## 1. Safely synchronize the development branch
 
 From PowerShell in `D:\\GitHub\\VirgoStars-Event-Ephemeris`:
