@@ -198,6 +198,20 @@ class GoldenNativeIntegrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             VirgoStarsEvents.open(self.path, expected_sha256="0" * 64)
 
+        # Test the directly importable PyO3 class, bypassing the public
+        # Python facade. Malformed trust material must fail BEFORE a path
+        # is opened (missing-path OSError would prove the wrong order).
+        absent = str(self.path.with_name("not-present.p0"))
+        for malformed in ("", "a" * 63, "a" * 65, "G" * 64, "A" * 64, "0" * 63 + "\n"):
+            with self.subTest(sha=malformed):
+                with self.assertRaisesRegex(ValueError, "64 lower-case hex"):
+                    NativeReader(absent, malformed)
+
+        # An otherwise valid SHA passes the format gate and therefore
+        # exposes the actual missing-source error, not a digest error.
+        with self.assertRaises(OSError):
+            NativeReader(absent, FIXTURE_SHA256)
+
 
 if __name__ == "__main__":
     unittest.main()
