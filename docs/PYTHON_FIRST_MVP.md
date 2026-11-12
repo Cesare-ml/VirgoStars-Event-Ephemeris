@@ -130,14 +130,14 @@ The sample uses placeholders and fabricated IDs; **it is not a real ephemeris re
 - [ ] **PY-MVP.1: Rust synod aggregation and pure phase engine**, reusing `P0Archive::at` / `next` and the existing `Event::Synod` record. Add a bounded `at_all_synods(t)`-style operation based on the archive's *actual* synod body index; retain source IDs, thresholds and per-body lack-of-coverage diagnostics. Implement deterministic phase codes as a separate, tested Rust routine. Avoid full-archive scan on each call.
 - [ ] **PY-MVP.2: Python binding crate**, using PyO3/maturin to invoke the Rust reader and transform its result into a typed, JSON-serializable dictionary. Implement `VirgoStarsEvents.open(path, expected_sha256=...)` and `get_synods_at(t)`; reject invalid/naive timestamps. No independent Python decoder.
 - [ ] **PY-MVP.3: local pip installation and offline example**, `pyproject.toml` build system, importable `virgostars_events` module, `pip install .` and `pip install -e .`, reproducible wheel build and installation into a fresh virtual environment. Explicit file path; no automatic network or dataset download.
-- [ ] **PY-MVP.4: test and accept the user story**, require `python tools/validate_python_mvp.py` to run 9/9 **non-skipped** synthetic native P0 tests, 12/12 pure-Python API/time tests, 6/6 CLI tests and 10/10 independent CSV-oracle tests after wheel installation; then run `tools/verify_python_synods.py` against the independently normalized original `sinodi.csv` for all indexed bodies and exact phase boundaries (without bundling the CSV), followed by comparison of selected instants/body/phase against PostgreSQL's `getSinodiPerDataoraUtc` and `getMotiSinodiciPianetiPerDataoraUtc` on agreed reviewed samples. Run edge cases: X at/before/after anchor and each of three phase boundaries; Moon new moon; body with NULL vs []; no preceding/new cycle; gaps 1919/2018; pre-1970; offset-aware datetime; invalid dates; whole-file digest mismatch; JSON serializability. Maintain deliberate improvements separately from legacy bugs.
+- [ ] **PY-MVP.4: test and accept the user story**, require `python tools/validate_python_mvp.py` to run 9/9 **non-skipped** synthetic native P0 tests, 15/15 pure-Python API/time tests, 6/6 CLI tests and 10/10 independent CSV-oracle tests after wheel installation; then run `tools/verify_python_synods.py` against the independently normalized original `sinodi.csv` for all indexed bodies and exact phase boundaries (without bundling the CSV), followed by comparison of selected instants/body/phase against PostgreSQL's `getSinodiPerDataoraUtc` and `getMotiSinodiciPianetiPerDataoraUtc` on agreed reviewed samples. Run edge cases: X at/before/after anchor and each of three phase boundaries; Moon new moon; body with NULL vs []; no preceding/new cycle; gaps 1919/2018; pre-1970; offset-aware datetime; invalid dates; whole-file digest mismatch; JSON serializability. Maintain deliberate improvements separately from legacy bugs.
 - [ ] **PY-MVP.5: deliver a reproducible user-ready artifact**, wheel for target CPython/Windows, a 10-line script example, README quick start, example expected fixture output (synthetic clearly labeled), version and visible credits, validated install and smoke test by maintainer. **This acceptance milestone is the first usable Python MVP**. Keep PR draft until review and approval; public PyPI release is a separate decision.
 
 ### Additional M0 source work — exact timestamp input and offline CLI
 
 - `python/virgostars_events/_time.py` now rejects unsupported ISO formats and more than **six** fractional-second digits, avoiding `datetime.fromisoformat` silently discarding sub-microsecond digits. Aware Python `datetime` remains supported. Two regression tests added.
 - `python/virgostars_events/__main__.py` and `[project.scripts]` provide `python -m virgostars_events` and `virgostars-events` to query the same Rust-backed API from a shell, returning JSON with explicit checksum and no bundled data. Five CLI unit tests added.
-- **Current required suite counts:** 12 Python/time tests + 6 CLI tests + 10 CSV oracle tests + 9 native synthetic P0 tests = **37 checks** before optional real-data and SQL parity. These **new tests and CLI have NOT yet been executed on a compiled wheel**. Earlier results for 8 tests are historical.
+- **Current required suite counts:** 15 Python/time tests + 6 CLI tests + 10 CSV oracle tests + 9 native synthetic P0 tests = **40 checks** before optional real-data and SQL parity. These **new tests and CLI have NOT yet been executed on a compiled wheel**. Earlier results for 8 tests are historical.
 
 ## Implementation checkpoint — 2026-11-11
 
@@ -157,7 +157,7 @@ A simple `pip install .` from the repository must also work with Rust toolchain 
 
 ### Input-integrity regression — 2026-11-11
 
-The Python wrapper now rejects malformed trusted digests before importing or opening the native reader, requires exactly 64 hexadecimal characters and normalizes accepted upper-case hex to lower-case. `to_utc_microseconds` refuses timezone-aware Python datetimes that represent nonexistent local wall times in a DST spring-forward gap; it does not silently move the requested instant. The CLI validates instants before doing archive I/O, while the Rust core remains the only dataset decoder and cycle classifier. Three focused tests cover these cases using a portable simulated DST timezone (no system `tzdata` needed). The non-skipped M0 base gate is now **37 tests** (12 API/time, 6 CLI, 10 source oracle, 6 native synthetic); compiled wheel, Cargo gates and full owner-dataset parity are still **NOT RUN** here.
+The Python wrapper now rejects malformed trusted digests before importing or opening the native reader, requires exactly 64 hexadecimal characters and normalizes accepted upper-case hex to lower-case. `to_utc_microseconds` refuses timezone-aware Python datetimes that represent nonexistent local wall times in a DST spring-forward gap; it does not silently move the requested instant. The CLI validates instants before doing archive I/O, while the Rust core remains the only dataset decoder and cycle classifier. Three focused tests cover these cases using a portable simulated DST timezone (no system `tzdata` needed). The non-skipped M0 base gate is now **40 tests** (12 API/time, 6 CLI, 10 source oracle, 6 native synthetic); compiled wheel, Cargo gates and full owner-dataset parity are still **NOT RUN** here.
 
 ### Authenticated per-reader private P0 snapshot — 2026-11-12
 
@@ -165,3 +165,17 @@ The initial post-open hash-before-and-after-query guard has been **replaced** wi
 
 This design adds a one-time disk copy and requires extra storage for each live reader, rather than hashing the original file **twice on every query**. It does not defend against a malicious local process manipulating the private directory nor certify astronomical completeness. Tests have been revised/expanded to verify these behaviors using synthetic original data, now **9 compiled native tests** and **37 total mandatory non-skipped tests**. The native PyO3 build and these new regressions are **NOT RUN** here: Cargo/maturin unavailable. `tempfile` is a new cargo dependency; the existing tracked `Cargo.lock` is stale for PyO3 as well and must be regenerated with Cargo and committed after a real Rust toolchain validation.
 
+
+### Explicit Python snapshot lifetime — 2026-11-12
+
+Each live `VirgoStarsEvents` retains a private temporary P0 copy through its native Rust reader. To release this promptly and deterministically from Python application code, the wrapper now supports idempotent `close()`, a read-only `closed` property and context management:
+
+```python
+from virgostars_events import VirgoStarsEvents
+
+with VirgoStarsEvents.open(path, expected_sha256=trusted_sha256) as events:
+    result = events.get_synods_at("2026-11-11T12:00:00Z")
+# The private verified archive is eligible for immediate cleanup here.
+```
+
+Closing clears the wrapper's native-reader reference, which releases the Rust `TempDir` when no additional references exist. Calling `close()` again is harmless; queries/re-entry after closure raise `RuntimeError`; `with` does not suppress exceptions. Three new pure-Python lifecycle tests cover these semantics and raise the **mandatory non-skipped gate to 40** = 15 API/time + 6 CLI + 10 CSV oracle + 9 compiled native. **Isolated Python logic reproduction: 3/3 PASS**; actual changed GitHub package tests, wheel, Rust compilation and original dataset parity **NOT RUN** in this authoring environment. This API does not protect an immutable source against a malicious local process.
