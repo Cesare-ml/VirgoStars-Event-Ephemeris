@@ -315,7 +315,10 @@ def assert_parity(
         # This public Python convenience field must be the *same object* as
         # synods["Moon"], not a separately queried/detached copy that could
         # diverge after callers inspect or update their dictionaries.
-        if result.get("new_moon") is not expected_moon:
+        # The public JSON contract requires an explicit new_moon key even
+        # before the first recorded Moon, where its value must be None.
+        # dict.get() alone cannot distinguish that null from an absent key.
+        if "new_moon" not in result or result["new_moon"] is not expected_moon:
             raise ValueError(f"new_moon alias mismatch at {iso_utc(instant)}")
     return {
         "checked_bodies": len(bodies),
