@@ -909,6 +909,53 @@ mod sha256_syntax_tests {
     use super::canonical_lowercase_sha256;
 
     #[test]
+    fn uppercase_digest_in_golden_p0_header_is_rejected_at_open() {
+        use base64::Engine as _;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        // Modify ONLY a digest's letter case in the existing independent
+        // synthetic P0 fixture. The header size and all compressed blocks
+        // stay byte-for-byte unchanged; open() must reject immediately.
+        let original = include_str!("../tests/fixtures/synthetic.p0.base64").trim();
+        let mut bytes = base64::engine::general_purpose::STANDARD
+            .decode(original)
+            .expect("valid golden P0 base64");
+        let header_len = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
+        let header_end = 12 + header_len;
+        let header: serde_json::Value =
+            serde_json::from_slice(&bytes[12..header_end]).expect("golden P0 header");
+        let lower = header["table_of_contents"][0]["raw_sha256"]
+            .as_str()
+            .expect("first TOC digest")
+            .as_bytes();
+        let relative = bytes[12..header_end]
+            .windows(lower.len())
+            .position(|window| window == lower)
+            .expect("TOC digest bytes in header");
+        let digest = &mut bytes[12 + relative..12 + relative + lower.len()];
+        digest.make_ascii_uppercase();
+        assert!(digest.iter().any(u8::is_ascii_uppercase));
+        assert!(bytes[header_end..].len() > 0);
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("monotonic-ish test filename")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "virgostars-p0-uppercase-digest-{}-{unique}.p0",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).expect("write adversarial P0 fixture");
+        let result = super::P0Archive::open(&path);
+        std::fs::remove_file(&path).expect("remove adversarial P0 fixture");
+        assert!(
+            matches!(result, Err(super::P0Error::Invalid(ref message))
+                if message.contains("bad block SHA-256 digest")),
+            "a noncanonical TOC digest must fail at archive open"
+        );
+    }
+
+    #[test]
     fn sha256_is_exactly_64_lowercase_ascii_hex_digits() {
         assert!(canonical_lowercase_sha256(&"a0".repeat(32)));
         assert!(canonical_lowercase_sha256(&"0123456789abcdef".repeat(4)));
