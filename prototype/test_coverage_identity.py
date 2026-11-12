@@ -9,7 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from coverage_policy import CoverageAwareReader, CoveragePolicy, SCHEMA
+from coverage_policy import (CoverageAwareReader, CoveragePolicy, SCHEMA,
+                             MAX_POLICY_BYTES, MAX_REVIEWED_WINDOWS)
 
 
 class DummyReader:
@@ -86,6 +87,46 @@ class ArchiveBindingTests(unittest.TestCase):
         reader = DummyReader(None)
         with self.assertRaisesRegex(TypeError, "file-backed"):
             CoverageAwareReader(reader, self.load())
+
+    def test_oversized_policy_rejected_before_parsing(self):
+        self.policy_file.write_bytes(b" " * (MAX_POLICY_BYTES + 1))
+        with self.assertRaisesRegex(ValueError, "exceeds maximum size"):
+            self.load()
+
+    def test_exact_policy_size_limit_is_allowed(self):
+        # JSON permits trailing whitespace, testing the true byte limit.
+        original = self.policy_file.read_bytes()
+        self.policy_file.write_bytes(original + b" " * (MAX_POLICY_BYTES - len(original)))
+        self.assertEqual(len(self.load().windows), 1)
+
+    def test_too_many_reviewed_windows_rejected_before_sort(self):
+        entry = {"family": "ingress", "body": "Moon", "start_us": "0",
+                 "end_us_exclusive": "1", "reviewer": "r", "evidence": "e"}
+        self.write_policy([entry] * (MAX_REVIEWED_WINDOWS + 1))
+        self.assertLess(self.policy_file.stat().st_size, MAX_POLICY_BYTES)
+        with self.assertRaisesRegex(ValueError, "too many coverage windows"):
+            self.load()
+
+    def test_non_ascii_decimal_microseconds_rejected(self):
+        # Arabic-Indic digit isdecimal() is True, unlike Rust's ASCII parser.
+        window = {"family": "ingress", "body": "Moon", "start_us": "\u0661",
+                  "end_us_exclusive": "20", "reviewer": "r", "evidence": "e"}
+        self.write_policy([window])
+        with self.assertRaisesRegex(ValueError, "invalid coverage microseconds"):
+            self.load()
+
+    def test_duplicate_top_level_policy_keys_rejected(self):
+        original = self.policy_file.read_text(encoding="utf-8")
+        # Even if the duplicate values agree, the policy must be unambiguous.
+        self.policy_file.write_text(original.replace('"schema":', '"schema": "conflict", "schema":', 1), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "duplicate coverage policy JSON key: schema"):
+            self.load()
+
+    def test_duplicate_nested_window_keys_rejected(self):
+        original = self.policy_file.read_text(encoding="utf-8")
+        self.policy_file.write_text(original.replace('"start_us":', '"start_us": "99", "start_us":', 1), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "duplicate coverage policy JSON key: start_us"):
+            self.load()
 
 
 if __name__ == "__main__":
