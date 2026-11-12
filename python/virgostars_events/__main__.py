@@ -39,13 +39,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         # Fail before hashing/opening a potentially large archive on invalid input.
         to_utc_microseconds(args.instant)
-        reader = VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256)
-        result = reader.get_synods_at(args.instant)
-        output = json.dumps(
-            result,
-            ensure_ascii=False,
-            indent=None if args.compact else 2,
-        )
+        # NativeReader owns a verified private P0 copy. Close on successful
+        # serialization *and* on every query/JSON failure, before printing.
+        with VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256) as reader:
+            result = reader.get_synods_at(args.instant)
+            output = json.dumps(
+                result,
+                ensure_ascii=False,
+                indent=None if args.compact else 2,
+            )
     except (ImportError, OSError, ValueError, TypeError, OverflowError, RuntimeError) as exc:
         print(f"virgostars-events: {exc}", file=sys.stderr)
         return 1
