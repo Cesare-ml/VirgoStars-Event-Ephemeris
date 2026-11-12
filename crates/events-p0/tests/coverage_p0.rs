@@ -242,3 +242,94 @@ fn archive_mutation_after_review_attachment_is_detected() {
     fs::write(&file.0, bytes).unwrap();
     assert!(covered.sign_at(&body("Moon"), instant(3_000_000)).is_err());
 }
+
+#[test]
+fn duplicate_json_policy_keys_are_rejected_at_every_depth() {
+    let file = fixture();
+    let archive = P0Archive::open(&file.0).unwrap();
+    let valid = serde_json::to_string(&json!({
+        "schema": "virgostars-reviewed-coverage/v0",
+        "verification": "human-reviewed-only",
+        "archive_sha256": GOLDEN_SHA256,
+        "reviewed_windows": [reviewed_window("ingress", "Moon", 0, 10)]
+    }))
+    .unwrap();
+    let invalid = [
+        (
+            "top-level",
+            valid.replacen(
+                "\"schema\":",
+                "\"schema\":\"other\",\"schema\":",
+                1,
+            ),
+        ),
+        (
+            "same-value",
+            valid.replacen(
+                "\"schema\":",
+                "\"schema\":\"virgostars-reviewed-coverage/v0\",\"schema\":",
+                1,
+            ),
+        ),
+        (
+            "nested-window",
+            valid.replacen(
+                "\"start_us\":",
+                "\"start_us\":\"99\",\"start_us\":",
+                1,
+            ),
+        ),
+        (
+            "unrecognized-nested-metadata",
+            valid.replacen(
+                "\"reviewed_windows\":",
+                "\"metadata\":{\"nested\":{\"duplicate\":1,\"duplicate\":2}},\"reviewed_windows\":",
+                1,
+            ),
+        ),
+        (
+            "escaped-equivalent-key",
+            valid.replacen(
+                "\"schema\":",
+                "\"\\u0073chema\":\"other\",\"schema\":",
+                1,
+            ),
+        ),
+    ];
+    for (name, json_text) in invalid {
+        let policy = TestFile::new("duplicate-coverage.json", json_text.as_bytes());
+        let error = archive
+            .with_coverage_policy(&policy.0)
+            .err()
+            .expect("ambiguous policy must be rejected");
+        assert!(
+            error.to_string().contains("duplicate coverage policy JSON key"),
+            "{name}: {error}"
+        );
+    }
+}
+
+#[test]
+fn strict_policy_parser_still_accepts_valid_nested_json_values() {
+    let file = fixture();
+    let archive = P0Archive::open(&file.0).unwrap();
+    let document = json!({
+        "schema": "virgostars-reviewed-coverage/v0",
+        "verification": "human-reviewed-only",
+        "archive_sha256": GOLDEN_SHA256,
+        "reviewed_windows": [],
+        "optional_metadata": {
+            "flags": [true, false, null, 7, 1.25, {"note": "synthetic"}]
+        }
+    });
+    let policy_file = TestFile::new(
+        "metadata-coverage.json",
+        &serde_json::to_vec(&document).unwrap(),
+    );
+    let covered = archive.with_coverage_policy(&policy_file.0).unwrap();
+    assert_eq!(covered.reviewed_window_count(), 0);
+    assert!(matches!(
+        covered.sign_at(&body("Moon"), instant(3_000_000)).unwrap(),
+        CoveredState::UnknownCoverage { .. }
+    ));
+}
