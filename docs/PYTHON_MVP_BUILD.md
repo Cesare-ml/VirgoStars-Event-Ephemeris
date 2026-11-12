@@ -151,6 +151,27 @@ py -3 -m unittest discover -s tools -p "test_verify_python_wheel.py" -v
 
 **As of this change:** 8/8 wheel-gate orchestration tests were executed successfully under Python 3.13, with exact GitHub blobs SHA-verified against the locally tested files. A real offline-install **negative** smoke against a deliberately fake pure-Python `_native.py` wheel correctly failed the binary-extension check (exit 1), without validating any compiled Rust wheel. Subprocess environments strip inherited `PYTHONPATH`, `PYTHONHOME` and `PYTHONUSERBASE` to keep the installed console script from resolving developer source code. **No Rust wheel was built or installed here** because Cargo/maturin are unavailable; the complete native gate remains pending on a developer machine. Other Python/platform versions need their own matching wheels.
 
+## 7. One-command local Rust build + wheel acceptance
+
+The optional local helper `tools/build_python_mvp.py` combines all existing required gates into **one fail-closed workflow**. This is a source-checkout developer tool, not an installer or PyPI publisher. It requires Rust/Cargo and **maturin already installed for the Python interpreter being used**.
+
+```powershell
+# From the checked-out PR #5 source, with Cargo on PATH:
+py -3 -m pip install "maturin>=1.8,<2"
+py -3 -m unittest discover -s tools -p "test_build_python_mvp.py" -v
+py -3 tools\build_python_mvp.py
+```
+
+The script runs `tools/validate_rust.py` first (fmt, Clippy, Rust tests, release build), calls `maturin build --release --interpreter <current Python>` into a disposable empty directory, requires exactly one newly built wheel, then runs `tools/verify_python_wheel.py` to perform the **real, offline wheel installation** and **all 34 mandatory non-skipped Python tests**. Only **after every gate has succeeded** is the SHA-256-checked wheel copied into `dist/`. Existing wheels are never overwritten (including a concurrent writer); a failed build/check leaves no newly distributed wheel. This does not tag or upload a release, change GitHub Actions, or bundle original scientific data.
+
+To additionally require original source CSV parity, provide your existing separately authorized local files:
+
+```powershell
+py -3 tools\build_python_mvp.py --archive $env:VSEPH_P0_PATH --sha256 $env:VSEPH_P0_SHA256 --synods-csv "D:\path\to\sinodi.csv"
+```
+
+**Verification status (2026-11-12):** 7/7 orchestration tests **PASS** on Python 3.13 using mocked Cargo/maturin/acceptance process calls. The committed source files exactly match tested Git object hashes: `957a4ea3b14cf7ac074cb65a94f4eca23f42cf8c` and `907bcfb814d8f96d5f05bfd20fea2de3d0d6f3b7`. `compileall` passed. **NOT EXECUTED:** actual Cargo/maturin build or Windows native wheel/owner CSV acceptance in the agent environment; no Rust toolchain is present. The script is not proof of successful production wheel delivery.
+
 ## Validation matrix and scope
 
 | Check | Status as documented here |
