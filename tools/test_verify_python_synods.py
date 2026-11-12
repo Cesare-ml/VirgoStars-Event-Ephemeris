@@ -347,6 +347,27 @@ class SourceCsvTests(unittest.TestCase):
         self.assertIn(instant_us("2018-01-01T00:00:00Z"), probes)
         self.assertEqual(probes, sorted(set(probes)))
 
+        # Historical spread: four genuinely distinct eras even though the
+        # baseline sits near the fourth cycle. This catches regressions that
+        # would pass when only present-day anchors were sampled.
+        series = [
+            SourceSynod(1000 + 100 * i, 500 + i,
+                        (1010 + 100 * i, 1020 + 100 * i, 1030 + 100 * i))
+            for i in range(9)
+        ]
+        historical = select_probes(
+            {"Mars": series}, "1970-01-01T00:00:00.001350Z"
+        )
+        for index in (0, 3, 4, 8):
+            event = series[index]
+            for instant in (event.at, *(event.extras or ())):
+                for adjacent in (instant - 1, instant, instant + 1):
+                    self.assertIn(adjacent, historical)
+        self.assertEqual(historical, sorted(set(historical)))
+        # Four eras times (anchor + three phases) times three adjacent
+        # instants; plus the baseline and four fixed historical gap probes.
+        self.assertLessEqual(len(historical), 4 * 4 * 3 + 5)
+
     def test_lunar_1919_2018_style_gap_is_unknown_not_year_long_cal2(self):
         day_us = 86_400_000_000
         last = SourceSynod(100, 44934, (110, 120, 130))
