@@ -99,7 +99,17 @@ def run_gates(
             raise RuntimeError("P0 auditor did not produce valid JSON") from exc
         if not isinstance(python_report, dict) or not isinstance(rust_report, dict):
             raise RuntimeError("P0 auditors must each report a JSON object")
-        fields = ("sha256", "blocks", "records", "sections")
+        # Both auditors must report the physical file length, not only
+        # matching header-derived counts. A missing value on both sides
+        # must never be treated as matching nulls.
+        if not all(
+            type(report.get("bytes")) is int and report["bytes"] > 0
+            for report in (python_report, rust_report)
+        ):
+            raise RuntimeError("P0 auditors must report a positive file byte length")
+        if rust_report.get("format") != "VSEPH-P0-EXPERIMENTAL":
+            raise RuntimeError("Rust P0 audit reported an unexpected archive format")
+        fields = ("sha256", "bytes", "blocks", "records", "sections")
         differences = [key for key in fields if python_report.get(key) != rust_report.get(key)]
         if differences:
             raise RuntimeError(
