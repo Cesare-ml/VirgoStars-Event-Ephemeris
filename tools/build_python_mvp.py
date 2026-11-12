@@ -54,28 +54,43 @@ def digest(path: Path) -> str:
 
 
 def save_verified_wheel(wheel: Path, out_dir: Path) -> Path:
-    """Never overwrite a pre-existing dist wheel, including a corrupted one."""
+    """Publish a fully copied and hash-verified wheel atomically, without overwrite."""
     out_dir.mkdir(parents=True, exist_ok=True)
     output = out_dir / wheel.name
-    if output.exists():
-        if not output.is_file() or digest(output) != digest(wheel):
+    source_digest = digest(wheel)
+    if output.exists() or output.is_symlink():
+        if output.is_symlink() or not output.is_file() or digest(output) != source_digest:
             raise FileExistsError(f"existing wheel differs; refusing overwrite: {output}")
         return output
-    created = False
+
+    staged: Path | None = None
     try:
-        # O_EXCL prevents accidental overwrite even if another build races us.
-        with output.open("xb") as destination:
-            created = True
+        # Same-directory staging guarantees that publishing by hard link is
+        # atomic and cannot expose a half-copied wheel under its final name.
+        with tempfile.NamedTemporaryFile(
+            mode="wb", prefix=".virgostars-m0-", suffix=".part",
+            dir=out_dir, delete=False,
+        ) as destination:
+            staged = Path(destination.name)
             with wheel.open("rb") as source:
                 shutil.copyfileobj(source, destination)
-        if digest(output) != digest(wheel):
-            raise OSError("copied wheel checksum mismatch")
-    except BaseException:
-        # Never delete a different process's wheel on an O_EXCL race.
-        if created:
-            output.unlink(missing_ok=True)
-        raise
-    return output
+            destination.flush()
+            os.fsync(destination.fileno())
+        if digest(staged) != source_digest or digest(wheel) != source_digest:
+            raise OSError("copied wheel checksum mismatch or source changed during copy")
+        try:
+            # No-clobber publication: unlike os.replace, os.link never
+            # overwrites an artifact another builder has just produced.
+            os.link(staged, output)
+        except FileExistsError:
+            if output.is_symlink() or not output.is_file() or digest(output) != source_digest:
+                raise FileExistsError(f"concurrent wheel differs; refusing overwrite: {output}")
+        if digest(output) != source_digest:
+            raise OSError("published wheel checksum mismatch")
+        return output
+    finally:
+        if staged is not None:
+            staged.unlink(missing_ok=True)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
