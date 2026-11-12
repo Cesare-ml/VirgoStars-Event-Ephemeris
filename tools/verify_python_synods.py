@@ -20,6 +20,7 @@ import csv
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
+from operator import attrgetter
 import re
 from pathlib import Path
 import sys
@@ -106,9 +107,14 @@ def load_synod_csv(path: Path) -> dict[str, list[SourceSynod]]:
     return dict(sorted(result.items()))
 
 
+# Python >=3.10 supports bisect's key argument. Search directly in the
+# already-sorted SourceSynod series instead of allocating a second O(N) list
+# of timestamps for every body at every parity probe.
+_EVENT_AT = attrgetter("at")
+
+
 def expected_row(series: list[SourceSynod], instant: int) -> tuple[SourceSynod | None, SourceSynod | None]:
-    timestamps = [event.at for event in series]
-    position = bisect_right(timestamps, instant)
+    position = bisect_right(series, instant, key=_EVENT_AT)
     if position == 0:
         return None, None
     selected = series[position - 1]
@@ -306,8 +312,10 @@ def main() -> int:
         source = load_synod_csv(args.csv)
         probes = select_probes(source, args.instant)
         from virgostars_events import VirgoStarsEvents
-        reader = VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256)
-        report = assert_parity(reader, source, probes, args.sha256)
+        # The native reader keeps a verified temporary archive copy. Release
+        # it promptly even if source parity detects an error.
+        with VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256) as reader:
+            report = assert_parity(reader, source, probes, args.sha256)
     except (OSError, ValueError, TypeError, KeyError, OverflowError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
