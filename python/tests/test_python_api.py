@@ -169,6 +169,35 @@ def fake_response():
 
 
 class PythonApiTests(unittest.TestCase):
+    def test_native_body_and_source_id_match_recorded_cycle(self):
+        instant = "1970-01-01T00:00:00Z"
+        for body_value in ("Mars", "", None, 123, True):
+            with self.subTest(body=body_value):
+                raw = fake_response()
+                raw["synods"]["Mercury"]["body"] = body_value
+                with self.assertRaisesRegex(ValueError, "native synod body identity mismatch"):
+                    VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
+
+        # A recorded cycle must come from an actual positive source row ID.
+        for source_id in (None, False, True, 0, -1, "27", 27.0):
+            with self.subTest(source_id=source_id):
+                raw = fake_response()
+                raw["synods"]["Mercury"]["source_id"] = source_id
+                with self.assertRaisesRegex(ValueError, "native synod source ID inconsistent"):
+                    VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
+
+        # Without a preceding recorded cycle, there is no source row ID.
+        raw = fake_response()
+        raw["synods"]["Mercury"]["cycle_start_us"] = None
+        with self.assertRaisesRegex(ValueError, "native synod source ID inconsistent"):
+            VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
+
+        raw["synods"]["Mercury"]["source_id"] = None
+        accepted = VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
+        self.assertIsNone(accepted["synods"]["Mercury"]["source_id"])
+        self.assertIsNone(accepted["synods"]["Mercury"]["cycle_start_utc"])
+        self.assertEqual(accepted["synods"]["Mercury"]["status"], "no_preceding_recorded_cycle")
+
     def test_native_cycle_boundaries_must_enclose_the_requested_instant(self):
         # A precomputed reader must never report future events as the
         # already current cycle, or a next anchor <= the requested instant.
@@ -211,6 +240,7 @@ class PythonApiTests(unittest.TestCase):
         # An indexed body with no preceding event remains a legitimate
         # missing state, not a fabricated future cycle.
         missing = fake_response()
+        missing["synods"]["Moon"]["source_id"] = None
         missing["synods"]["Moon"]["cycle_start_us"] = None
         missing["synods"]["Moon"]["next_cycle_start_us"] = None
         # NativeReader serializes null, not a Moon record, when no recorded
