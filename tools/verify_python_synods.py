@@ -83,21 +83,29 @@ def load_synod_csv(path: Path) -> dict[str, list[SourceSynod]]:
     result: dict[str, list[SourceSynod]] = {}
     seen_source_ids: set[int] = set()
     with path.open("r", encoding="utf-8", newline="") as file:
-        reader = csv.DictReader(file)
-        if reader.fieldnames != required:
-            raise ValueError(f"normalized CSV columns differ: {reader.fieldnames!r}")
-        for line, row in enumerate(reader, 2):
-            if None in row:
-                raise ValueError(f"unexpected CSV fields at line {line}")
-            body, source_id, fields = normalized_row("synod", row)
-            if source_id in seen_source_ids:
-                raise ValueError(f"repeated source row ID {source_id} at line {line}")
-            seen_source_ids.add(source_id)
-            at, extras = fields
-            result.setdefault(body, []).append(
-                SourceSynod(at=at, source_id=source_id,
-                            extras=None if extras is None else tuple(extras))
-            )
+        reader = csv.DictReader(file, strict=True)
+        try:
+            if reader.fieldnames != required:
+                raise ValueError(f"normalized CSV columns differ: {reader.fieldnames!r}")
+            for line, row in enumerate(reader, 2):
+                if None in row:
+                    raise ValueError(f"unexpected CSV fields at line {line}")
+                body, source_id, fields = normalized_row("synod", row)
+                if source_id in seen_source_ids:
+                    raise ValueError(f"repeated source row ID {source_id} at line {line}")
+                seen_source_ids.add(source_id)
+                at, extras = fields
+                result.setdefault(body, []).append(
+                    SourceSynod(at=at, source_id=source_id,
+                                extras=None if extras is None else tuple(extras))
+                )
+        except csv.Error as exc:
+            # csv.DictReader is permissive without strict=True: an
+            # unterminated quoted cell can otherwise absorb later rows.
+            # Never compare an ambiguous owner CSV to the Rust archive.
+            raise ValueError(
+                f"malformed normalized synod CSV near line {reader.line_num}: {exc}"
+            ) from exc
     if not result:
         raise ValueError("source CSV contains no synods")
     for body, series in result.items():
