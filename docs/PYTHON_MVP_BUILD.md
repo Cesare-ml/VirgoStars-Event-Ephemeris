@@ -11,9 +11,9 @@ py -3 tools\\validate_python_sources.py
 py -3 -m unittest discover -s tools -p "test_validate_python_sources.py" -v
 ```
 
-It requires exactly **39 non-skipped source tests**: 15 Python API/time + 8 mocked CLI + 16 independent synthetic CSV-oracle tests. It verifies the imported Python package lives under this checkout's `python/` directory and rejects a missing suite, test failure, skip or stale count. It uses only Python >= 3.10 standard-library modules. The source runner's own eight regression cases are separate from those 39 tests.
+It requires exactly **40 non-skipped source tests**: 16 Python API/time + 8 mocked CLI + 16 independent synthetic CSV-oracle tests. It verifies the imported Python package lives under this checkout's `python/` directory and rejects a missing suite, test failure, skip or stale count. It uses only Python >= 3.10 standard-library modules. The source runner's own eight regression cases are separate from those 39 tests.
 
-**This is explicitly NOT M0 acceptance**: the real local Python/Rust package still needs `cargo generate-lockfile`, `py -3 tools\\build_python_mvp.py`, the **48-case installed-wheel validator** (including 9 compiled Rust/PyO3 tests), and the authorized original CSV/P0 parity check. The **8/8 exact source-runner unit tests PASSED** locally under Python 3.13.5 from GitHub-byte-verified files (`git hash-object` matched both blobs). A synthetic 39-case local checkout PASS and a deliberate skip correctly produced nonzero. **The real repository's 39 source tests and the compiled 48-case wheel gate have NOT RUN**; the local synthetic checkout exercises the gate's control flow only.
+**This is explicitly NOT M0 acceptance**: the real local Python/Rust package still needs `cargo generate-lockfile`, `py -3 tools\\build_python_mvp.py`, the **49-case installed-wheel validator** (including 9 compiled Rust/PyO3 tests), and the authorized original CSV/P0 parity check. The **8/8 exact source-runner unit tests PASSED** locally under Python 3.13.5 from GitHub-byte-verified files (`git hash-object` matched both blobs). A synthetic 39-case local checkout PASS and a deliberate skip correctly produced nonzero. **The real repository's 39 source tests and the compiled 48-case wheel gate have NOT RUN**; the local synthetic checkout exercises the gate's control flow only.
 
 ## M0: fail-fast owner-data input checks (2026-11-12)
 
@@ -126,7 +126,7 @@ The smoke tests must **run**, not skip, and return source IDs/recorded phases pl
 
 The real-data smoke suite now contains **3 owner-snapshot tests**, including the two source gaps (1919 and 2018). Using the owner-approved 2026-11-10 P0 snapshot, the smoke test must prove that `get_synods_at("1919-06-01T00:00:00Z")` and `get_synods_at("2018-06-01T00:00:00Z")` retain recorded Moon source IDs **44934** and **46146**, report `phase.code=None` / `phase.status="unknown_discontinuous_moon_anchors"`, and include the `moon_recorded_cycle_gap_over_45_days` warning. Normal Moon cycles must still classify their source thresholds. A gap guard is not scientific completeness certification; see [Moon gaps](MOON_SYNOD_SOURCE_GAPS.md).
 
-The independent CSV oracle contains **16 tests** (including UTC probe precision and a year-long gap regression); the mandatory base Python/PyO3 suite contains **48 non-skipped tests** (15 API/time + 8 CLI + 16 oracle + 9 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
+The independent CSV oracle contains **16 tests** (including UTC probe precision and a year-long gap regression); the mandatory base Python/PyO3 suite contains **49 non-skipped tests** (16 API/time + 8 CLI + 16 oracle + 9 native synthetic). With the owner archive, **three more** smoke tests and source CSV parity are required. **All new Rust and native Python changes remain to be built and executed on Windows.**
 
 ## 4a. Independent source-CSV parity of the installed Python API
 
