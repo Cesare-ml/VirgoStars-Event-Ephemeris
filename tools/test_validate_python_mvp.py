@@ -177,5 +177,39 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
         self.assertEqual(runner.call_count, 2)
 
 
+    def test_real_unittest_early_stop_is_not_a_false_success(self):
+        # A real TextTestRunner can return wasSuccessful=True and no skips
+        # despite executing only one of two discovered cases.
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            (directory / "test_m0_early_stop.py").write_text(
+                "import unittest\\n"
+                "class EarlyStop(unittest.TestCase):\\n"
+                "    def test_01_stop(self):\\n"
+                "        self._outcome.result.stop()\\n"
+                "    def test_02_must_run(self):\\n"
+                "        self.assertTrue(True)\\n",
+                encoding="utf-8",
+            )
+            with patch("sys.stdout", new_callable=StringIO) as output, redirect_stderr(StringIO()) as error:
+                self.assertFalse(validator.run_tests("test_m0_early_stop.py", 2, directory))
+            self.assertIn("discovered=2, ran=1", error.getvalue())
+            self.assertNotIn("PASS:", output.getvalue())
+
+    def test_real_unittest_complete_suite_is_accepted(self):
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            (directory / "test_m0_complete_suite.py").write_text(
+                "import unittest\\n"
+                "class Complete(unittest.TestCase):\\n"
+                "    def test_01(self): self.assertTrue(True)\\n"
+                "    def test_02(self): self.assertEqual(1 + 1, 2)\\n",
+                encoding="utf-8",
+            )
+            with patch("sys.stdout", new_callable=StringIO) as output, redirect_stderr(StringIO()):
+                self.assertTrue(validator.run_tests("test_m0_complete_suite.py", 2, directory))
+            self.assertIn("PASS: test_m0_complete_suite.py: 2/2", output.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
