@@ -80,3 +80,83 @@ fn main() {
         process::exit(2);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::verify_archive;
+    use base64::Engine as _;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    const FIXTURE_SHA: &str = "4b7dbe3171633402b76565df79a31066f58913b52b2839c735ea3e68cb413499";
+
+    struct TemporaryArchive(PathBuf);
+
+    impl Drop for TemporaryArchive {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    fn golden_bytes() -> Vec<u8> {
+        base64::engine::general_purpose::STANDARD
+            .decode(include_str!("../../tests/fixtures/synthetic.p0.base64").trim())
+            .expect("independently authored synthetic P0 fixture")
+    }
+
+    fn write_archive(bytes: &[u8]) -> TemporaryArchive {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("valid system clock")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "virgostars-p0-verify-{}-{nonce}.p0",
+            std::process::id()
+        ));
+        std::fs::write(&path, bytes).expect("write temporary synthetic archive");
+        TemporaryArchive(path)
+    }
+
+    #[test]
+    fn trusted_golden_archive_reports_all_verified_fields() {
+        let input = write_archive(&golden_bytes());
+        let report = verify_archive(&input.0, Some(FIXTURE_SHA))
+            .expect("the original synthetic P0 archive must pass");
+        assert_eq!(report["sha256"], FIXTURE_SHA);
+        assert_eq!(report["sha256_checked_against_expected"], true);
+        assert_eq!(report["format"], "VSEPH-P0-EXPERIMENTAL");
+        assert_eq!(report["bytes"], 1470);
+        assert_eq!(report["blocks"], 4);
+        assert_eq!(report["records"], 8);
+        assert_eq!(report["sections"]["synod"], 3);
+        assert_eq!(report["sections"]["motion"], 2);
+        assert_eq!(report["sections"]["ingress"], 3);
+        assert_eq!(report["coverage_certified"], false);
+    }
+
+    #[test]
+    fn wrong_trusted_hash_rejected_before_decoding_corrupt_block() {
+        let mut corrupted = golden_bytes();
+        *corrupted.last_mut().expect("nonempty fixture") ^= 0x7f;
+        let input = write_archive(&corrupted);
+        // Both the file identity and compressed block are now wrong.
+        // The expected SHA must be diagnosed FIRST, before zlib decoding.
+        let error = verify_archive(&input.0, Some(FIXTURE_SHA))
+            .expect_err("wrong trusted archive must fail");
+        assert!(
+            error.to_string().contains("whole-file archive SHA-256 mismatch"),
+            "identity verification must precede block decode: {error}"
+        );
+    }
+
+    #[test]
+    fn full_block_audit_still_required_without_trusted_sha() {
+        let input = write_archive(&golden_bytes());
+        let report = verify_archive(&input.0, None).expect("valid untrusted fixture still audited");
+        assert_eq!(report["sha256_checked_against_expected"], false);
+        let mut corrupted = golden_bytes();
+        *corrupted.last_mut().unwrap() ^= 0x7f;
+        let altered = write_archive(&corrupted);
+        assert!(verify_archive(&altered.0, None).is_err());
+    }
+}
