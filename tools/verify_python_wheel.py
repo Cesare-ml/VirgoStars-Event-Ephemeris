@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Execute in a DIFFERENT working directory so source imports cannot mask a
 # missing wheel. Both the Python package and compiled native extension must
-# be inside the temporary venv. A pure-Python _native.py must not pass.
+# be inside the temporary venv. A pure-Python `_native.py` must not pass.
 INSTALLED_PROBE = """
 from importlib.machinery import EXTENSION_SUFFIXES
 from importlib.metadata import version
