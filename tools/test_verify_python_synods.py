@@ -420,6 +420,28 @@ class SourceCsvTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "empty indexed body series"):
             select_probes({"Mars": []}, "1970-01-01T00:00:00Z")
 
+        # Both endpoints are valid source timestamps; sampling +/-1 us
+        # around them must not manufacture impossible year 0000/10000
+        # queries, while retaining all other valid adjacent instants.
+        first = instant_us("0001-01-01T00:00:00Z")
+        last = instant_us("9999-12-31T23:59:59.999999Z")
+        boundary_source = {
+            "Moon": [
+                SourceSynod(first, 1, (first + 1, first + 2, first + 3)),
+                SourceSynod(last, 2, None),
+            ]
+        }
+        bounded = select_probes(boundary_source, "1970-01-01T00:00:00Z")
+        self.assertIn(first, bounded)
+        self.assertIn(first + 1, bounded)
+        self.assertIn(last - 1, bounded)
+        self.assertIn(last, bounded)
+        self.assertNotIn(first - 1, bounded)
+        self.assertNotIn(last + 1, bounded)
+        self.assertTrue(all(first <= probe <= last for probe in bounded))
+        # No generated probe may fail UTC formatting or change microseconds.
+        self.assertTrue(all(instant_us(iso_utc(probe)) == probe for probe in bounded))
+
 
 if __name__ == "__main__":
     unittest.main()
