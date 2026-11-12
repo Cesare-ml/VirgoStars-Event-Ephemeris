@@ -313,6 +313,35 @@ class SourceCsvTests(unittest.TestCase):
                 without_moon, [49], "a" * 64,
             )
 
+        # Required JSON fields must be present even if their value would
+        # legitimately be null before the first recorded synod cycle.
+        # A dict.get() comparison alone would falsely accept each omission.
+        for field in (
+            "source_id", "cycle_start_utc", "next_cycle_start_utc",
+            "phase_thresholds_utc",
+        ):
+            def omit_field(result):
+                del result["synods"]["Moon"][field]
+
+            with self.subTest(missing=field), self.assertRaisesRegex(
+                ValueError, "parity mismatch Moon"
+            ):
+                assert_parity(
+                    OracleReader(source, omit_field), source, [49], "a" * 64
+                )
+
+        for field in ("code", "started_at_utc"):
+            def omit_phase_field(result):
+                del result["synods"]["Moon"]["phase"][field]
+
+            with self.subTest(missing_phase=field), self.assertRaisesRegex(
+                ValueError, "parity mismatch Moon.*phase"
+            ):
+                assert_parity(
+                    OracleReader(source, omit_phase_field),
+                    source, [49], "a" * 64,
+                )
+
     def test_wrong_source_row_id_is_detected(self):
         def bad(result):
             result["synods"]["Moon"]["source_id"] = 999
