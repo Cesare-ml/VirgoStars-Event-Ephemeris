@@ -135,7 +135,7 @@ $wheel = (Get-ChildItem .\dist\*.whl | Select-Object -Last 1).FullName
 py -3 tools\verify_python_wheel.py --wheel $wheel
 ```
 
-This creates and deletes a temporary virtual environment, performs `pip install --no-index --no-deps` on the **actual wheel**, runs isolated package/native import and CLI checks, and invokes `tools/validate_python_mvp.py` with its mandatory 34 non-skipped checks (12 Python API, 6 CLI, 10 CSV-oracle, 6 native fixture). Invalid inputs and subprocess failures return nonzero. This requires a **prebuilt wheel**; it does not compile Rust or certify scientific completeness.
+This creates and deletes a temporary virtual environment, performs `pip install --no-index --no-deps` on the **actual wheel**, requires the installed `_native` file to be a compiled extension (not merely a Python shim) physically inside the test venv, runs both `python -m virgostars_events --version` and the pip-created `virgostars-events --version` console launcher (Windows `.exe`), and invokes `tools/validate_python_mvp.py` with its mandatory 34 non-skipped checks (12 Python API, 6 CLI, 10 CSV-oracle, 6 native fixture). Invalid inputs and subprocess failures return nonzero. This requires a **prebuilt wheel**; it does not compile Rust or certify scientific completeness.
 
 When the owner-authorized separate archive and normalized source CSV have been assembled and verified, the stricter read-only comparison is:
 
@@ -149,7 +149,7 @@ Unit tests for the *orchestrator* (subprocess calls are mocked, not a substitute
 py -3 -m unittest discover -s tools -p "test_verify_python_wheel.py" -v
 ```
 
-**As of this change:** 5/5 wheel-gate orchestration tests were executed successfully under Python 3.13, with repository blobs SHA-verified against the locally tested files. **No Rust wheel was built or installed here** because Cargo/maturin are unavailable; the complete native gate remains pending on a developer machine. Other Python/platform versions need their own matching wheels.
+**As of this change:** 7/7 wheel-gate orchestration tests were executed successfully under Python 3.13, with exact GitHub blobs SHA-verified against the locally tested files. A real offline-install **negative** smoke against a deliberately fake pure-Python `_native.py` wheel correctly failed the binary-extension check (exit 1), without validating any compiled Rust wheel. **No Rust wheel was built or installed here** because Cargo/maturin are unavailable; the complete native gate remains pending on a developer machine. Other Python/platform versions need their own matching wheels.
 
 ## Validation matrix and scope
 
