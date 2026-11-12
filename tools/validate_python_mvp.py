@@ -71,7 +71,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     # Reject invalid owner-data arguments BEFORE importing PyO3 or spending
-    # time running the mandatory 50 tests. Never silently normalize a
+    # time running the mandatory 51 tests. Never silently normalize a
     # potentially mistyped digest: the original snapshot identity is trusted.
     if bool(args.archive) != bool(args.sha256):
         parser.error("--archive and --sha256 must be given together")
@@ -95,7 +95,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     # Explicit close()/with cleanup must release the native per-reader snapshot.
-    if not run_tests("test_python_api.py", 17):
+    if not run_tests("test_python_api.py", 18):
         return 1
     # CLI source tests validate safe JSON output, required trusted digest,
     # timestamp precision and usable nonzero exit status for invalid input.
