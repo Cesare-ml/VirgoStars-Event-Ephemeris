@@ -32,11 +32,11 @@ def fake_result(*, passed=True, skipped=None, ran=15,
 class PythonSourceGateTests(unittest.TestCase):
     def test_source_gate_excludes_native_and_owner_data(self):
         self.assertEqual(gate.SOURCE_SUITES, (
-            ("test_python_api.py", 17, "python/tests"),
+            ("test_python_api.py", 18, "python/tests"),
             ("test_cli.py", 8, "python/tests"),
             ("test_verify_python_synods.py", 16, "tools"),
         ))
-        self.assertEqual(sum(item[1] for item in gate.SOURCE_SUITES), 41)
+        self.assertEqual(sum(item[1] for item in gate.SOURCE_SUITES), 42)
         self.assertNotIn("test_native_fixture.py", str(gate.SOURCE_SUITES))
 
     def test_missing_suite_case_fails_before_running_tests(self):
@@ -109,7 +109,7 @@ class PythonSourceGateTests(unittest.TestCase):
         with patch.object(gate, "run_suite", return_value=True) as runner, redirect_stdout(StringIO()) as output:
             self.assertEqual(gate.main(), 0)
         self.assertEqual(runner.call_count, 3)
-        self.assertIn("41/41 source-only tests", output.getvalue())
+        self.assertIn("42/42 source-only tests", output.getvalue())
         self.assertIn("NOT validated", output.getvalue())
 
     def test_first_failing_suite_stops_the_source_gate(self):
