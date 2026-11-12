@@ -17,6 +17,8 @@
 
 **P0 header SHA-256 canonicalization (2026-11-12, draft PR #5):** Rust `P0Archive::open` now rejects uppercase or otherwise noncanonical `raw_sha256` TOC entries **before** decoding any block; its trusted whole-archive hash format uses the same strictly 64-lowercase-ASCII-hex predicate. Added two Rust tests (syntax + mutated golden P0 header, identical compressed payload). A 4-case independent Python verification of the fixture and mutation passed; **actual Rust tests and wheel compile remain pending** because Cargo is not installed here and `Cargo.lock` is stale. This is format-integrity hardening, not M0 delivery.
 
+**P0 canonical binary varints (2026-11-12, draft PR #5):** Rust `take_varint` and the independent Python P0 audit now reject overlong unsigned LEB128 encodings while preserving canonical u64 values; this prevents different byte strings from representing the same recorded ID, timestamp delta or source phase marker. Added **3 Rust unit-test methods** and **2 Python P0-audit test methods** with valid-checksum synthetic malformed archives. A standalone Python reconstruction of the new predicate plus compressed fixture scenarios passed **8/8**, but actual committed Rust tests and full test suites have NOT RUN here. Keep this provisional P0 hardening distinct from the eventual VSEPH v1 format freeze.
+
 ## M0 — FIRST user-facing deliverable: installable Python synod MVP
 
 **Deliver this BEFORE JS/TS WASM, production backend migration or frozen VSEPH v1.** Full acceptance criteria and proposed dictionary API: [Python-first MVP](PYTHON_FIRST_MVP.md). End-to-end delivery order including post-MVP features: [Delivery milestones M0–M5](DELIVERY_MILESTONES.md).
