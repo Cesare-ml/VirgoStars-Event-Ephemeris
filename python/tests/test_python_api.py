@@ -213,6 +213,10 @@ class PythonApiTests(unittest.TestCase):
         missing = fake_response()
         missing["synods"]["Moon"]["cycle_start_us"] = None
         missing["synods"]["Moon"]["next_cycle_start_us"] = None
+        # NativeReader serializes null, not a Moon record, when no recorded
+        # lunar anchor precedes the requested instant. Keep the fixture
+        # consistent with the fail-closed transport contract.
+        missing["new_moon"] = None
         result = VirgoStarsEvents(DummyNative(missing)).get_synods_at(
             "1970-01-01T00:00:00Z"
         )
