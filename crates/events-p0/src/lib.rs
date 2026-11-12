@@ -935,7 +935,7 @@ mod sha256_syntax_tests {
         let digest = &mut bytes[12 + relative..12 + relative + lower.len()];
         digest.make_ascii_uppercase();
         assert!(digest.iter().any(u8::is_ascii_uppercase));
-        assert!(bytes[header_end..].len() > 0);
+        assert!(!bytes[header_end..].is_empty());
 
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
