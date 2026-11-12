@@ -70,6 +70,15 @@ def prepare(root: Path = ROOT, *, apply: bool = False,
             print("FAIL: tracked changes exist; review, commit or stash them first:\n" + status,
                   file=sys.stderr)
             return 1
+        # Git commands can operate on a parent repository even if Cargo.toml
+        # lives in an unrelated nested folder. Require this exact workspace
+        # to be the actual Git checkout root before running Cargo.
+        git_root = command([git, "rev-parse", "--show-toplevel"], root, run=run).strip()
+        if Path(git_root).resolve() != root.resolve():
+            raise RuntimeError(
+                f"Cargo workspace is not the Git repository root: {root.resolve()} "
+                f"(Git root: {git_root})"
+            )
         # Cargo.lock is a tracked release input: an untracked lockfile is
         # invisible to `git diff` and could otherwise be reported as verified
         # without any change available to commit or review.
