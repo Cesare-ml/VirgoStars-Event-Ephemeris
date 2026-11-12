@@ -131,7 +131,7 @@ class DummyNative:
 
 
 def fake_response():
-    return {
+    raw = {
         "requested_at_us": 0,
         "dataset": {"id": None, "sha256": "a" * 64, "format": "VSEPH-P0", "coverage_certified": False},
         "synods": {
@@ -162,6 +162,10 @@ def fake_response():
         },
         "new_moon": None,
     }
+    # Rust serializes a value-equal Moon object (distinct JSON location).
+    # Use the same raw mapping here so mutation tests stay consistent.
+    raw["new_moon"] = raw["synods"]["Moon"]
+    return raw
 
 
 class PythonApiTests(unittest.TestCase):
@@ -255,6 +259,33 @@ class PythonApiTests(unittest.TestCase):
         self.assertFalse(data["dataset"]["coverage_certified"])
         json.dumps(data)
 
+        # The wrapper must not quietly repair a contradictory native Moon
+        # alias. Both omitted and value-divergent native fields are invalid.
+        for corruption in ("missing", "null", "wrong-id", "unrelated"):
+            with self.subTest(corruption=corruption):
+                raw = fake_response()
+                if corruption == "missing":
+                    del raw["new_moon"]
+                elif corruption == "null":
+                    raw["new_moon"] = None
+                elif corruption == "wrong-id":
+                    raw["new_moon"] = dict(raw["synods"]["Moon"], source_id=999)
+                else:
+                    raw["new_moon"] = raw["synods"]["Mercury"]
+                with self.assertRaisesRegex(ValueError, "new_moon disagrees"):
+                    VirgoStarsEvents(DummyNative(raw)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        for malformed_synods in (None, [], {"Moon": None}):
+            with self.subTest(malformed_synods=malformed_synods):
+                raw = fake_response()
+                raw["synods"] = malformed_synods
+                with self.assertRaisesRegex(ValueError, "synods object of records"):
+                    VirgoStarsEvents(DummyNative(raw)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
     def test_empty_extra_array_not_confused_with_sql_null(self):
         raw = fake_response()
         raw["synods"]["Moon"]["phase_thresholds_us"] = []
@@ -266,6 +297,7 @@ class PythonApiTests(unittest.TestCase):
         raw["synods"]["Moon"]["source_id"] = None
         raw["synods"]["Moon"]["cycle_start_us"] = None
         raw["synods"]["Moon"]["phase"]["status"] = "no_preceding_recorded_cycle"
+        raw["new_moon"] = None  # Native P0 emits null when no Moon anchor precedes X.
         data = VirgoStarsEvents(DummyNative(raw)).get_synods_at("1970-01-01T00:00:00Z")
         self.assertIsNone(data["new_moon"])
         self.assertEqual(
