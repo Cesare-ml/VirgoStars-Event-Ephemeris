@@ -106,3 +106,7 @@ Each agent handoff/PR must include: `task / issue`, `base commit and branch`, `s
 ## Priority queue
 
 Use `docs/ROADMAP.md` for exact acceptance criteria and `docs/WORK_LOG.md` for latest handoffs. Follow the **M0 Python-first MVP** in `docs/ROADMAP.md` and `docs/PYTHON_FIRST_MVP.md`: validate the existing experimental Rust reader, implement latest synods/new-moon/phase in Rust, then a pip-installable Python PyO3/maturin binding with a real Windows smoke test. After M0, progress toward full backend query parity, scientific coverage review, VSEPH v1 and JS/WASM. Data export requires authorized database access; without it, work on synthetic fixtures and validation tooling, not fake real data.
+
+## Native PyO3 SHA trust-anchor validation (2026-11-12)
+
+The Python facade checks `expected_sha256`, but `virgostars_events._native.NativeReader` is directly constructible. Its Rust constructor now rejects anything other than **64 lowercase ASCII hexadecimal digits before opening the archive or allocating a temporary verified copy**. The existing compiled golden fixture test has extra subcases proving that malformed input on a nonexistent path raises `ValueError` rather than an I/O error, while a valid-format SHA on that same missing path raises `OSError`. Nine native test *methods* and 48 mandatory M0 cases remain unchanged. **Cargo/rustc/maturin are unavailable here; new Rust code and compiled native regression NOT RUN.** Keep PR #5 draft, no merge, release or scientific dataset modifications.
