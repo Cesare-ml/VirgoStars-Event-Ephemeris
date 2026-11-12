@@ -53,7 +53,19 @@ last_recorded = reader.at("ingress", "Moon", "3000-01-01T00:00:00Z")
 - `status="unknown_initial_state"`: `t` lies in a reviewed interval, but no event within that interval has yet established an initial state; `state=None`.
 - `status="verified"`: the timestamp is in a reviewed interval, with an event recorded at/after its start and at/before `t`; `state` includes source ID, event microseconds and sign, with direction for motion, and reviewer/evidence fields.
 
-Time values are signed `i64` POSIX microsecond strings in policy JSON. Windows are **[start_us, end_us_exclusive)**. Disjoint reviewed windows are allowed; overlapping ones for one family/body are rejected. A policy must bind to the actual archive SHA-256; mismatched versions fail before querying. A review record requires `family`, `body`, `start_us`, `end_us_exclusive`, `reviewer` and `evidence`.
+Time values are signed `i64` POSIX microsecond strings in policy JSON. Windows are **[start_us, end_us_exclusive)**. Disjoint reviewed windows are allowed; overlapping ones for one family/body are rejected. A policy must bind to the actual archive SHA-256; mismatched versions fail before querying.
+
+### Archive/reader identity hardening (2026-11-12)
+
+The experimental Python adapter now **checks the hash of the actual reader file**, not only the archive path supplied when the policy was loaded:
+
+- `CoveragePolicy.load(policy_path, archive_path)` records the verified full-file SHA-256; `CoverageAwareReader(reader, policy)` rejects another reader path unless the bytes match.
+- Every `sign_at`/`direction_at` verifies the file digest **before and after** reading an event, including for unreviewed windows, so later file changes or stale cached blocks do not quietly produce reviewed states.
+- Hash mismatches raise `ValueError` and queries fail closed. Readers must expose a filesystem `path`; the direct raw `VSEPHReader` diagnostic APIs do not perform these full-file rechecks.
+- This prototype intentionally incurs **two complete streaming SHA-256 reads per state query** (~8.3 MB of hashing against the current 4.14 MB archive). It is an integrity-first implementation, not a benchmark or a solution to hostile concurrent filesystem writes; a trusted immutable snapshot/file descriptor is preferable for the authoritative Rust runtime.
+
+The SHA-256 check confirms **byte identity**, not scientific correctness, completeness, data licensing or an authenticated reviewer's authority. The currently distributed policy still approves **no intervals**.
+ A review record requires `family`, `body`, `start_us`, `end_us_exclusive`, `reviewer` and `evidence`.
 
 ## How to review a missing interval
 
@@ -70,9 +82,10 @@ The policy does not certify astrological interpretation or precision in arcsecon
 ```bash
 python tools/assemble_dataset.py
 python prototype/test_coverage_policy.py
+python prototype/test_coverage_identity.py
 python prototype/test_vseph_prototype.py
 ```
 
-The new coverage tests use intentionally fabricated data; they check zero-window fail-closed results, exact inclusive/exclusive boundaries, initial-state prerequisites, direction-vs-ingress separation, invalid intervals, missing evidence and an incorrect archive hash. They do not claim coverage for the real 380,844 events.
+The coverage and archive-identity tests use intentionally fabricated data; they check zero-window fail-closed results, exact inclusive/exclusive boundaries, initial-state prerequisites, direction-vs-ingress separation, invalid intervals, missing evidence and an incorrect archive hash. They do not claim coverage for the real 380,844 events.
 
 See also [DATASET_UPLOAD](DATASET_UPLOAD.md), [API_CONTRACTS](API_CONTRACTS.md), and issues [#7](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/7) and [#8](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/8).
