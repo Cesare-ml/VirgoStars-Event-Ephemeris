@@ -38,18 +38,22 @@ def run_tests(pattern: str, minimum_tests: int, test_dir: Path = TESTS) -> bool:
         )
         return False
     result = unittest.TextTestRunner(verbosity=2).run(suite)
-    # unittest may report OK even if a test calls result.stop() and the
-    # remaining discovered tests never run. Require full execution, not
-    # merely wasSuccessful() and zero skipped tests.
+    # unittest can report OK with expected failures, or after result.stop()
+    # silently prevents other discovered tests from running. Neither proves
+    # full native acceptance: every discovered test must actually PASS.
     if (
         not result.wasSuccessful()
         or result.skipped
+        or result.expectedFailures
+        or result.unexpectedSuccesses
         or result.testsRun != count
     ):
         print(
             f"FAIL: {pattern}: discovered={count}, ran={result.testsRun}, "
             f"failures={len(result.failures)}, errors={len(result.errors)}, "
-            f"skipped={len(result.skipped)}",
+            f"skipped={len(result.skipped)}, "
+            f"expected_failures={len(result.expectedFailures)}, "
+            f"unexpected_successes={len(result.unexpectedSuccesses)}",
             file=sys.stderr,
         )
         return False
