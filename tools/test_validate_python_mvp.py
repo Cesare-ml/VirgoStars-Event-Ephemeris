@@ -97,7 +97,7 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
         self.assertEqual(
             [call.args[:2] for call in runner.call_args_list],
             [
-                ("test_python_api.py", 16),
+                ("test_python_api.py", 17),
                 ("test_cli.py", 8),
                 ("test_verify_python_synods.py", 16),
                 ("test_native_fixture.py", 9),
@@ -108,7 +108,7 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
         # Prevent parallel agents from adding coverage while leaving the
         # mandatory installed-wheel acceptance gate silently out of date.
         suites = (
-            ("test_python_api.py", 16, validator.TESTS),
+            ("test_python_api.py", 17, validator.TESTS),
             ("test_cli.py", 8, validator.TESTS),
             ("test_verify_python_synods.py", 16, validator.TOOLS_TESTS),
             ("test_native_fixture.py", 9, validator.TESTS),
