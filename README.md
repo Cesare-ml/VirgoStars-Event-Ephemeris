@@ -6,6 +6,8 @@
 
 **Rust/Python transport integrity (2026-11-12, draft PR #5):** The Python facade now refuses a native response unless it is a JSON object with an actual integer `requested_at_us` exactly matching the caller's requested UTC microsecond count. A wrong, missing, boolean, float or string timestamp raises `ValueError` rather than silently relabeling events from another instant. One Python API regression covers these cases and non-object JSON. The source-only acceptance threshold is now **41** tests, and the compiled PyO3 wheel requires **50 non-skipped** tests. Only an isolated 14-case integrity reproduction ran locally; a complete installed/native build has **not** yet been verified.
 
+**P0 byte-audit parity (2026-11-12, draft PR #5):** The local `p0-verify` Rust CLI now emits the physical archive `bytes` count. When a separately trusted local snapshot is supplied, `tools/validate_rust.py` rejects a malformed/missing byte count, Python/Rust size mismatch or a Rust response claiming a format other than `VSEPH-P0-EXPERIMENTAL`, alongside existing SHA/block/event-count checks. Three new Python orchestration tests cover these failures. The original independent synthetic P0 reference was checked as **1470 bytes, 4 blocks, 8 events**, and **9/9 local predicate-reproduction tests passed**. This does **not** replace actual Cargo/native tests, which remain blocked on `Cargo.lock` regeneration.
+
 ## First product milestone: Python synods, Moon new moon and current cycle phase
 
 **The first usable MVP is a locally pip-installable Python library**, ahead of WASM, a stable VSEPH v1 format, and production replacement. The planned API is:
