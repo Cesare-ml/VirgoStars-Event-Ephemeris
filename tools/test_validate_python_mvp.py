@@ -196,6 +196,38 @@ class NativeMvpGatePreflightTests(unittest.TestCase):
             self.assertIn("discovered=2, ran=1", error.getvalue())
             self.assertNotIn("PASS:", output.getvalue())
 
+    def test_real_unittest_expected_failure_cannot_pass_native_gate(self):
+        # unittest reports OK for @expectedFailure; acceptance cannot count
+        # that as a genuinely passing Rust/Python integration test.
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            (directory / "test_m0_native_expected_failure.py").write_text(
+                "import unittest\n"
+                "class KnownFailure(unittest.TestCase):\n"
+                "    @unittest.expectedFailure\n"
+                "    def test_native_reader(self): self.assertEqual(1, 2)\n",
+                encoding="utf-8",
+            )
+            with patch("sys.stdout", new_callable=StringIO) as output, redirect_stderr(StringIO()) as errors:
+                self.assertFalse(validator.run_tests("test_m0_native_expected_failure.py", 1, directory))
+            self.assertIn("expected_failures=1", errors.getvalue())
+            self.assertNotIn("PASS:", output.getvalue())
+
+    def test_real_unittest_unexpected_success_cannot_pass_native_gate(self):
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            (directory / "test_m0_native_unexpected_success.py").write_text(
+                "import unittest\n"
+                "class Unexpected(unittest.TestCase):\n"
+                "    @unittest.expectedFailure\n"
+                "    def test_still_decorated(self): self.assertEqual(1, 1)\n",
+                encoding="utf-8",
+            )
+            with patch("sys.stdout", new_callable=StringIO) as output, redirect_stderr(StringIO()) as errors:
+                self.assertFalse(validator.run_tests("test_m0_native_unexpected_success.py", 1, directory))
+            self.assertIn("unexpected_successes=1", errors.getvalue())
+            self.assertNotIn("PASS:", output.getvalue())
+
     def test_real_unittest_complete_suite_is_accepted(self):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)
