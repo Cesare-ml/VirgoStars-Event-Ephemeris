@@ -3,10 +3,10 @@
 # Powered by VirgoStars — https://www.virgostars.it/
 """Build, verify and retain one local Python M0 wheel (never publish it).
 
-Run on a machine with Rust/Cargo and maturin installed. Fail closed: first
-validate Rust, then build into an isolated temporary directory, then install
-and exercise the *real* wheel via verify_python_wheel.py. Only a wheel that
-passes all gates is copied to dist/, without replacing existing artifacts.
+Run on a machine with Rust/Cargo and maturin installed. Fail closed: run
+the 42-case source suite, then 14 synthetic P0 byte-audit cases without
+skips, then validate Rust, build in isolation and install/exercise the real
+wheel. Only a wheel that passes all gates is copied to dist/.
 """
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Catch Python facade, CLI and independent CSV-oracle regressions
         # before the much slower locked Cargo build. This source gate is
         # strictly non-native; successful wheels still require the entire
-        # real PyO3/50-case installed test suite below.
+        # real PyO3/51-case installed test suite below.
         run([sys.executable, ROOT / "tools" / "validate_python_sources.py"])
         # The independent binary P0 integrity tests must also pass without
         # skips; their optional owner archive test is a separate gate.
