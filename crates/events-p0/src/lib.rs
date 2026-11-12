@@ -911,6 +911,73 @@ fn decode_records(
 }
 
 #[cfg(test)]
+mod canonical_varint_tests {
+    use super::{decode_records, take_varint, BodyId, EventFamily};
+
+    #[test]
+    fn accepts_only_minimal_unsigned_leb128_values() {
+        for (bytes, expected) in [
+            (&[0x00][..], 0u64),
+            (&[0x01][..], 1),
+            (&[0x7f][..], 127),
+            (&[0x80, 0x01][..], 128),
+            (&[0xff, 0x7f][..], 16_383),
+            (&[0x80, 0x80, 0x01][..], 16_384),
+            (&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01][..], u64::MAX),
+        ] {
+            let mut pos = 0;
+            assert_eq!(take_varint(bytes, &mut pos).unwrap(), expected);
+            assert_eq!(pos, bytes.len());
+        }
+    }
+
+    #[test]
+    fn rejects_overlong_or_truncated_unsigned_leb128() {
+        for bytes in [
+            &[0x80, 0x00][..],
+            &[0x81, 0x00][..],
+            &[0xff, 0x00][..],
+            &[0x80, 0x80, 0x00][..],
+        ] {
+            let mut pos = 0;
+            let error = take_varint(bytes, &mut pos).unwrap_err();
+            assert!(error.to_string().contains("non-canonical unsigned varint"));
+        }
+        for bytes in [&[0x80][..], &[0x80, 0x80][..]] {
+            let mut pos = 0;
+            assert!(take_varint(bytes, &mut pos).is_err());
+        }
+        // The tenth group must not overflow u64.
+        let overflow = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x02];
+        let mut pos = 0;
+        assert!(take_varint(&overflow, &mut pos).is_err());
+    }
+
+    #[test]
+    fn malformed_source_ids_or_deltas_fail_full_record_decode() {
+        let body = BodyId::try_from("Moon").unwrap();
+        // One ingress at t=0: signed base i64, id=4, delta=0, Aries sign=0.
+        let base = 0i64.to_le_bytes();
+        let mut valid = base.to_vec();
+        valid.extend_from_slice(&[4, 0, 0]);
+        assert_eq!(
+            decode_records(EventFamily::Ingress, &body, &valid, 1).unwrap().len(),
+            1
+        );
+        for payload in [
+            &[0x84, 0x00, 0, 0][..], // id=4, redundant zero high group
+            &[4, 0x80, 0x00, 0][..], // delta=0, redundant zero high group
+        ] {
+            let mut bytes = base.to_vec();
+            bytes.extend_from_slice(payload);
+            let error = decode_records(EventFamily::Ingress, &body, &bytes, 1)
+                .unwrap_err();
+            assert!(error.to_string().contains("non-canonical unsigned varint"));
+        }
+    }
+}
+
+#[cfg(test)]
 mod sha256_syntax_tests {
     use super::canonical_lowercase_sha256;
 
