@@ -10,10 +10,13 @@
 //! Compatible in intent with prototype/coverage_policy.py in dataset PR #6.
 //! Source records alone never certify missing intervals are complete.
 
+use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use virgostars_events_core::{
     BodyId, CoverageAssessment, CoveragePolicy, EventFamily, ReviewedWindow, TimestampMicros,
@@ -23,6 +26,115 @@ use crate::{invalid, P0Archive, P0Error, P0Record};
 
 const SCHEMA: &str = "virgostars-reviewed-coverage/v0";
 const MAX_POLICY_BYTES: u64 = 1_000_000;
+
+// serde_json::Value alone silently overwrites repeated JSON object keys.
+// Coverage policies cannot make review decisions from ambiguous JSON, including
+// duplicates nested in currently unused metadata or escaped-equivalent names.
+struct StrictPolicyValue(Value);
+
+impl<'de> Deserialize<'de> for StrictPolicyValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StrictVisitor;
+
+        impl<'de> Visitor<'de> for StrictVisitor {
+            type Value = StrictPolicyValue;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("unambiguous JSON coverage policy value")
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictPolicyValue(Value::Bool(value)))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictPolicyValue(Value::from(value)))
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictPolicyValue(Value::from(value)))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                serde_json::Number::from_f64(value)
+                    .map(|number| StrictPolicyValue(Value::Number(number)))
+                    .ok_or_else(|| E::custom("nonfinite policy JSON number"))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictPolicyValue(Value::String(value.to_owned())))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictPolicyValue(Value::String(value)))
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictPolicyValue(Value::Null))
+            }
+
+            fn visit_none<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(StrictPolicyValue(Value::Null))
+            }
+
+            fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut items = Vec::new();
+                while let Some(item) = sequence.next_element::<StrictPolicyValue>()? {
+                    items.push(item.0);
+                }
+                Ok(StrictPolicyValue(Value::Array(items)))
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut entries = serde_json::Map::new();
+                while let Some((key, value)) = map.next_entry::<String, StrictPolicyValue>()? {
+                    if entries.contains_key(&key) {
+                        return Err(de::Error::custom(format!(
+                            "duplicate coverage policy JSON key: {key}"
+                        )));
+                    }
+                    entries.insert(key, value.0);
+                }
+                Ok(StrictPolicyValue(Value::Object(entries)))
+            }
+        }
+
+        deserializer.deserialize_any(StrictVisitor)
+    }
+}
 
 fn required<'a>(value: &'a Value, key: &str) -> Result<&'a str, P0Error> {
     value
@@ -114,7 +226,7 @@ impl P0Archive {
         if data.len() as u64 > MAX_POLICY_BYTES {
             return Err(invalid("coverage policy exceeds maximum size"));
         }
-        let document: Value = serde_json::from_slice(&data)
+        let StrictPolicyValue(document) = serde_json::from_slice(&data)
             .map_err(|error| invalid(format!("malformed coverage policy: {error}")))?;
         if required(&document, "schema")? != SCHEMA
             || required(&document, "verification")? != "human-reviewed-only"
