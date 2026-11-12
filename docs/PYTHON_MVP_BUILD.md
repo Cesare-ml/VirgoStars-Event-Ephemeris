@@ -14,6 +14,19 @@ py -3 -m unittest discover -s tools -p "test_validate_python_mvp.py" -v
 
 The source-only suite already rejects incomplete execution. Five standalone Python 3.13.5 reproductions of the amended native `run_tests` behavior passed (early stop, complete suite, skip, missing test and assertion failure). These reproductions are **not** a complete checkout run of the committed 11 orchestrator tests; the mandatory installed-wheel **50** tests and owner CSV/P0 parity remain unexecuted.
 
+### Reject linked Cargo.lock files before regeneration (2026-11-12)
+
+The opt-in `tools/prepare_cargo_lock.py --apply` now refuses a **symbolic-link `Cargo.lock`** before running either Git or Cargo. A tracked symlink can point outside the checkout even when its Git index entry is valid; the lockfile must be a regular file in the workspace for safe generation/review. The default command remains read-only.
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_prepare_cargo_lock.py" -v
+py -3 tools\prepare_cargo_lock.py
+# After reviewing git status, on a Cargo-equipped checkout only:
+py -3 tools\prepare_cargo_lock.py --apply
+```
+
+**Executed:** **15/15** exact helper unit tests passed under Python 3.13.5. One new cross-platform test simulates a symlink without OS privileges; a second runs real Git with a tracked symlink pointing to an external file and verifies the external bytes remain untouched and Cargo is never called. Both committed sources match local Git blob IDs: `b157f181c76f2a94f445b372cfea6b5e1ebd3046` (helper) and `0aee337d35dc016d177b9543ac367c3ebbb7c780` (tests). **Cargo commands are simulated in these tests**; Rust compilation, wheel build, the 50-case native acceptance, and scientific parity are still separate, unverified gates.
+
 ## Safely regenerate the stale Cargo.lock before the first M0 wheel
 
 A **read-only** dependency-lock report works without Rust/Cargo:
