@@ -175,6 +175,11 @@ class PythonApiTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "native synod response instant"):
                     VirgoStarsEvents(native).get_synods_at(requested)
                 self.assertEqual(native.received, 1)
+        for payload in ([], None, "invalid", 42):
+            with self.subTest(payload=payload):
+                with self.assertRaisesRegex(ValueError, "JSON object"):
+                    VirgoStarsEvents(DummyNative(payload)).get_synods_at(requested)
+
         missing = fake_response()
         del missing["requested_at_us"]
         with self.assertRaisesRegex(ValueError, "native synod response instant"):
