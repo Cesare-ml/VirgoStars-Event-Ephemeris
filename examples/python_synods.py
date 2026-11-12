@@ -21,9 +21,10 @@ def main() -> None:
     parser.add_argument("--sha256", required=True, help="Trusted whole-file SHA-256")
     args = parser.parse_args()
 
-    reader = VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256)
-    result = reader.get_synods_at(args.instant)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    # Close immediately: this releases the Rust-owned temporary P0 snapshot.
+    with VirgoStarsEvents.open(args.archive, expected_sha256=args.sha256) as reader:
+        result = reader.get_synods_at(args.instant)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
