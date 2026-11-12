@@ -120,7 +120,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         run([sys.executable, ROOT / "tools" / "validate_rust.py"])
         with tempfile.TemporaryDirectory(prefix="virgostars-m0-build-") as temp:
             wheels_dir = Path(temp) / "wheels"
-            run([maturin, "build", "--release", "--out", wheels_dir, "--interpreter", sys.executable])
+            run([maturin, "build", "--locked", "--release", "--out", wheels_dir, "--interpreter", sys.executable])
             wheels = sorted(wheels_dir.glob("*.whl"))
             if len(wheels) != 1:
                 raise RuntimeError(f"expected exactly one new wheel, found {len(wheels)}")
