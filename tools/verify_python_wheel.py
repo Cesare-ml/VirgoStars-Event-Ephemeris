@@ -63,7 +63,14 @@ def venv_console_script(directory: Path) -> Path:
 def run_checked(command: Sequence[str], *, cwd: Path) -> None:
     """Propagate any failing subprocess; never report partial tests as pass."""
     print("\n[wheel check]", " ".join(map(str, command)), flush=True)
-    completed = subprocess.run(list(map(str, command)), cwd=str(cwd), check=False)
+    # The console-script launcher does not support `python -I`; prevent an
+    # inherited developer PYTHONPATH/PYTHONHOME from shadowing the wheel.
+    clean_env = os.environ.copy()
+    for key in ("PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE"):
+        clean_env.pop(key, None)
+    completed = subprocess.run(
+        list(map(str, command)), cwd=str(cwd), check=False, env=clean_env
+    )
     if completed.returncode != 0:
         raise RuntimeError(f"command exited {completed.returncode}: {command[0]}")
 
