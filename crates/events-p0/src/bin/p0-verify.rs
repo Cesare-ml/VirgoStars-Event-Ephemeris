@@ -45,7 +45,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let count = |family| result.by_family.get(&family).copied().unwrap_or(0);
     // Report the complete on-disk byte length as an independently
     // comparable property alongside the full-file digest and decoded totals.
-    let bytes = std::fs::metadata(&path)?.len();
+    let bytes = std::fs::metadata(std::path::Path::new(&path))?.len();
     println!(
         "{}",
         serde_json::json!({
