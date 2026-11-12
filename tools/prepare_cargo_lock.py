@@ -70,6 +70,10 @@ def prepare(root: Path = ROOT, *, apply: bool = False,
             print("FAIL: tracked changes exist; review, commit or stash them first:\n" + status,
                   file=sys.stderr)
             return 1
+        # Cargo.lock is a tracked release input: an untracked lockfile is
+        # invisible to `git diff` and could otherwise be reported as verified
+        # without any change available to commit or review.
+        command([git, "ls-files", "--error-unmatch", "--", "Cargo.lock"], root, run=run)
         print("[M0 lock] cargo generate-lockfile", flush=True)
         command([cargo, "generate-lockfile"], root, run=run)
         missing = missing_packages(lock)
