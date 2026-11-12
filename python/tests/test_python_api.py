@@ -371,6 +371,51 @@ class PythonApiTests(unittest.TestCase):
                 DummyNative(fake_response()), expected_sha256="b" * 64
             ).get_synods_at("1970-01-01T00:00:00Z")
 
+        # A P0 archive has no scientifically reviewed body coverage.
+        # Native transport may add gap warnings, but must not omit the
+        # mandatory unreviewed-policy warning or fabricate certification.
+        for altered in (
+            "missing coverage", "non-object coverage", "certified status",
+            "missing warning", "non-list warnings", "missing phase object",
+        ):
+            with self.subTest(altered=altered):
+                raw = fake_response()
+                record = raw["synods"]["Mercury"]
+                if altered == "missing coverage":
+                    del record["coverage"]
+                elif altered == "non-object coverage":
+                    record["coverage"] = "unreviewed"
+                elif altered == "certified status":
+                    record["coverage"]["status"] = "certified"
+                elif altered == "missing warning":
+                    record["coverage"]["warnings"] = []
+                elif altered == "non-list warnings":
+                    record["coverage"]["warnings"] = "no_reviewed_coverage_policy"
+                elif altered == "missing phase object":
+                    record["phase"] = None
+                expected = (
+                    "phase must be an object" if altered == "missing phase object"
+                    else "coverage claim invalid"
+                )
+                with self.assertRaisesRegex(ValueError, expected):
+                    VirgoStarsEvents(DummyNative(raw)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        # Extra factual gap warnings are allowed without changing the
+        # mandatory disclosure that source coverage is unreviewed.
+        with_warnings = fake_response()
+        with_warnings["synods"]["Mercury"]["coverage"]["warnings"].append(
+            "independently_observed_source_gap"
+        )
+        accepted = VirgoStarsEvents(DummyNative(with_warnings)).get_synods_at(
+            "1970-01-01T00:00:00Z"
+        )
+        self.assertIn(
+            "independently_observed_source_gap",
+            accepted["synods"]["Mercury"]["coverage"]["warnings"],
+        )
+
     def test_empty_extra_array_not_confused_with_sql_null(self):
         raw = fake_response()
         raw["synods"]["Moon"]["phase_thresholds_us"] = []
