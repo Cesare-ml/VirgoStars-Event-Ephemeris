@@ -149,7 +149,7 @@ Unit tests for the *orchestrator* (subprocess calls are mocked, not a substitute
 py -3 -m unittest discover -s tools -p "test_verify_python_wheel.py" -v
 ```
 
-**As of this change:** 7/7 wheel-gate orchestration tests were executed successfully under Python 3.13, with exact GitHub blobs SHA-verified against the locally tested files. A real offline-install **negative** smoke against a deliberately fake pure-Python `_native.py` wheel correctly failed the binary-extension check (exit 1), without validating any compiled Rust wheel. **No Rust wheel was built or installed here** because Cargo/maturin are unavailable; the complete native gate remains pending on a developer machine. Other Python/platform versions need their own matching wheels.
+**As of this change:** 8/8 wheel-gate orchestration tests were executed successfully under Python 3.13, with exact GitHub blobs SHA-verified against the locally tested files. A real offline-install **negative** smoke against a deliberately fake pure-Python `_native.py` wheel correctly failed the binary-extension check (exit 1), without validating any compiled Rust wheel. Subprocess environments strip inherited `PYTHONPATH`, `PYTHONHOME` and `PYTHONUSERBASE` to keep the installed console script from resolving developer source code. **No Rust wheel was built or installed here** because Cargo/maturin are unavailable; the complete native gate remains pending on a developer machine. Other Python/platform versions need their own matching wheels.
 
 ## Validation matrix and scope
 
