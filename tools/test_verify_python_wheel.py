@@ -55,14 +55,23 @@ class WheelGateTests(unittest.TestCase):
                 self.assertEqual(wheel_check.main(["--wheel", str(wheel)]), 0)
             builder.assert_called_once_with(with_pip=True, clear=True)
             commands = [list(call.args[0]) for call in runner.call_args_list]
-            self.assertEqual(len(commands), 4)
+            self.assertEqual(len(commands), 5)
             self.assertIn("--no-index", commands[0])
             self.assertIn("--no-deps", commands[0])
             self.assertEqual(str(commands[0][-1]), str(wheel.resolve()))
             self.assertIn("from virgostars_events._native import NativeReader", commands[1][-1])
             self.assertIn("--version", commands[2])
-            self.assertTrue(str(commands[3][2]).endswith("tools/validate_python_mvp.py"))
-            self.assertTrue(all("-I" in c for c in commands[1:]))
+            self.assertTrue(str(commands[3][0]).endswith("virgostars-events.exe" if wheel_check.os.name == "nt" else "virgostars-events"))
+            self.assertEqual(commands[3][1], "--version")
+            self.assertTrue(str(commands[4][2]).endswith("tools/validate_python_mvp.py"))
+            self.assertTrue(all("-I" in c for c in (commands[1], commands[2], commands[4])))
+
+    def test_native_probe_requires_compiled_extension_within_venv(self):
+        probe = wheel_check.INSTALLED_PROBE
+        self.assertIn("EXTENSION_SUFFIXES", probe)
+        self.assertIn("extension.is_relative_to(root)", probe)
+        self.assertIn("_native is not a compiled extension", probe)
+        self.assertIn("version('virgostars-event-ephemeris')", probe)
 
     def test_owner_snapshot_and_csv_paths_are_forwarded_to_validator(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -93,6 +102,16 @@ class WheelGateTests(unittest.TestCase):
                 with redirect_stderr(StringIO()) as stderr:
                     self.assertEqual(wheel_check.main(["--wheel", str(wheel)]), 1)
                 self.assertIn("native failure", stderr.getvalue())
+
+
+    def test_venv_bootstrap_failure_returns_nonzero_not_success(self):
+        with tempfile.TemporaryDirectory() as temp:
+            wheel = self.make_wheel(Path(temp))
+            with patch.object(wheel_check.venv, "EnvBuilder") as builder:
+                builder.return_value.create.side_effect = OSError("ensurepip missing")
+                with redirect_stderr(StringIO()) as stderr:
+                    self.assertEqual(wheel_check.main(["--wheel", str(wheel)]), 1)
+                self.assertIn("ensurepip missing", stderr.getvalue())
 
 
 if __name__ == "__main__":
