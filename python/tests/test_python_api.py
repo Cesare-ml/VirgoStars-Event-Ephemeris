@@ -286,6 +286,50 @@ class PythonApiTests(unittest.TestCase):
                         "1970-01-01T00:00:00Z"
                     )
 
+        # Native dataset identity is part of the response contract.
+        # Reject a plausible source row if the native transport omits or
+        # changes the format, ID, SHA-256, or coverage-certification claim.
+        for corrupted in (
+            "missing dataset", "wrong shape", "wrong format", "missing format",
+            "wrong id", "missing id", "certified", "missing sha", "upper sha",
+            "short sha", "boolean sha",
+        ):
+            with self.subTest(corrupted=corrupted):
+                raw = fake_response()
+                if corrupted == "missing dataset":
+                    del raw["dataset"]
+                elif corrupted == "wrong shape":
+                    raw["dataset"] = []
+                elif corrupted == "wrong format":
+                    raw["dataset"]["format"] = "VSEPH-v1"
+                elif corrupted == "missing format":
+                    del raw["dataset"]["format"]
+                elif corrupted == "wrong id":
+                    raw["dataset"]["id"] = "other-archive"
+                elif corrupted == "missing id":
+                    del raw["dataset"]["id"]
+                elif corrupted == "certified":
+                    raw["dataset"]["coverage_certified"] = True
+                elif corrupted == "missing sha":
+                    del raw["dataset"]["sha256"]
+                elif corrupted == "upper sha":
+                    raw["dataset"]["sha256"] = "A" * 64
+                elif corrupted == "short sha":
+                    raw["dataset"]["sha256"] = "a" * 63
+                elif corrupted == "boolean sha":
+                    raw["dataset"]["sha256"] = False
+                with self.assertRaisesRegex(ValueError, "dataset identity is invalid"):
+                    VirgoStarsEvents(DummyNative(raw)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        # When opened with a trusted independent hash, the *returned* native
+        # identity must also agree, not just have a valid 64-character shape.
+        with self.assertRaisesRegex(ValueError, "dataset identity is invalid"):
+            VirgoStarsEvents(
+                DummyNative(fake_response()), expected_sha256="b" * 64
+            ).get_synods_at("1970-01-01T00:00:00Z")
+
     def test_empty_extra_array_not_confused_with_sql_null(self):
         raw = fake_response()
         raw["synods"]["Moon"]["phase_thresholds_us"] = []
@@ -367,10 +411,12 @@ class PythonApiTests(unittest.TestCase):
         with patch.dict(sys.modules, {"virgostars_events._native": module}):
             reader = VirgoStarsEvents.open("local.p0", expected_sha256="b" * 64)
         self.assertIsInstance(reader._reader, FakeReader)
+        self.assertEqual(reader._trusted_sha256, "b" * 64)
         self.assertEqual(requests, [("local.p0", "b" * 64)])
         with patch.dict(sys.modules, {"virgostars_events._native": module}):
-            VirgoStarsEvents.open("upper.p0", expected_sha256="A" * 64)
+            upper_reader = VirgoStarsEvents.open("upper.p0", expected_sha256="A" * 64)
         self.assertEqual(requests[-1], ("upper.p0", "a" * 64))
+        self.assertEqual(upper_reader._trusted_sha256, "a" * 64)
 
 
 if __name__ == "__main__":
