@@ -28,6 +28,8 @@ User story: from a Python installation, pass a timezone-aware date/instant X to 
 
 M0 input preflight (PR #5, 2026-11-11): reject invalid SHA-256 before native import, nonexistent aware local times at spring-forward transitions, and malformed CLI instants before costly archive access. Three regression tests added (12 API/time + 6 CLI; 34 non-skipped tests total including CSV oracle and native fixture). These changes require execution of the full native gate before M0 completion.
 
+**M0.3/M0.4 local build promotion tool (2026-11-12, [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5)):** `tools/build_python_mvp.py` now runs the existing Rust checks, builds one fresh maturin wheel in temporary storage and invokes the isolated offline Python/native wheel gate. It puts the wheel in `dist/` **only if all gates pass**, preserves conflicting existing artifacts, and accepts optional independently approved P0/CSV parity inputs. Seven pure-Python mocked orchestration tests passed on Python 3.13; **Rust build / actual wheel acceptance still NOT RUN**. Do not close M0.3/M0.4 until verified on Windows and reviewed.
+
 ## P0 — first executable and reproducible core
 
 - [ ] **P0.1 ([issue #1](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/1)) — Define synthetic fixture contract.** Add schema and six tiny text fixtures for three families (pre-1970, sparse, null and variable extra phases, duplicate/malformed, DST-relevant UTC instants). Review date/id/phase semantics. **Done when:** deterministic fixture generator and tests for fixture parsing/validation exist.
