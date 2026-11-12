@@ -29,6 +29,10 @@ Input integrity checkpoint (2026-11-11): validate exactly 64 hex SHA-256 charact
 
 The existing draft PR #5 now includes `tools/verify_python_wheel.py`, a stdlib-only checker for **prebuilt** wheels. After Cargo, maturin and `pip install .` pass locally, run `py -3 tools\verify_python_wheel.py --wheel <matching .whl>`; it creates a clean temp venv, installs `--no-index --no-deps`, checks installed Python/native imports and CLI, and invokes the full non-skipping `validate_python_mvp.py`. Add `--archive`, trusted `--sha256` and `--synods-csv` for authorized snapshot parity. Orchestrator unit tests: `python -m unittest discover -s tools -p test_verify_python_wheel.py -v`. **5/5 mocked subprocess unit tests ran**; **real built wheel/native integration NOT RUN** in the agent container. Never equate subprocess mocks with Rust/PyO3 binary validation, and keep draft status pending real checks.
 
+## M0 local build-and-accept helper (2026-11-12)
+
+`tools/build_python_mvp.py` provides one explicit **local** command for first-user milestone: run Rust fmt/Clippy/test/release via `tools/validate_rust.py`, build a fresh maturin wheel for current Python, install/check the prebuilt wheel offline in a clean virtualenv using `tools/verify_python_wheel.py`, and retain the wheel under `dist/` **only after all gates pass**. Optional `--archive --sha256 --synods-csv` adds owner-authorized data parity. Existing output wheels must never be silently overwritten. Seven local *mocked orchestration* unit tests passed, but the actual Rust build, Windows binary, native acceptance and scientific data parity have **not** been executed here. Before any merge, complete these real checks and record results. No release, GitHub Actions or production replacement.
+
 ## Task selection for each run
 
 1. Inspect the repo, issues, PRs, branches, tests, and roadmap status first.
