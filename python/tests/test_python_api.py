@@ -179,12 +179,19 @@ class PythonApiTests(unittest.TestCase):
                     VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
 
         # A recorded cycle must come from an actual positive source row ID.
-        for source_id in (None, False, True, 0, -1, "27", 27.0):
+        for source_id in (None, False, True, 0, -1, "27", 27.0, 1 << 64, 1 << 128):
             with self.subTest(source_id=source_id):
                 raw = fake_response()
                 raw["synods"]["Mercury"]["source_id"] = source_id
                 with self.assertRaisesRegex(ValueError, "native synod source ID inconsistent"):
                     VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
+
+        # Rust serializes source IDs as u64. Its maximum value remains a
+        # valid original identity; values beyond it cannot come from Rust.
+        raw = fake_response()
+        raw["synods"]["Mercury"]["source_id"] = (1 << 64) - 1
+        accepted = VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
+        self.assertEqual(accepted["synods"]["Mercury"]["source_id"], (1 << 64) - 1)
 
         # Without a preceding recorded cycle, there is no source row ID.
         raw = fake_response()
