@@ -137,7 +137,7 @@ class VirgoStarsEvents:
                 (source_id is None) != (current_us is None)
                 or (
                     source_id is not None
-                    and (type(source_id) is not int or source_id <= 0)
+                    and (type(source_id) is not int or not 0 < source_id <= (1 << 64) - 1)
                 )
             ):
                 raise ValueError(f"native synod source ID inconsistent with cycle for {body}")
