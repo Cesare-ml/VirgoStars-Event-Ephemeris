@@ -51,11 +51,53 @@ class AuditP0BytesTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.audit(corrupted)
 
-    def test_unsafe_header_size_rejected(self):
+    def test_unsafe_header_size_and_noninteger_json_metadata_rejected(self):
         corrupted = bytearray(self.good)
         struct.pack_into('<I', corrupted, 8, 0xffffffff)
         with self.assertRaisesRegex(ValueError, 'header size'):
             self.audit(corrupted)
+
+        # Rust serde_json keeps bool/float/int distinct. Python's ordinary
+        # equality does not: [False, False, True] == [0, 0, 1] and 3.0 == 3.
+        # Keep the original compressed payload and block SHA-256 unchanged,
+        # so only the malformed metadata can account for rejection.
+        def rewrite_header(archive, new_document):
+            length = struct.unpack_from('<I', archive, 8)[0]
+            payload = archive[12 + length:]
+            encoded = json.dumps(new_document, sort_keys=True, separators=(',', ':')).encode()
+            return b'VSEPH-P0' + struct.pack('<I', len(encoded)) + encoded + payload
+
+        length = struct.unpack_from('<I', self.good, 8)[0]
+        original = json.loads(self.good[12:12 + length])
+        cases = (
+            ("not a JSON object", [0, 0, 1], 'JSON object'),
+            ("boolean format version", dict(original, format_version=[False, False, True]),
+             'version or codec'),
+            ("floating format version", dict(original, format_version=[0.0, 0.0, 1.0]),
+             'version or codec'),
+            ("floating block record cap", dict(original, block_records_max=512.0),
+             'version or codec'),
+            ("floating section counts", dict(original, sections={
+                name: float(count) for name, count in original['sections'].items()
+            }), 'section record totals'),
+            ("missing sections", {key: value for key, value in original.items() if key != 'sections'},
+             'section record totals'),
+        )
+        for label, document, message in cases:
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(ValueError, message):
+                    self.audit(rewrite_header(self.good, document))
+
+        # With a one-record archive, True == 1 would have been another false
+        # positive before the strict section-total type validation.
+        tiny = self.build_semantic_fixture([
+            ('ingress', 'Moon', 0, 0, 1, struct.pack('<q', 0) + bytes([4, 0, 0])),
+        ])
+        tiny_length = struct.unpack_from('<I', tiny, 8)[0]
+        tiny_header = json.loads(tiny[12:12 + tiny_length])
+        tiny_header['sections']['ingress'] = True
+        with self.assertRaisesRegex(ValueError, 'section record totals'):
+            self.audit(rewrite_header(tiny, tiny_header))
 
     def test_compressed_block_corruption_detected(self):
         corrupted = bytearray(self.good)
