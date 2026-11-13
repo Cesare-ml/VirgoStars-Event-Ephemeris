@@ -2,6 +2,8 @@
 
 **Priority: FIRST USER-EXECUTABLE MILESTONE.** Rust synod stage + batch query and Python PyO3/maturin package **source now exist** on draft PR #5, but **the native wheel has not yet been built or installed**. This remains an implementation/acceptance contract, not a claim that the Python package is currently usable. Work on draft [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5); data snapshot is separately staged on draft [PR #6](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/6). No changes to production/backend or historical records.
 
+**Rust/Python source-row identity invariant (2026-11-13, draft PR #5):** The P0 Rust reader stores original `source_id` as `u64`; the Python facade therefore accepts an ID only if its type is a genuine integer in **1 through 18,446,744,073,709,551,615**, and only when a recorded cycle start exists. A missing predecessor must have `source_id=None`. Reject booleans, floats, strings, zero, negative integers and Python's unbounded integers above `u64::MAX` rather than presenting an impossible native source identity. Added overflow subcases to the existing API test method, preserving the **18 API / 42 Python-source / 51 wheel** acceptance counts. A standalone 10-case Python boundary reproduction passed, but the full committed source/native test gates remain unexecuted here.
+
 ## User story
 
 > Install the library easily from Python. Given an instant X, obtain an object containing the **latest synodic cycle anchor at or before X for each available celestial body**, the **latest recorded new moon at or before X**, and each cycle's **current phase as of X**, when the original phase thresholds permit a determination.
