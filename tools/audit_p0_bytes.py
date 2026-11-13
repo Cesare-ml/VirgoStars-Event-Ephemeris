@@ -108,7 +108,21 @@ def audit_file(path: str | Path, expected_sha256: str | None = None) -> dict:
     if not 0 < header_len <= MAX_HEADER or header_len + 12 > len(raw_file):
         raise ValueError("invalid JSON header size")
     doc = json.loads(raw_file[12:12 + header_len])
-    if doc.get("format") != "VSEPH-P0-EXPERIMENTAL" or doc.get("format_version") != [0, 0, 1] or doc.get("codec") != "zlib" or doc.get("block_records_max") != MAX_COUNT:
+    if not isinstance(doc, dict):
+        raise ValueError("P0 header must be a JSON object")
+    version = doc.get("format_version")
+    # Python considers True == 1 and 1.0 == 1; Rust serde_json does not.
+    # Explicit types are essential for independent cross-language auditing.
+    if (
+        doc.get("format") != "VSEPH-P0-EXPERIMENTAL"
+        or type(version) is not list
+        or len(version) != 3
+        or any(type(value) is not int for value in version)
+        or version != [0, 0, 1]
+        or doc.get("codec") != "zlib"
+        or type(doc.get("block_records_max")) is not int
+        or doc["block_records_max"] != MAX_COUNT
+    ):
         raise ValueError("unsupported P0 version or codec")
     toc = doc["table_of_contents"]
     if not isinstance(toc, list):
@@ -150,7 +164,12 @@ def audit_file(path: str | Path, expected_sha256: str | None = None) -> dict:
         counts[family] += count
     if base + offset != len(raw_file):
         raise ValueError("unindexed bytes at end of archive")
-    if dict(counts) != doc["sections"]:
+    sections = doc.get("sections")
+    if (
+        not isinstance(sections, dict)
+        or any(type(value) is not int or value < 0 for value in sections.values())
+        or dict(counts) != sections
+    ):
         raise ValueError("section record totals mismatch")
     return {"sha256": sha, "bytes": len(raw_file), "blocks": len(toc), "records": sum(counts.values()), "sections": dict(sorted(counts.items()))}
 
