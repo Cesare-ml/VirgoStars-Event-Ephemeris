@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: CPAL-1.0
 # Powered by VirgoStars — https://www.virgostars.it/
-"""Source-only regressions for the Rust/Python JSON Unicode boundary."""
+"""Source-only regressions for the Rust/Python JSON transport and Moon alias."""
 import unittest
 
-from virgostars_events._wire import decode_native_json
+from virgostars_events._wire import decode_native_json, same_json_value
 
 
 class NativeJsonUnicodeTests(unittest.TestCase):
@@ -29,6 +29,29 @@ class NativeJsonUnicodeTests(unittest.TestCase):
         for payload in ('{"id":1,"\\u0069d":1}', '{"id":NaN}', '{"id":1e400}'):
             with self.subTest(payload=payload), self.assertRaises(ValueError):
                 decode_native_json(payload)
+
+    def test_alias_comparison_is_type_exact_in_nested_containers(self):
+        matching = {"Moon": [{"source_id": 11, "extras": [None, 3.0, True]}]}
+        self.assertTrue(same_json_value(matching, matching))
+        self.assertFalse(same_json_value({"v": [1]}, {"v": [True]}))
+        self.assertFalse(same_json_value({"v": [1]}, {"v": [1.0]}))
+        self.assertFalse(same_json_value({"v": [None]}, {"v": [[]]}))
+        self.assertFalse(same_json_value({"x": 1}, {"y": 1}))
+        self.assertTrue(same_json_value({"a": 1, "b": 2}, {"b": 2, "a": 1}))
+
+    def test_alias_comparison_supports_deep_equal_json_without_recursion(self):
+        left, right = 1, 1
+        for _ in range(700):
+            left = [left]
+            right = [right]
+        self.assertTrue(same_json_value(left, right))
+
+    def test_alias_comparison_detects_deep_leaf_mismatch(self):
+        left, right = 1, 2
+        for _ in range(700):
+            left = {"v": left}
+            right = {"v": right}
+        self.assertFalse(same_json_value(left, right))
 
 
 if __name__ == "__main__":
