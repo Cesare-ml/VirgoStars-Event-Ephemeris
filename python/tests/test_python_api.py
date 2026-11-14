@@ -234,6 +234,47 @@ class PythonApiTests(unittest.TestCase):
                         "1970-01-01T00:00:00Z"
                     )
 
+        # The native stage assessment is current only when its source start
+        # is a genuine integer in [cycle_start, requested_at]. A falsey bool,
+        # floating-point number, absent start or future threshold cannot
+        # silently be presented as a recorded current phase.
+        for code, started in (
+            ("R3", 1),
+            ("R3", -301),
+            ("R3", True),
+            ("R3", -100.0),
+            ("R3", "-100"),
+            ("R3", None),
+            (None, -100),
+        ):
+            with self.subTest(phase_code=code, started_at_us=started):
+                response = fake_response()
+                response["synods"]["Mercury"]["phase"]["code"] = code
+                response["synods"]["Mercury"]["phase"]["started_at_us"] = started
+                with self.assertRaisesRegex(ValueError, "native synod phase start invalid"):
+                    VirgoStarsEvents(DummyNative(response)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        missing_anchor = fake_response()
+        missing_anchor["synods"]["Mercury"]["source_id"] = None
+        missing_anchor["synods"]["Mercury"]["cycle_start_us"] = None
+        with self.assertRaisesRegex(ValueError, "native synod phase start invalid"):
+            VirgoStarsEvents(DummyNative(missing_anchor)).get_synods_at(
+                "1970-01-01T00:00:00Z"
+            )
+
+        # A real phase start exactly at its anchor remains valid.
+        at_stage_start = fake_response()
+        at_stage_start["synods"]["Mercury"]["phase"]["started_at_us"] = -300
+        accepted = VirgoStarsEvents(DummyNative(at_stage_start)).get_synods_at(
+            "1970-01-01T00:00:00Z"
+        )
+        self.assertEqual(
+            accepted["synods"]["Mercury"]["phase"]["started_at_utc"],
+            "1969-12-31T23:59:59.999700Z",
+        )
+
         # The current anchor is inclusive at X, while the *next* anchor
         # must be strictly later than X. Both cases are common boundaries.
         at_boundary = fake_response()
