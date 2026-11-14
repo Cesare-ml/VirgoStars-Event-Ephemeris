@@ -125,7 +125,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         # The independent binary P0 integrity tests must also pass without
         # skips; their optional owner archive test is a separate gate.
         run([sys.executable, ROOT / "tools" / "validate_p0_synthetic.py"])
-        run([sys.executable, ROOT / "tools" / "validate_rust.py"])
+        # If an authorized owner archive is provided, require the independent
+        # Python byte auditor AND Rust p0-verify to agree on that exact
+        # SHA-256-bound file before building any Python wheel. Previously
+        # --archive was passed only to the installed-wheel Python gate.
+        rust_command: list[str | Path] = [
+            sys.executable, ROOT / "tools" / "validate_rust.py"
+        ]
+        if args.archive:
+            rust_command.extend([
+                "--archive", args.archive.resolve(),
+                "--sha256", args.sha256.lower(),
+            ])
+        run(rust_command)
         with tempfile.TemporaryDirectory(prefix="virgostars-m0-build-") as temp:
             wheels_dir = Path(temp) / "wheels"
             run([maturin, "build", "--locked", "--release", "--out", wheels_dir, "--interpreter", sys.executable])
