@@ -1,3 +1,10 @@
+## 2026-11-14 — Reject JSON null alias of SQL NULL synod phases (draft PR #5)
+
+- **Scope:** Reused existing draft PR #5. Did not modify owner scientific dataset, PR #6, main, releases, GitHub Actions, or production.
+- **Code:** `tools/verify_csv_p0.py` now distinguishes the normalized CSV blank field (original SQL NULL) from explicit JSON `null`. Before this change `json.loads('null') is None` caused both to compare identically. The valid JSON `[]` remains distinct.
+- **Regression:** Added `test_literal_json_null_cannot_alias_sql_null`, raising the synthetic CSV/P0 test method count to **15**. Updated `docs/CSV_P0_FIELD_PARITY.md`.
+- **Validation:** Standalone Python 3.13.5 checks of the parsing expression passed for blank, `[]` and rejection of JSON `null`; source and docs read back from GitHub. **Not run:** complete 15-method test suite on checkout, Cargo fmt/Clippy/tests/build, PyO3 wheel, owner CSV/P0 parity. PR must stay draft until actual gates pass.
+
 ## 2026-11-14 — Strict recorded synod phase-array transport (draft PR #5)
 
 - **Scope:** Continued existing [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) (`feat/p0-2-rust-workspace`) after checking recent branch changes and PRs #4/#5/#6. No change to owner data PR #6, merged main, astronomical computation or P0 wire format.
