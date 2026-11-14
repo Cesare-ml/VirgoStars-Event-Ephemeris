@@ -682,6 +682,36 @@ class PythonApiTests(unittest.TestCase):
             "CAL2",
         )
 
+        # A known stage may only start at its own source boundary:
+        # cycle anchor for D1/CRESC1, or the corresponding extra timestamp.
+        # These values remain within [cycle_start, requested_at], so the
+        # general time-range guard alone would otherwise accept them.
+        for body, code, wrong_start in (
+            ("Mercury", "D1", -200),
+            ("Mercury", "R2", -100),
+            ("Mercury", "R3", -200),
+            ("Mercury", "D4", -100),
+            ("Moon", "CRESC1", -1500),
+            ("Moon", "CAL2", -1000),
+        ):
+            with self.subTest(body=body, code=code, wrong_start=wrong_start):
+                broken = fake_response()
+                record = broken["synods"][body]
+                if body == "Moon":
+                    record["phase_thresholds_us"] = [-1500, -1000, -500]
+                    broken["new_moon"] = record
+                record["phase"] = {
+                    "code": code,
+                    "started_at_us": wrong_start,
+                    "status": "derived_from_recorded_thresholds",
+                }
+                with self.assertRaisesRegex(
+                    ValueError, "native synod phase start disagrees with thresholds"
+                ):
+                    VirgoStarsEvents(DummyNative(broken)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
     def test_missing_previous_moon_anchor_returns_none_alias(self):
         raw = fake_response()
         raw["synods"]["Moon"]["source_id"] = None
