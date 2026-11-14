@@ -105,6 +105,10 @@ def uvar(data: bytes, pos: int) -> tuple[int, int]:
             raise ValueError("varint exceeds unsigned 64-bit")
         value |= (b & 0x7f) << (step * 7)
         if not b & 0x80:
+            # Match Rust take_varint(): redundant top zero groups are not
+            # canonical LEB128 and must never be accepted as equivalent bytes.
+            if step > 0 and b == 0:
+                raise ValueError("non-canonical unsigned varint")
             return value, pos
     raise ValueError("varint too long")
 
