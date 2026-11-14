@@ -1,5 +1,15 @@
 # Validation and quality gates
 
+## Bounded stdout/stderr for independent P0 audit subprocesses (2026-11-14, draft PR #5)
+
+The previous 64-KiB audit JSON parser ceiling ran **after** `subprocess.run(capture_output=True)`, which could first accumulate unlimited stdout/stderr. The default real subprocess path in `tools/validate_rust.py` now calls `tools/bounded_audit.py` for **both** independent Python and Rust archive auditors. It concurrently reads raw bytes from both pipes, retains at most **65,536 stdout bytes and 8,192 stderr bytes**, terminates the child on overrun, rejects non-UTF-8 stdout and preserves nonzero exit codes with bounded diagnostics. Mocked command-injection behavior for existing orchestrator tests remains available; the five Cargo checks and audit JSON schema/identity/parity checks are unchanged.
+
+Run this targeted stdlib suite (real synthetic child processes, no Cargo or scientific data):
+```sh
+python -m unittest discover -s tools -p test_bounded_audit.py -v
+```
+**Executed** on Python 3.13.5: **6/6 PASS**, `python -m py_compile` PASS. The exact locally executed new files match GitHub blob hashes `39af7ed0340681e857b72ba724b1257f7cc7e048` (runner) and `3f4793e1e83c015552537832b744491d3444dece` (tests). This is a *memory* cap for the direct auditor processes; it does not guarantee a time bound, kill a child process tree, or prevent unrelated Cargo commands from emitting verbose logs. The full 17-method `test_validate_rust.py`, Cargo locked format/Clippy/test/build, 42-source/51-native Python wheel gates and original owner-data audit were **not run** here. No scientific completeness claim.
+
 ## Bounded independent P0 audit JSON transport (2026-11-14, draft PR #5)
 
 `tools/audit_report_json.py` rejects audit subprocess JSON above 65,536 **UTF-8 bytes**, nesting deeper than 32 levels and unpaired UTF-16 surrogates (including escaped JSON keys/values). Paired `\\ud83d\\ude00` remains legal, and 65,536-byte valid JSON remains accepted. Duplicate keys (including escaped aliases), nonfinite JSON numbers and top-level nonobjects remain forbidden. This is a **parse-time** control; it does not cap a subprocess's emitted stdout while the subprocess is still running.
