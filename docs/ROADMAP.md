@@ -8,6 +8,8 @@
 
 **M0.2 Python JSON transport overflow hardening (2026-11-14, draft PR #5):** `_wire.py` now rejects numeric exponent literals producing non-finite Python floats (e.g. `1e400`), which bypassed the prior `parse_constant` rejection of literal `Infinity`. Existing API regression method extended with malformed exponents, no gate count changes. Exact helper passed a separate 4-method Python 3.13.5 unit harness; complete 42-source / 51-native wheel gates remain pending. PR #5 stays draft.
 
+**M0.2 strict phase-onset wire consistency (2026-11-14, draft PR #5):** A known Rust-derived stage now must begin at its own recorded source threshold (or the cycle anchor for first-stage `D1`/`CRESC1`). Invalid onset/code combinations fail closed instead of being exposed as current stage evidence. The existing API test method gained six malformed cases, leaving mandatory 42-source/51-native counts unchanged. The byte-identical helper passed a 4-method isolated Python test harness; full Python/Rust and owner-data gates are still outstanding. This does not move M0.2 to complete.
+
 ## Working conventions
 
 - `[ ]` not done; `[x]` only if merged and verified; `[~]` only if in progress with PR link documented in WORK_LOG.
