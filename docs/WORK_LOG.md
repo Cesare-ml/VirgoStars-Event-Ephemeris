@@ -1,3 +1,11 @@
+## 2026-11-14 — Fail-closed case-insensitive wheel filename collisions (draft PR #5)
+
+- **Problem:** Existing ZIP inspection rejected exact duplicate names but treated different-case members as distinct. On typical Windows case-insensitive filesystems, a wheel containing `virgostars_events/__init__.py` and `VirgoStars_Events/__INIT__.PY` may overwrite one installed path and invalidate the compiled/package provenance check.
+- **Patch:** `tools/wheel_contents_policy.py` now records all ZIP member paths after `rstrip('/').casefold()` and rejects a second path with the same comparison key before any pip invocation. Existing exact duplicate, symlink, size, dataset, ZIP integrity and metadata checks remain unchanged; no published binary or source data altered.
+- **Test authored:** `test_case_insensitive_windows_wheel_paths_must_not_collide` in `tools/test_wheel_contents_policy.py`; two case-ambiguous archive variants must fail, distinct README filename remains permitted. The module now declares 13 test methods.
+- **Executed:** 6/6 Python stdlib synthetic ZIP smoke cases locally with the same `rstrip('/').casefold()` logic (uppercase package, uppercase filename, nested paths, file/directory collision, two positive controls). Read-back on GitHub verified exact source and regression additions. **Not executed:** the committed full 13-test wheel-policy suite, real Rust/PyO3 wheel, locked Cargo checks, 42 Python source cases, 51 native wheel cases, owner 380,844-record CSV/P0 parity.
+- **Next:** run `py -3 -m unittest discover -s tools -p "test_wheel_contents_policy.py" -v` on a full checkout; regenerate/review stale Cargo.lock using Rust, then run all native acceptance gates. PR #5 remains draft. No merge, GitHub Actions, publishing, production or dataset mutation.
+
 ## 2026-11-14 — Silent auditor deadline and pipe-read deadline (draft PR #5)
 
 - **Issue:** Memory budgets alone do not stop an auditor that hangs silently, and inherited stdout/stderr handles could keep pipe-reader threads waiting after the direct subprocess exits.
