@@ -119,6 +119,8 @@ Run `cargo generate-lockfile` after updating the `tempfile` Rust dependency (exi
 
 **Private archive lifetime:** `VirgoStarsEvents.close()` and `with ... as reader` now release the Python wrapper's native P0 snapshot reference promptly. Regression tests must check normal exit, exceptional exit, idempotent close, closed-state use rejection and native-reader deallocation. Three Python tests added; a standalone Python reproduction passed 3/3, but actual repository/native integration not yet compiled or validated. Require the updated 40-test gate before release.
 
+**Native JSON transport regression (draft PR #5, 2026-11-14):** For the Python synod response, fail closed on duplicate keys at any nesting depth (including JSON-escaped equivalent keys), `NaN`/`Infinity`/`-Infinity`, and non-text native results. Run the committed `python/tests/test_python_api.py` alongside the 42-case source-only gate and the separate 51-case wheel acceptance. The isolated four-method `_wire.py` decoder preflight passed locally; the full committed tests and Rust/PyO3 compilation were **not run here**. Do not treat these predicates as evidence of scientifically complete coverage.
+
 ## Gate D: cross-language parity
 
 For a shared synthetic golden fixture, compare exact serialized results and error categories from Rust, JS/TS WASM and Python PyO3. Include UTC and Europe/Rome on both DST transitions, out-of-coverage dates, month containing multiple new moons, negative timestamps, missing phases and invalid input. Test browser and Node loading separately, and Python wheels on supported target platforms.
