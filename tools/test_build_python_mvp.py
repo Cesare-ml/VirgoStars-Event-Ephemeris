@@ -16,6 +16,38 @@ import build_python_mvp as build
 
 
 class BuildTests(unittest.TestCase):
+    def setUp(self):
+        # Mocked build-chain tests use temporary workspaces without an actual
+        # Cargo toolchain. The real readiness checker is tested separately.
+        readiness = patch.object(build, "build_environment_problems", return_value=[])
+        readiness.start()
+        self.addCleanup(readiness.stop)
+
+    def test_stale_cargo_lock_stops_before_all_tests_and_build_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Cargo.toml").touch()
+            (root / "pyproject.toml").touch()
+            output = root / "dist"
+            blockers = [
+                "Cargo.lock missing: pyo3, tempfile, virgostars-events-python",
+                "cargo not found on PATH",
+            ]
+            with patch.object(build, "ROOT", root), patch.object(
+                build, "build_environment_problems", return_value=blockers
+            ) as check, patch.object(
+                build, "maturin_executable"
+            ) as maturin, patch.object(
+                build, "run"
+            ) as called, redirect_stderr(StringIO()) as errors:
+                self.assertEqual(build.main(["--out-dir", str(output)]), 1)
+            check.assert_called_once_with(root)
+            maturin.assert_not_called()
+            called.assert_not_called()
+            self.assertFalse(output.exists())
+            self.assertIn("pyo3, tempfile", errors.getvalue())
+            self.assertIn("No tests run", errors.getvalue())
+
     def test_missing_maturin_fails_without_build_or_release(self):
         with patch.object(build, "ROOT", Path(__file__).resolve().parents[1]), patch.object(
             build, "maturin_executable", return_value=None
