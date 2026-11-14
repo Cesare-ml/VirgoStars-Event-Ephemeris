@@ -1,5 +1,18 @@
 # Windows: build and test the first Python/Rust synod MVP
 
+## Windows reserved device name regex: verified fix (2026-11-14, PR #5)
+
+A cross-check found that the `tools/wheel_contents_policy.py` pattern for Windows device basenames had **double-escaped regex metacharacters**: the regex literally looked for backslashes instead of matching `CON`, `CON.py`, `NUL.txt`, `COM1.pyd`, `LPT9.dll` and similar names. This let a malformed wheel ZIP member bypass the reserved-name protection. The expression now uses a real optional literal-dot extension and end-of-string assertion; ordinary filenames such as `console.py` and `com10.py` remain permitted.
+
+`tools/test_wheel_contents_policy.py` now contains an additional **direct regex regression** (15 tests in the module), independent of the existing end-to-end ZIP-name cases, to catch accidental double escaping before wheel acceptance.
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_wheel_contents_policy.py" -v
+```
+
+**Actually executed:** three isolated CPython tests against the exact old and new regex and matching helper behavior (9 reserved names, 7 allowed names, plus old-pattern bug reproduction): **3/3 PASS**. **Not yet executed:** the committed full 15-test wheel-policy module on a full checkout, an actual native wheel, Rust/Cargo builds, Python source/native gates, or authorized owner-data parity.
+
+
 ## Hermetic pip environment in the offline wheel verifier (2026-11-14, draft PR #5)
 
 `tools/verify_python_wheel.py::run_checked` now removes inherited `PIP_*` variables (including `PIP_TARGET`, `PIP_PREFIX`, `PIP_ROOT`, `PIP_USER`, `PIP_INDEX_URL` and an externally selected `PIP_CONFIG_FILE`) alongside the existing `PYTHONPATH`/`PYTHONHOME`/`PYTHONUSERBASE` sanitization. It then sets `PIP_CONFIG_FILE` to `os.devnull` to disable system/user/site pip config files. The wheel is still a private checked copy installed with `--no-index --no-deps` in the temporary venv. These controls prevent locally inherited pip configuration from changing the intended install target. This is an isolated installation-policy improvement, **not** evidence that a native wheel has been built.
