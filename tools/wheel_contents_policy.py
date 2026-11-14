@@ -31,9 +31,10 @@ MAX_UNCOMPRESSED_TOTAL = 128 * 1024 * 1024
 
 # ZIP member names may be accepted on Linux but redirect or conflict with
 # special Windows names when the same wheel is installed on Windows.
+# Win32 additionally reserves COM¹/²/³ and LPT¹/²/³ (ISO-8859-1 superscripts).
 _WINDOWS_INVALID = frozenset('<>:"|?*')
 _WINDOWS_DEVICE = re.compile(
-    r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?\Z",
+    r"(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?\Z",
     re.IGNORECASE,
 )
 
