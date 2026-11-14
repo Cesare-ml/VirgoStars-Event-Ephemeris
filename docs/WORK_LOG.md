@@ -1,3 +1,11 @@
+## 2026-11-14 — Reject finite-looking JSON numbers that overflow to Infinity (draft PR #5)
+
+- **Coordination:** Verified draft PR #5 HEAD and open draft PRs. A concurrent agent had already added a stage-code validator inside `_phase_wire.py`; deleted this session's newly authored duplicate `_stage_wire.py` immediately without integrating it. No staged redundant module remains.
+- **Real bug:** Python's `json.loads` invokes `parse_constant` for literal `NaN`/`Infinity`, but `1e400` (perfectly valid JSON numeric syntax) becomes a non-finite `float("inf")` without invoking that callback. Such a value could slip into unrecognized fields of the Rust/Python response and later produce nonstandard JSON.
+- **Fix:** `python/virgostars_events/_wire.py` now uses a `parse_float` callback that preserves ordinary finite floats and rejects overflowed non-finite values. The existing API test method now includes `1e400` and `-9.9e999` transport corruptions; still **18 Python API / 42 source / 51 installed-native** mandatory test methods, no altered astronomical results.
+- **Actually executed:** Python 3.13.5 isolated four-method `unittest` harness: **4/4 PASS**, covering literal non-finite tokens, overflow exponents, normal finite floats/integers, duplicates/nontext, and reproduction of the original `json.loads` flaw. The exact tested `_wire.py` Git blob `51306c47d1a4bd15655035114cc34a5dcc7bfaca` was matched to GitHub readback. The isolated harness is **not** the full committed API suite.
+- **Not run:** Full 42-case repository source gate, 14-case synthetic P0 audit, 51-case installed-native Rust/PyO3 wheel acceptance, original data CSV/P0 parity. PR remains draft; no merges, data edits, publishing or GitHub Actions.
+
 ## 2026-11-14 — Reject JSON null alias of SQL NULL synod phases (draft PR #5)
 
 - **Scope:** Reused existing draft PR #5. Did not modify owner scientific dataset, PR #6, main, releases, GitHub Actions, or production.
