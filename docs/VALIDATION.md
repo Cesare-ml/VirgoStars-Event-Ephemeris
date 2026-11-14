@@ -1,5 +1,16 @@
 # Validation and quality gates
 
+## Bounded independent P0 audit JSON transport (2026-11-14, draft PR #5)
+
+`tools/audit_report_json.py` rejects audit subprocess JSON above 65,536 **UTF-8 bytes**, nesting deeper than 32 levels and unpaired UTF-16 surrogates (including escaped JSON keys/values). Paired `\\ud83d\\ude00` remains legal, and 65,536-byte valid JSON remains accepted. Duplicate keys (including escaped aliases), nonfinite JSON numbers and top-level nonobjects remain forbidden. This is a **parse-time** control; it does not cap a subprocess's emitted stdout while the subprocess is still running.
+
+Synthetic stdlib regression commands after a clean checkout:
+```sh
+python -m unittest discover -s tools -p 'test_audit_report*.py' -v
+python tools/validate_rust.py --help
+```
+The first command covers 5 existing JSON parser checks + 3 new size/nesting/Unicode checks. Local isolated Python 3.13.5 tests: **8/8 PASS**, with GitHub blob hashes matching the executed helper/new tests (`beaf5800...`, `e1c0991...`). The second command and full independent auditor orchestration were **not executed** in this environment. Running this small suite does **not** satisfy full Python source/native wheel gates, Rust/Cargo gates or real owner-data parity.
+
 ## Strict JSON transport for independent P0 audit reports (2026-11-14, draft PR #5)
 
 Before comparing any P0 audit counts, `tools/validate_rust.py` now parses both subprocess JSON reports using the independent standard-library helper `tools/audit_report_json.py`. Duplicate JSON object keys are rejected recursively, **including equivalent Unicode-escaped keys**. Python's otherwise-permissive `NaN`/`Infinity`/-`Infinity` syntax and overflowing exponents such as `1e400` are rejected. Any malformed or nonobject report fails before digest, family-count, or coverage checks; successful canonical reports still flow through the existing strict report-shape, SHA-256, size and Rust/Python parity gates.
