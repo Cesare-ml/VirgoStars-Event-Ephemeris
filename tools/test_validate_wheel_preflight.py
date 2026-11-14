@@ -87,18 +87,25 @@ class WheelPreflightGateTests(unittest.TestCase):
         self.assertFalse(self.check(Aborted, minimum=2))
 
     def test_main_checks_all_three_and_stops_on_first_failure(self):
-        with patch.object(gate, "run_suite", side_effect=[True, True, True]) as runner:
-            with redirect_stdout(StringIO()):
-                self.assertEqual(gate.main(), 0)
-        self.assertEqual(
-            [call.args[0] for call in runner.call_args_list],
-            [name for name, _ in gate.REQUIRED_SUITES],
-        )
+        # Use dummy source paths because run_suite is deliberately mocked;
+        # this orchestration check must not depend on a populated checkout.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name, _ in gate.REQUIRED_SUITES:
+                (root / name).touch()
+            with patch.object(gate, "TOOLS", root):
+                with patch.object(gate, "run_suite", side_effect=[True, True, True]) as runner:
+                    with redirect_stdout(StringIO()):
+                        self.assertEqual(gate.main(), 0)
+                self.assertEqual(
+                    [call.args[0] for call in runner.call_args_list],
+                    [name for name, _ in gate.REQUIRED_SUITES],
+                )
 
-        with patch.object(gate, "run_suite", side_effect=[True, False]) as runner:
-            with redirect_stdout(StringIO()):
-                self.assertEqual(gate.main(), 1)
-        self.assertEqual(runner.call_count, 2)
+                with patch.object(gate, "run_suite", side_effect=[True, False]) as runner:
+                    with redirect_stdout(StringIO()):
+                        self.assertEqual(gate.main(), 1)
+                self.assertEqual(runner.call_count, 2)
 
 
 if __name__ == "__main__":
