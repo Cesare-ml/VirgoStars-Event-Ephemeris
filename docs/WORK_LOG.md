@@ -1,3 +1,11 @@
+## 2026-11-14 — Bound independent P0 auditor subprocess memory BEFORE JSON parsing (draft PR #5)
+
+- **Defect:** the prior fail-closed JSON parser enforced 65,536 UTF-8 bytes only after `subprocess.run(capture_output=True)` accumulated the child stdout and stderr without limits; a malfunctioning auditor could consume excessive memory before the integrity comparison.
+- **Implementation:** Added `tools/bounded_audit.py` (concurrent direct stdout/stderr pipe readers with **64 KiB / 8 KiB** memory ceilings, child termination on overrun, UTF-8 strict stdout, bounded error output and exit-code preservation). Changed only the *real* audit subprocess invocations in `tools/validate_rust.py`; existing injected `invoke` mock seam and five Cargo gates are preserved. No astronomical decoder, event record, coverage policy, CSV, archive, Rust core or dataset license changes.
+- **Verification executed:** `python -m unittest -v test_bounded_audit` using six real Python child-process synthetic cases under Python 3.13.5 → **6/6 PASS**; `python -m py_compile bounded_audit.py test_bounded_audit.py` → PASS. GitHub blob SHA-1 matches byte-identical locally tested files: runner `39af7ed0340681e857b72ba724b1257f7cc7e048`, tests `3f4793e1e83c015552537832b744491d3444dece`. `docs/VALIDATION.md` updated.
+- **Not executed / risk:** full 17-method `tools/test_validate_rust.py` integration suite, locked Cargo fmt/Clippy/tests/build, 42 Python source cases, 51 native wheel cases and owner 380,844-event parity. The default direct subprocess path is bounded; injected test doubles retain legacy capture semantics. Child process trees / elapsed-time bounds are outside scope.
+- **Next:** run full independent P0 Python+Rust audit on a Cargo-equipped clean checkout; regenerate/review stale `Cargo.lock`, compile/install a native PyO3 wheel, and verify original dataset parity before considering a merge. **No merge, release, deploy or GitHub Actions.**
+
 ## 2026-11-14 — Reject duplicate JSON header keys in Rust P0 reader (draft PR #5)
 
 - **Task:** Close the reader/auditor discrepancy identified in the previous P0 byte-audit change. The existing `serde_json::from_slice::<Value>` silently collapsed repeated JSON object keys in untrusted header metadata.
