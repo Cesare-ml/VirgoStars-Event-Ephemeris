@@ -235,7 +235,7 @@ class PythonApiTests(unittest.TestCase):
                     )
 
         # The native stage assessment is current only when its source start
-        # is a genuine integer in [cycle_start, requested_at]. A falsey bool,
+        # is a genuine integer in [cycle_start, requested_at]. A boolean,
         # floating-point number, absent start or future threshold cannot
         # silently be presented as a recorded current phase.
         for code, started in (
@@ -266,6 +266,7 @@ class PythonApiTests(unittest.TestCase):
 
         # A real phase start exactly at its anchor remains valid.
         at_stage_start = fake_response()
+        at_stage_start["synods"]["Mercury"]["phase"]["code"] = "D1"
         at_stage_start["synods"]["Mercury"]["phase"]["started_at_us"] = -300
         accepted = VirgoStarsEvents(DummyNative(at_stage_start)).get_synods_at(
             "1970-01-01T00:00:00Z"
