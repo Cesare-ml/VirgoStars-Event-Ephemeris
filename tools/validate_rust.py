@@ -23,6 +23,35 @@ ROOT = Path(__file__).resolve().parent.parent
 RUSTUP_URL = "https://rustup.rs/"
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
+
+def validate_audit_shape(report: object, label: str) -> None:
+    """Require actual scalar types and coherent counts before audit parity.
+
+    Python's JSON values equate True with 1 and 1.0 with 1; checking only
+    equality between two reports could accept matching malformed metadata.
+    """
+    if not isinstance(report, dict):
+        raise RuntimeError(f"{label} P0 audit must report a JSON object")
+    digest = report.get("sha256")
+    if type(digest) is not str or SHA256.fullmatch(digest) is None:
+        raise RuntimeError(f"{label} P0 audit must report a canonical SHA-256")
+    if type(report.get("bytes")) is not int or report["bytes"] <= 0:
+        raise RuntimeError(f"{label} P0 audit must report a positive file byte length")
+    blocks = report.get("blocks")
+    records = report.get("records")
+    if type(blocks) is not int or type(records) is not int or not 0 <= blocks <= records:
+        raise RuntimeError(f"{label} P0 audit has invalid block/record counts")
+    if (blocks == 0) != (records == 0):
+        raise RuntimeError(f"{label} P0 audit has inconsistent empty archive counts")
+    sections = report.get("sections")
+    if (
+        not isinstance(sections, dict)
+        or any(key not in ("synod", "motion", "ingress") for key in sections)
+        or any(type(count) is not int or count < 0 for count in sections.values())
+        or sum(sections.values()) != records
+    ):
+        raise RuntimeError(f"{label} P0 audit has invalid family section counts")
+
 GATES = (
     # Abort before compilation if the reviewed Cargo.lock is stale. A normal
     # cargo invocation would otherwise silently rewrite the tracked lockfile.
@@ -97,16 +126,8 @@ def run_gates(
             rust_report = json.loads(rust_result.stdout)
         except (TypeError, json.JSONDecodeError) as exc:
             raise RuntimeError("P0 auditor did not produce valid JSON") from exc
-        if not isinstance(python_report, dict) or not isinstance(rust_report, dict):
-            raise RuntimeError("P0 auditors must each report a JSON object")
-        # Both auditors must report the physical file length, not only
-        # matching header-derived counts. A missing value on both sides
-        # must never be treated as matching nulls.
-        if not all(
-            type(report.get("bytes")) is int and report["bytes"] > 0
-            for report in (python_report, rust_report)
-        ):
-            raise RuntimeError("P0 auditors must report a positive file byte length")
+        validate_audit_shape(python_report, "Python")
+        validate_audit_shape(rust_report, "Rust")
         if rust_report.get("format") != "VSEPH-P0-EXPERIMENTAL":
             raise RuntimeError("Rust P0 audit reported an unexpected archive format")
         fields = ("sha256", "bytes", "blocks", "records", "sections")
@@ -115,6 +136,10 @@ def run_gates(
             raise RuntimeError(
                 "Python/Rust archive audit mismatch in: " + ", ".join(differences)
             )
+        # The two independent tools could agree on a bogus physical byte
+        # count. Also compare against the actual file on disk.
+        if rust_report["bytes"] != archive.stat().st_size:
+            raise RuntimeError("P0 auditor physical byte length differs from source file")
         if rust_report.get("sha256") != expected_sha256:
             raise RuntimeError("Rust/Python digest differs from the trusted manifest")
         if rust_report.get("sha256_checked_against_expected") is not True:
