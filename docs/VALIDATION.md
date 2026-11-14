@@ -2,6 +2,12 @@
 
 **No implementation/tests have been run for this repository as of initial setup.** The following gates become executable as code is added; record actual commands and outcomes in PRs and [WORK_LOG](WORK_LOG.md).
 
+## Native cycle-anchor validation precedes phase checks (2026-11-14, draft PR #5)
+
+The Python facade now checks recorded cycle start/end types and requested-instant bounds **before** comparing native `phase.started_at_us` with the cycle start. A corrupt string/list/floating `cycle_start_us` must yield a clear cycle-anchor `ValueError`, not an incidental comparison `TypeError` or an inaccurate phase-start error. The one-microsecond synthetic cycle fixture no longer carries phase thresholds predating the new anchor. Mandatory API/source/native test counts remain 18/42/51.
+
+**Executed:** isolated Python 3.13.5 reproduction of the current validation predicates: 4/4 unittest methods passing with 22 subcases. This is not a complete repository checkout run. The full source, synthetic P0, Cargo/PyO3 wheel and owner-dataset parity gates remain outstanding.
+
 ## Python phase-start transport guard (2026-11-14, draft PR #5)
 
 The Python `get_synods_at` facade now checks the native phase JSON before UTC projection: `phase.code` and `phase.started_at_us` must both be present or both absent; a present start must be a true Python integer inside the inclusive `[cycle_start_us, requested_at_us]` interval. This prevents a bad native payload from presenting a future or pre-cycle phase as the current recorded state. Null/unknown phases remain supported. Regression subcases were added **inside** the existing `test_native_cycle_boundaries_must_enclose_the_requested_instant` method, so the mandatory 18 API / 42 source / 51 wheel counts do not change.
