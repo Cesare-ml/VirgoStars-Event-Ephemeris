@@ -50,6 +50,8 @@ def parse_header_json(data: bytes) -> object:
     NaN/Infinity and numeric exponents overflowing to float infinity.
     serde_json rejects those malformed inputs; the independent oracle must
     reject them too, including in currently unused metadata fields.
+    Duplicate object keys at any depth (including escaped aliases) are also
+    ambiguous even when both spellings have the same value.
     """
     try:
         text = data.decode("utf-8")
@@ -65,8 +67,24 @@ def parse_header_json(data: bytes) -> object:
             raise ValueError("non-finite P0 JSON number")
         return number
 
+    def unique_object_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        # json.loads ordinarily keeps only the last duplicate key, including
+        # aliases written with JSON Unicode escapes. An independent byte
+        # audit must not silently reinterpret ambiguous archive metadata.
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate P0 JSON object key: {key!r}")
+            result[key] = value
+        return result
+
     try:
-        return json.loads(text, parse_constant=reject_constant, parse_float=finite_float)
+        return json.loads(
+            text,
+            parse_constant=reject_constant,
+            parse_float=finite_float,
+            object_pairs_hook=unique_object_keys,
+        )
     except json.JSONDecodeError as exc:
         raise ValueError(f"invalid UTF-8 JSON header: {exc}") from exc
 
