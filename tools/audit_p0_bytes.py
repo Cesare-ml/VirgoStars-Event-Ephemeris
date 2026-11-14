@@ -71,6 +71,15 @@ def parse_header_json(data: bytes) -> object:
         raise ValueError(f"invalid UTF-8 JSON header: {exc}") from exc
 
 
+def canonical_lowercase_sha256(value: object) -> bool:
+    """Mirror Rust's exact 64-byte, lowercase ASCII hex digest contract."""
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all("0" <= ch <= "9" or "a" <= ch <= "f" for ch in value)
+    )
+
+
 def _varint(data: bytes, pos: int) -> tuple[int, int]:
     value = 0
     for step in range(10):
@@ -192,12 +201,17 @@ def audit_file(path: str | Path, expected_sha256: str | None = None) -> dict:
         offset += size
         if base + offset > len(raw_file):
             raise ValueError("block extends beyond file")
+        # Rust validates a TOC digest's spelling at P0Archive::open().
+        # Reject malformed metadata before decompressing even valid blocks.
+        raw_digest = entry.get("raw_sha256")
+        if not canonical_lowercase_sha256(raw_digest):
+            raise ValueError("invalid P0 block SHA-256 digest: expected 64 lowercase hex digits")
         compressed = raw_file[base + start:base + offset]
         dec = zlib.decompressobj()
         block = dec.decompress(compressed, raw_len + 1)
         if len(block) != raw_len or not dec.eof or dec.unused_data or dec.unconsumed_tail or dec.flush():
             raise ValueError("truncated or trailing compressed stream")
-        if hashlib.sha256(block).hexdigest() != entry["raw_sha256"]:
+        if hashlib.sha256(block).hexdigest() != raw_digest:
             raise ValueError("block SHA-256 mismatch")
         first, last, count = _decode(family, block, count, seen_source_ids[family])
         if str(first) != entry["min_us"] or str(last) != entry["max_us"]:
