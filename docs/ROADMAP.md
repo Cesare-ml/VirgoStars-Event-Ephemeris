@@ -10,6 +10,8 @@
 
 **M0.2 strict phase-onset wire consistency (2026-11-14, draft PR #5):** A known Rust-derived stage now must begin at its own recorded source threshold (or the cycle anchor for first-stage `D1`/`CRESC1`). Invalid onset/code combinations fail closed instead of being exposed as current stage evidence. The existing API test method gained six malformed cases, leaving mandatory 42-source/51-native counts unchanged. The byte-identical helper passed a 4-method isolated Python test harness; full Python/Rust and owner-data gates are still outstanding. This does not move M0.2 to complete.
 
+**P0 strict JSON header parity (2026-11-14, draft PR #5):** Python audit and CSV/P0 comparison now require UTF-8 JSON and reject nonfinite JSON constants / exponent overflows, matching Rust serde_json. Existing adversarial metadata tests now cover nine malformed spellings/encodings without changing the audit method count. An isolated Python 3.13.5 4-method parser check passed. Full suite, Cargo.lock regeneration, locked Rust checks, native Python wheel validation and owner dataset review remain outstanding. Do not promote M0/P0 yet.
+
 ## Working conventions
 
 - `[ ]` not done; `[x]` only if merged and verified; `[~]` only if in progress with PR link documented in WORK_LOG.
