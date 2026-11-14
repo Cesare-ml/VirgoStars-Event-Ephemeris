@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from audit_report_json import decode_audit_report
+
 ROOT = Path(__file__).resolve().parent.parent
 RUSTUP_URL = "https://rustup.rs/"
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -121,11 +123,11 @@ def run_gates(
         print("\n[Rust P0 complete archive audit]", flush=True)
         rust_result = invoke(cli_cmd, cwd=root, check=True, capture_output=True, text=True)
 
-        try:
-            python_report = json.loads(py_result.stdout)
-            rust_report = json.loads(rust_result.stdout)
-        except (TypeError, json.JSONDecodeError) as exc:
-            raise RuntimeError("P0 auditor did not produce valid JSON") from exc
+        # Fail before checking audit fields if JSON itself is ambiguous:
+        # duplicate object keys and nonfinite numbers must never be silently
+        # interpreted differently by a Python or Rust JSON parser.
+        python_report = decode_audit_report(py_result.stdout, source="Python")
+        rust_report = decode_audit_report(rust_result.stdout, source="Rust")
         validate_audit_shape(python_report, "Python")
         validate_audit_shape(rust_report, "Rust")
         if rust_report.get("format") != "VSEPH-P0-EXPERIMENTAL":
