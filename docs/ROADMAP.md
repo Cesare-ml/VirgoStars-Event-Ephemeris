@@ -156,3 +156,6 @@ M0 input preflight (PR #5, 2026-11-11): reject invalid SHA-256 before native imp
 
 
 **M0.2 wheel file-vs-directory collision preflight (2026-11-14, draft PR #5):** detect case-insensitive, order-independent ZIP member conflicts between regular files and explicit/implicit directories prior to pip. 25/25 exact local ZIP policy + wheel identity test methods PASS; Cargo/native wheel gates and owner-data parity pending.
+
+
+**M0.2 lunar coverage warning wire consistency (2026-11-14, draft PR #5):** checked warnings (typed, nonduplicated) and the exact Moon >45-day recorded-anchor condition at the Python boundary. 12/12 focused Python stdlib tests executed; comprehensive 42 source/51 native, Cargo and real owner parity remain pending.
