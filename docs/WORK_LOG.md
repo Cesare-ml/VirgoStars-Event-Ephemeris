@@ -1,3 +1,10 @@
+## 2026-11-14 — Reject duplicate P0 JSON header fields during independent byte audit (draft PR #5)
+
+- **Observed defect:** Python `json.loads` silently keeps the last repeated JSON object key, including equivalent escaped spellings such as `"sections"` and `"\\u0073ections"`. Previously `audit_p0_bytes.py` could accept ambiguous P0 header metadata even with valid compressed-block digests.
+- **Change:** `parse_header_json` now rejects duplicate keys at every depth via `object_pairs_hook`. UTF-8, finite-number and existing metadata validations remain intact. Added `test_duplicate_header_keys_rejected_with_intact_compressed_blocks`: repeated top-level, nested and Unicode-escaped keys; a clean golden file remains the positive control. No event data, format version, source database, compiled Rust or scientific coverage modified.
+- **Executed:** six isolated Python 3.13.5 tests on a local copy of the updated `parse_header_json` function: valid nested metadata, repeated top-level, repeated nested, escaped-alias duplicate, valid escaped-only spelling, and unchanged nonfinite-number rejection; **6/6 PASS**. Source/test changes read back from GitHub on PR #5. **Not run:** the complete committed 16-method synthetic audit module, owner-data audit, Cargo fmt/Clippy/test/release, 42 Python source cases or 51 native wheel cases.
+- **Limitation / next step:** Rust's current `serde_json::Value` header decode may still accept duplicate keys on direct open; the independent auditor now refuses such inputs, but native strict-header parity remains a separate review task. Execute all gates on a full checkout and implement/test the equivalent native fail-closed rule before treating P0 header behavior as harmonized. No merge, Actions, release or deployment.
+
 ## 2026-11-14 — Bounded/Unicode-safe P0 audit report transport (draft PR #5)
 
 - **Scope:** Hardened `tools/audit_report_json.py` before JSON schema/digest/count comparison, without changing original event records, CSV, VSEPH-P0 bytes, archive identity, Rust core, or public API.
