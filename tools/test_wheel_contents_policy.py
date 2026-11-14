@@ -107,6 +107,35 @@ class WheelContentsPolicyTests(unittest.TestCase):
             ])
             self.assertIsNone(inspect_wheel_contents(wheel))
 
+    def test_windows_reserved_names_and_ntfs_stream_paths_rejected(self):
+        # These names are legal ZIP member strings but are unsafe or
+        # non-portable when pip installs a wheel on Windows.
+        for member in (
+            "virgostars_events/CON.py",
+            "virgostars_events/nul.txt",
+            "virgostars_events/COM1.pyd",
+            "virgostars_events/lPt9.dll",
+            "virgostars_events/aux",
+            "virgostars_events/PRN/child.py",
+            "virgostars_events/data.txt:alternate",
+            "virgostars_events/trailing.",
+            "virgostars_events/trailing ",
+            "virgostars_events/bad?.py",
+            "virgostars_events/control\\x01.txt",
+        ):
+            with self.subTest(member=member), tempfile.TemporaryDirectory() as folder:
+                wheel = self.wheel(Path(folder), [(member, b"fake")])
+                with self.assertRaisesRegex(ValueError, "unsafe wheel member path"):
+                    inspect_wheel_contents(wheel)
+
+        # Similar ordinary wheel member names are valid and must not be
+        # rejected just because they contain the device-name prefix.
+        for member in ("virgostars_events/console.py", "virgostars_events/com10.py"):
+            with self.subTest(valid=member), tempfile.TemporaryDirectory() as folder:
+                self.assertIsNone(inspect_wheel_contents(
+                    self.wheel(Path(folder), [(member, b"valid")])
+                ))
+
     def test_symlink_member_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             result = self.wheel(Path(folder))
