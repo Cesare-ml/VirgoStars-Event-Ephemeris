@@ -1,10 +1,9 @@
+# SPDX-License-Identifier: CPAL-1.0
+# Powered by VirgoStars — https://www.virgostars.it/
 from __future__ import annotations
 import tempfile
 from pathlib import Path
 import unittest
-from unittest.mock import patch
-from contextlib import redirect_stdout
-from io import StringIO
 import check_m0_build_env as check
 
 LOCK = ''.join(f'[[package]]\nname = "{p}"\nversion = "0.1.0"\n\n' for p in ("pyo3", "tempfile", "virgostars-events-python"))
