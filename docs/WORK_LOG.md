@@ -1,3 +1,11 @@
+## 2026-11-14 — Reject Windows device/ADS ZIP member names before wheel installation (draft PR #5)
+
+- **Observed risk:** the existing wheel ZIP preflight rejected traversal, exact/case-folded duplicates, symlinks and bundled datasets but still accepted Windows reserved names (`CON.py`, `NUL.txt`, `COM1.pyd`), NTFS alternate data stream syntax (`name:stream`), forbidden Windows punctuation, control bytes and trailing spaces/dots. Such member paths can behave differently on Windows than in a ZIP read on Linux.
+- **Change:** added `unsafe_windows_component` to `tools/wheel_contents_policy.py` and checked all nonempty member path segments before any pip installation. Rejects device names with extensions, control characters below U+0020, `<>:"|?*`, trailing periods and spaces. Preserves ordinary names such as `console.py` and `com10.py`. No runtime, dataset, P0 binary, Rust crate or scientific API changes.
+- **Tests authored:** `test_windows_reserved_names_and_ntfs_stream_paths_rejected` added to `tools/test_wheel_contents_policy.py` with 11 invalid cases and two allowed names; total declared wheel-policy tests 14.
+- **Actually executed:** three local Python 3.13.5 synthetic unittest methods PASS using the exact helper predicate and real ZIP creation (11 invalid path cases, 4 positive paths, and a ZIP with an unsafe member). These isolated tests are not a full checkout run. GitHub read-back verified implementation/test files. **Not run:** committed 14-test policy suite, all Cargo/Rust gates, 42 Python source tests, 51 installed-native wheel cases and authorized 380,844-event dataset parity.
+- **Next:** run `py -3 -m unittest discover -s tools -p "test_wheel_contents_policy.py" -v` in a full checkout, regenerate/review the stale tracked Cargo.lock using real Cargo, then compile/install the wheel and run all parity checks. PR remains draft; no merge, Actions, release, publication or production changes.
+
 ## 2026-11-14 — Fail-closed case-insensitive wheel filename collisions (draft PR #5)
 
 - **Problem:** Existing ZIP inspection rejected exact duplicate names but treated different-case members as distinct. On typical Windows case-insensitive filesystems, a wheel containing `virgostars_events/__init__.py` and `VirgoStars_Events/__INIT__.PY` may overwrite one installed path and invalidate the compiled/package provenance check.
