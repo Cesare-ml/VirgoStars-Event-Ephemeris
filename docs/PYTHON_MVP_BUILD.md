@@ -1,5 +1,18 @@
 # Windows: build and test the first Python/Rust synod MVP
 
+## Windows wheel path collision preflight (2026-11-14, draft PR #5)
+
+The offline pre-install policy (`tools/wheel_contents_policy.py`) now rejects two distinct ZIP members that become the same filesystem path when case-insensitively compared, including a duplicate package `__init__.py` with different capitalization. This avoids silent overwrites when a wheel is unpacked on common case-insensitive Windows filesystems. No dataset is embedded, and this is a packaging-safety check rather than a native build or scientific test.
+
+After checking out the PR branch, run:
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_wheel_contents_policy.py" -v
+```
+
+**Verification performed:** 6/6 synthetic stdlib ZIP smoke cases using the same `rstrip('/').casefold()` collision predicate, including file/file and directory/file collisions, and valid distinct filenames. The new committed 13-method full wheel-policy test module and the actual PyO3 wheel were **not run** in this environment; full checkout validation and native packaging remain required.
+
+
 ## Read-only Windows build prerequisite check (2026-11-14)
 
 Before spending time on Python source tests, Cargo or maturin, check the workspace's **first Python wheel prerequisites** from a full checkout of draft PR #5:
