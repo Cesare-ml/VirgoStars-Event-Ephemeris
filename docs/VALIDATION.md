@@ -18,6 +18,12 @@ The Python facade now checks recorded cycle start/end types and requested-instan
 
 **Executed:** isolated Python 3.13.5 reproduction of the current validation predicates: 4/4 unittest methods passing with 22 subcases. This is not a complete repository checkout run. The full source, synthetic P0, Cargo/PyO3 wheel and owner-dataset parity gates remain outstanding.
 
+## Reject exponential JSON float overflow in Rust/Python transport (2026-11-14, draft PR #5)
+
+The strict `decode_native_json` helper now checks `math.isfinite(float(token))` via `json.loads(parse_float=...)`, rejecting valid-grammar inputs such as `1e400` or `-9.9e999` that Python would otherwise silently turn into `Infinity`/`-Infinity`. The existing `parse_constant` hook catches literal `NaN`/`Infinity`, but **cannot catch numeric exponent overflow**. Standard finite numbers remain unchanged.
+
+**Evidence:** 4/4 isolated Python 3.13.5 unittest methods PASS using exactly the new committed helper (Git blob `51306c47d1a4bd15655035114cc34a5dcc7bfaca`). The existing Python API test method gained two malformed native response cases without increasing gate counts (18 API, 42 source, 51 installed-native). **Full committed test suites, native wheel and owner-data parity remain unverified**; isolated tests are not a replacement.
+
 ## Python phase-start transport guard (2026-11-14, draft PR #5)
 
 The Python `get_synods_at` facade now checks the native phase JSON before UTC projection: `phase.code` and `phase.started_at_us` must both be present or both absent; a present start must be a true Python integer inside the inclusive `[cycle_start_us, requested_at_us]` interval. This prevents a bad native payload from presenting a future or pre-cycle phase as the current recorded state. Null/unknown phases remain supported. Regression subcases were added **inside** the existing `test_native_cycle_boundaries_must_enclose_the_requested_instant` method, so the mandatory 18 API / 42 source / 51 wheel counts do not change.
