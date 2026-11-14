@@ -1,5 +1,19 @@
 # Windows: build and test the first Python/Rust synod MVP
 
+## Mandatory P0 synthetic audit count restored (2026-11-14, draft PR #5)
+
+The independent `tools/test_audit_p0_bytes.py` suite now contains **15 mandatory synthetic tests** plus one optional owner-data test. After a duplicate-P0-JSON-key regression was added, `tools/validate_p0_synthetic.py` still demanded only 14; its fail-closed count check therefore prevented all downstream build stages from starting, even in a correctly configured environment. The gate and `tools/test_validate_p0_synthetic.py` are updated to require 15. This is an actual build-blocking count mismatch fix, **not** a completed native wheel build.
+
+From a full PR #5 checkout run:
+
+```powershell
+py -3 tools\validate_p0_synthetic.py
+py -3 -m unittest discover -s tools -p "test_validate_p0_synthetic.py" -v
+```
+
+Expected: **15/15 synthetic tests**, no skips, and the five gate regression tests. The optional real owner-data audit remains a separate gate. `Cargo.lock` must still be regenerated with Cargo and the 42 source/51 installed-native checks and original dataset parity must still run.
+
+
 ## Verified private wheel snapshot for offline installation (2026-11-14, PR #5)
 
 `tools/verify_python_wheel.py` now copies the user-supplied `.whl` into its temporary verification directory **before** reading its ZIP metadata, and gives pip this **exact inspected copy**, not the original input path. This closes the time-of-check/time-of-use gap in which an external process could replace the original wheel after its dataset/ZIP policy check but before `pip install --no-index --no-deps`.
