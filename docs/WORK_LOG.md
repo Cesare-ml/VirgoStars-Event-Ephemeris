@@ -1,3 +1,12 @@
+## 2026-11-14 — Guard direct `run_gates` invocations before Cargo (draft PR #5)
+
+- **Problem:** the command-line entry point `validate_archive_options` checks trusted `--sha256` syntax and archive existence, but callers that invoke `run_gates` directly could bypass those checks. Missing independent `tools/audit_p0_bytes.py` was also detected *after* five potentially expensive Cargo gates.
+- **Patch:** `tools/validate_rust.py` now fails **before Cargo** for missing/malformed SHA-256, a digest supplied without an archive, missing archive files or a missing independent auditor; retains the established `trusted --sha256` error. The five existing Cargo gates and Python/Rust archive parity remain unchanged. No data, format, scientific coverage or public release touched.
+- **New regression:** `tools/test_validate_preflight.py` (5 methods) requires `invoke.assert_not_called()` for all invalid cases. Tests exercise actual `run_gates` from an exact blob-matching local copy, without running real Cargo.
+- **Actually executed:** Python 3.13.5 combined `python -m unittest -q test_validate_preflight test_p0_u64_report test_validate_bounded_integration test_bounded_audit` → **26/26 PASS** (5 new + 21 existing). GitHub `validate_rust.py` blob `8f829c12430dc1b57f8e01abca9f438e16890499` and new tests `d9d94cf04acd17c0d3398728f58e5f0f72b8d244` exactly match executed local files. Cargo unavailable in the execution runtime and direct container access to GitHub is DNS-blocked; changes were pushed via authenticated GitHub integration.
+- **Still not executed:** existing full 17-method `tools/test_validate_rust.py` module; locked Cargo fmt/Clippy/tests/release; Python 42 source / 51 native wheel cases and authorized 380,844-record original dataset parity. A source-only test pass does not establish Rust compilation, scientific completeness or packaging readiness.
+- **Next:** execute all source validation suites on a clean checkout; regenerate/review `Cargo.lock` with real Cargo, build native wheel, verify installed wheel and original archive against its trusted manifest. No main merge, GitHub Actions, release or deployment.
+
 ## 2026-11-14 — Strict Rust-u64 limits on independent audit JSON counts (draft PR #5)
 
 - **Issue:** the Python parser accepts integer JSON values with more than 64 bits, while the native Rust archive audit works with bounded integer counters. The existing shape checker ensured positivity and type but not the maximum representable unsigned 64-bit value, permitting impossible Python-side count/byte claims to pass that first gate.
