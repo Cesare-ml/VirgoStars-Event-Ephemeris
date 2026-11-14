@@ -55,3 +55,9 @@ A standalone human-readable `dataset.manifest.json` should include: dataset ID/v
 ## First implementation checkpoint
 
 Create a documented **tiny synthetic** file with all three families, one pre-1970 time, one null/empty phase list, one body with sparse coverage, multiple entries on the same date and one corrupted/truncated variant. Implement a reader and exact round-trip tests **before exporting real records**.
+
+## Experimental P0 decoder is not the v1 specification
+
+Draft PR #6 holds the 2026-11-10 VSEPH-P0 experimental zlib archive and Python reference packer. Draft PR #5 includes the new isolated **virgostars-events-p0** Rust decoder using that existing framing and a Python-generated golden fixture. The VSEPH v1 byte layout remains a **draft** and must still be frozen under issue #3.
+
+P0 framing: the eight ASCII bytes VSEPH-P0; u32 little-endian JSON header length; JSON header containing sorted indexed block metadata; contiguous zlib-compressed blocks. Each block has SHA-256 over the uncompressed bytes. The experimental reader caps headers to 5,000,000 bytes, compressed blocks to 5,000,000 bytes, raw blocks to 25,000,000 bytes and record counts to 512. The provisional body schema includes signed i64 base timestamps, unsigned varint IDs/deltas, synod extras and packed sign/direction bytes. This format should never be silently represented as the normative v1 header.

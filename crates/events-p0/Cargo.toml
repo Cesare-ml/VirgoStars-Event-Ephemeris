@@ -1,0 +1,21 @@
+[package]
+name = "virgostars-events-p0"
+description = "Experimental VSEPH-P0 indexed decoder; NOT the VSEPH v1 format"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+virgostars-events-core = { path = "../events-core" }
+serde = "1.0"
+serde_json = "1.0"
+flate2 = { version = "1.0", default-features = false, features = ["rust_backend"] }
+sha2 = "0.10"
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+base64 = "0.22"
