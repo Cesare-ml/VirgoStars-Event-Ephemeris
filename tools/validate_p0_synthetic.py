@@ -15,7 +15,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 OPTIONAL_OWNER_TEST = "test_real_snapshot_full_block_audit"
-REQUIRED_SYNTHETIC = 14
+REQUIRED_SYNTHETIC = 15
 
 
 def run_synthetic(cls: type[unittest.TestCase]) -> bool:
