@@ -44,3 +44,24 @@ def decode_native_json(payload: str) -> Any:
         parse_constant=_reject_nonfinite,
         parse_float=_finite_json_float,
     )
+
+
+def same_json_value(left: Any, right: Any) -> bool:
+    """Compare native JSON structures without Python's bool/int/float coercion.
+
+    In particular, True == 1 and 1 == 1.0 in Python, although Rust JSON
+    emits those as distinct values. Used to audit the Moon alias before it
+    is replaced by the canonical Moon record in the public Python response.
+    """
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return (
+            left.keys() == right.keys()
+            and all(same_json_value(value, right[key]) for key, value in left.items())
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            same_json_value(item, other) for item, other in zip(left, right)
+        )
+    return left == right
