@@ -25,6 +25,12 @@ from bounded_audit import run_bounded_audit
 ROOT = Path(__file__).resolve().parent.parent
 RUSTUP_URL = "https://rustup.rs/"
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+_U64_MAX = (1 << 64) - 1  # Rust P0 audit counters and file length are u64-sized.
+
+
+def _is_u64(value: object) -> bool:
+    """JSON integer accepted by the native P0 audit field schema (not bool)."""
+    return type(value) is int and 0 <= value <= _U64_MAX
 
 
 def validate_audit_shape(report: object, label: str) -> None:
@@ -38,11 +44,11 @@ def validate_audit_shape(report: object, label: str) -> None:
     digest = report.get("sha256")
     if type(digest) is not str or SHA256.fullmatch(digest) is None:
         raise RuntimeError(f"{label} P0 audit must report a canonical SHA-256")
-    if type(report.get("bytes")) is not int or report["bytes"] <= 0:
+    if not _is_u64(report.get("bytes")) or report["bytes"] == 0:
         raise RuntimeError(f"{label} P0 audit must report a positive file byte length")
     blocks = report.get("blocks")
     records = report.get("records")
-    if type(blocks) is not int or type(records) is not int or not 0 <= blocks <= records:
+    if not _is_u64(blocks) or not _is_u64(records) or blocks > records:
         raise RuntimeError(f"{label} P0 audit has invalid block/record counts")
     if (blocks == 0) != (records == 0):
         raise RuntimeError(f"{label} P0 audit has inconsistent empty archive counts")
@@ -50,7 +56,7 @@ def validate_audit_shape(report: object, label: str) -> None:
     if (
         not isinstance(sections, dict)
         or any(key not in ("synod", "motion", "ingress") for key in sections)
-        or any(type(count) is not int or count < 0 for count in sections.values())
+        or any(not _is_u64(count) for count in sections.values())
         or sum(sections.values()) != records
     ):
         raise RuntimeError(f"{label} P0 audit has invalid family section counts")
