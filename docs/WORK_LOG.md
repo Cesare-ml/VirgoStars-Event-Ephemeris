@@ -1,3 +1,11 @@
+## 2026-11-14 — Install the exact wheel bytes checked by the offline policy (draft PR #5)
+
+- **Defect:** `tools/verify_python_wheel.py` previously inspected the caller-supplied wheel path, then later invoked pip on the same external path after creating its venv. An unrelated process could replace that file between ZIP/dataset validation and installation (TOCTOU).
+- **Change:** stage the input wheel with `shutil.copyfile` inside the verifier's private temporary directory, apply `inspect_wheel_contents` to the staged copy, and pass **that exact copy** to `pip install --no-index --no-deps`. On error the temporary copy is removed automatically; the original owner file is not modified. Existing Python source isolation, CLI import check, compiled-extension check and native acceptance gate remain required.
+- **Regression:** `tools/test_verify_python_wheel.py` now asserts pip receives a different path with the same wheel filename. A new test overwrites the input wheel during the mocked venv creation step and verifies pip's staged input still matches pre-mutation bytes. The suite now declares **10** methods.
+- **Executed:** two synthetic CPython 3.13.5 tests locally on temp wheel ZIPs: copied/inspected wheel survives source replacement; malformed ZIP copy fails parsing. **Not executed:** complete 10-method committed suite, pip installation, PyO3/Cargo builds, 42 source tests, 51 native-wheel tests or original 380,844-event parity. GitHub readback to verify committed code required separately.
+- **Next:** execute `py -3 -m unittest discover -s tools -p "test_verify_python_wheel.py" -v` on a full checkout, regenerate/review known-stale `Cargo.lock` using real Cargo, compile and install a native wheel, and validate authorized dataset parity. No merge, release, dataset changes, GitHub Actions or production deployment.
+
 ## 2026-11-14 — Bounded P0 subprocess route integration regressions (draft PR #5)
 
 - **Gap:** the eight `bounded_audit.py` child-process tests proved limits and timeout inside the helper, but did not guard the default `validate_rust.run_gates` wiring. A future accidental return to `subprocess.run(capture_output=True)` for Python/Rust auditors would bypass those protections.
