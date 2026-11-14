@@ -158,7 +158,7 @@ class ValidateRustToolTest(unittest.TestCase):
         archive = validate_archive_options("fixture.p0", DIGEST, self.root)
         def fake(command, **kwargs):
             if kwargs.get("capture_output"):
-                report = {"sha256": DIGEST, "bytes": 20, "blocks": 4, "records": 8, "sections": {}}
+                report = {"sha256": DIGEST, "bytes": 20, "blocks": 4, "records": 8, "sections": {"synod": 3, "motion": 2, "ingress": 3}}
                 if command[0] == "mock-cargo":
                     report.update(format="VSEPH-P0-EXPERIMENTAL",
                                   sha256_checked_against_expected=False,
@@ -232,6 +232,72 @@ class ValidateRustToolTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "unexpected archive format"):
                     run_gates(root=self.root, archive=archive, expected_sha256=DIGEST,
                               cargo="mock-cargo", invoke=fake)
+
+    def test_rejects_two_identically_malformed_p0_reports(self):
+        # Comparing only equality would accept missing sections and JSON
+        # scalar type coercions such as True == 1 and 8.0 == 8.
+        archive = validate_archive_options("fixture.p0", DIGEST, self.root)
+        valid = {
+            "sha256": DIGEST, "bytes": 20, "blocks": 4, "records": 8,
+            "sections": {"synod": 3, "motion": 2, "ingress": 3},
+        }
+        broken_cases = (
+            ("missing sections", {"sections": None}),
+            ("empty sections despite events", {"sections": {}}),
+            ("boolean count", {"records": True}),
+            ("float count", {"records": 8.0}),
+            ("boolean block count", {"blocks": True}),
+            ("more blocks than events", {"blocks": 9}),
+            ("zero blocks with records", {"blocks": 0}),
+            ("float section count", {"sections": {"synod": 3.0, "motion": 2, "ingress": 3}}),
+            ("boolean section count", {"sections": {"synod": True, "motion": 4, "ingress": 3}}),
+            ("incorrect section sum", {"sections": {"synod": 2, "motion": 2, "ingress": 3}}),
+            ("unrecognized family", {"sections": {"synod": 3, "motion": 2, "ingress": 3, "moon": 0}}),
+            ("noncanonical digest", {"sha256": DIGEST.upper()}),
+        )
+        for name, mutation in broken_cases:
+            with self.subTest(name=name):
+                def fake(command, **kwargs):
+                    if kwargs.get("capture_output"):
+                        report = dict(valid, **mutation)
+                        if command[0] == "mock-cargo":
+                            report.update(
+                                format="VSEPH-P0-EXPERIMENTAL",
+                                sha256_checked_against_expected=True,
+                                coverage_certified=False,
+                            )
+                        return subprocess.CompletedProcess(
+                            command, 0, stdout=json.dumps(report),
+                        )
+                    return subprocess.CompletedProcess(command, 0)
+                with self.assertRaisesRegex(RuntimeError, "P0 audit"):
+                    run_gates(
+                        root=self.root, archive=archive, expected_sha256=DIGEST,
+                        cargo="mock-cargo", invoke=fake,
+                    )
+
+    def test_matching_report_size_must_equal_real_archive_bytes(self):
+        archive = validate_archive_options("fixture.p0", DIGEST, self.root)
+        self.assertEqual(archive.stat().st_size, 20)
+        def fake(command, **kwargs):
+            if kwargs.get("capture_output"):
+                report = {
+                    "sha256": DIGEST, "bytes": 21, "blocks": 4, "records": 8,
+                    "sections": {"synod": 3, "motion": 2, "ingress": 3},
+                }
+                if command[0] == "mock-cargo":
+                    report.update(
+                        format="VSEPH-P0-EXPERIMENTAL",
+                        sha256_checked_against_expected=True,
+                        coverage_certified=False,
+                    )
+                return subprocess.CompletedProcess(command, 0, stdout=json.dumps(report))
+            return subprocess.CompletedProcess(command, 0)
+        with self.assertRaisesRegex(RuntimeError, "physical byte length"):
+            run_gates(
+                root=self.root, archive=archive, expected_sha256=DIGEST,
+                cargo="mock-cargo", invoke=fake,
+            )
 
     def test_archive_without_trusted_hash_stops_before_validation(self):
         with self.assertRaisesRegex(ValueError, "trusted"):
