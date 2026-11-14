@@ -68,9 +68,14 @@ def run_checked(command: Sequence[str], *, cwd: Path) -> None:
     print("\n[wheel check]", " ".join(map(str, command)), flush=True)
     # The console-script launcher does not support `python -I`; prevent an
     # inherited developer PYTHONPATH/PYTHONHOME from shadowing the wheel.
+    # Also prevent inherited PIP_TARGET, PIP_PREFIX, PIP_USER and PIP_ROOT
+    # from redirecting an "isolated" install outside the test environment.
     clean_env = os.environ.copy()
-    for key in ("PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE"):
-        clean_env.pop(key, None)
+    for key in tuple(clean_env):
+        if key in ("PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE") or key.startswith("PIP_"):
+            clean_env.pop(key)
+    # pip documents os.devnull as disabling all pip configuration files.
+    clean_env["PIP_CONFIG_FILE"] = os.devnull
     completed = subprocess.run(
         list(map(str, command)), cwd=str(cwd), check=False, env=clean_env
     )
