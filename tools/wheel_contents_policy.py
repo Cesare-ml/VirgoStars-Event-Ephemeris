@@ -33,7 +33,7 @@ MAX_UNCOMPRESSED_TOTAL = 128 * 1024 * 1024
 # special Windows names when the same wheel is installed on Windows.
 _WINDOWS_INVALID = frozenset('<>:"|?*')
 _WINDOWS_DEVICE = re.compile(
-    r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\..*)?\\Z",
+    r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?\Z",
     re.IGNORECASE,
 )
 
