@@ -1,5 +1,10 @@
 # Validation and quality gates
 
+## Python native phase status/code transport (2026-11-14, draft PR #5)
+
+The Python M0 wrapper checks the Rust `SynodStage`/`SynodStageStatus` wire shape, **without reclassifying phases**: a `derived_from_recorded_thresholds` result must have a body-appropriate four-stage code, an integer stage start, and exactly three stored phase thresholds. Unknown-status results must have no stage code or stage start; a missing predecessor must carry `no_preceding_recorded_cycle`. Missing/boolean/unrecognized status, invalid body-stage pair or wrongly claimed derivation are transport errors. The additional test cases are embedded in the existing 18-method Python API suite (source-gate totals unchanged). A copied, Git SHA-1-matching helper passed **4/4 isolated Python 3.13.5 tests**; full committed Python suite, native wheel and Rust tests are **not run here**.
+
+
 ## Native synod phase arrays (2026-11-14, draft PR #5)
 
 Validate the Python native transport before any ISO projection: `phase_thresholds_us` must be explicitly present and either null (unknown) or an array of strictly increasing **signed i64** microsecond integers strictly after its recorded anchor. Explicit `[]` is valid only when an anchor is recorded. Never treat a future phase as current, infer missing phases, or reject an originally recorded phase merely because it lies after the requested instant or later source cycle. The existing API method now covers malformed arrays and legitimate NULL/empty/future cases; counts stay 18 API / 42 source / 51 installed wheel. The standalone exact-helper preflight passed 4/4 in Python 3.13.5, **not** the full repository suite, installed wheel or Rust build.
