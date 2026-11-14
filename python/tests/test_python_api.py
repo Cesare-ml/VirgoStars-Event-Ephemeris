@@ -541,6 +541,60 @@ class PythonApiTests(unittest.TestCase):
         data = VirgoStarsEvents(DummyNative(raw)).get_synods_at("1970-01-01T00:00:00Z")
         self.assertEqual(data["synods"]["Moon"]["phase_thresholds_utc"], [])
 
+        # Preserve source observations, but never accept invented, reversed,
+        # duplicated or non-integer phase timestamps from the native boundary.
+        for invalid in (
+            12, "100", {}, True, [True], [-100.0], ["-100"],
+            [None], [-300], [-100, -100], [-100, -101],
+            [(1 << 63)], [-(1 << 63) - 1],
+        ):
+            with self.subTest(invalid=invalid):
+                broken = fake_response()
+                broken["synods"]["Mercury"]["phase_thresholds_us"] = invalid
+                with self.assertRaisesRegex(
+                    ValueError, "native synod phase thresholds invalid"
+                ):
+                    VirgoStarsEvents(DummyNative(broken)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        for omitted in ("missing field", "missing anchor"):
+            with self.subTest(omitted=omitted):
+                broken = fake_response()
+                if omitted == "missing field":
+                    del broken["synods"]["Mercury"]["phase_thresholds_us"]
+                else:
+                    broken["synods"]["Moon"]["source_id"] = None
+                    broken["synods"]["Moon"]["cycle_start_us"] = None
+                    broken["synods"]["Moon"]["phase_thresholds_us"] = []
+                    broken["new_moon"] = None
+                with self.assertRaisesRegex(
+                    ValueError, "native synod phase thresholds invalid"
+                ):
+                    VirgoStarsEvents(DummyNative(broken)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        # An original phase timestamp after X is recorded data, not a claim
+        # that the associated future phase has already begun.
+        future = fake_response()
+        future["synods"]["Mercury"]["phase_thresholds_us"] = [1, 2, 3]
+        future["synods"]["Mercury"]["phase"] = {
+            "code": "D1", "started_at_us": -300,
+            "status": "derived_from_recorded_thresholds",
+        }
+        returned = VirgoStarsEvents(DummyNative(future)).get_synods_at(
+            "1970-01-01T00:00:00Z"
+        )
+        self.assertEqual(
+            returned["synods"]["Mercury"]["phase_thresholds_utc"],
+            [
+                "1970-01-01T00:00:00.000001Z",
+                "1970-01-01T00:00:00.000002Z",
+                "1970-01-01T00:00:00.000003Z",
+            ],
+        )
+
     def test_missing_previous_moon_anchor_returns_none_alias(self):
         raw = fake_response()
         raw["synods"]["Moon"]["source_id"] = None
