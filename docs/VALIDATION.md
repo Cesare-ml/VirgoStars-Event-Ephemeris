@@ -1,5 +1,12 @@
 # Validation and quality gates
 
+## Strict JSON transport for independent P0 audit reports (2026-11-14, draft PR #5)
+
+Before comparing any P0 audit counts, `tools/validate_rust.py` now parses both subprocess JSON reports using the independent standard-library helper `tools/audit_report_json.py`. Duplicate JSON object keys are rejected recursively, **including equivalent Unicode-escaped keys**. Python's otherwise-permissive `NaN`/`Infinity`/-`Infinity` syntax and overflowing exponents such as `1e400` are rejected. Any malformed or nonobject report fails before digest, family-count, or coverage checks; successful canonical reports still flow through the existing strict report-shape, SHA-256, size and Rust/Python parity gates.
+
+Run `python -m unittest discover -s tools -p test_audit_report_json.py -v` (5 focused tests) and `python -m unittest discover -s tools -p test_validate_rust.py -v` (17 validator-orchestrator tests), followed by the mandatory Cargo-locked and native wheel gates on a Rust-equipped checkout. **Actually run here:** Python 3.13.5 exact-GitHub-blob helper unit tests **5/5 PASS**, `audit_report_json.py` blob `f0bda055dd1918f5093d62312d58221254477431`, test blob `4c3a547e61c35869feb9504f4ad52c823f922ed1`. **Not run here:** complete 17-method orchestrator suite, 42-source/51-wheel acceptance, Cargo or owner CSV/P0 parity. No scientific dataset changes, release, or GitHub Actions.
+
+
 ## P0 independent audit report schema and physical length (2026-11-14, draft PR #5)
 
 The `tools/validate_rust.py` cross-check now validates **each** Python and Rust P0 audit report before comparing them. Both must report canonical lowercase SHA-256, a positive integer file size, nonnegative integer block/event counts with `blocks <= records`, and an integer nonnegative event count per recognized family whose sum equals `records`. Empty archives must have zero records and zero blocks. This rejects Python JSON coercions (`true == 1`, `8.0 == 8`) and identical missing `sections` fields that previously could pass equality. After independent reports agree, their `bytes` must also equal the **actual archive size on disk**, rather than two mutually agreeing false sizes. Existing Rust CLI format/trusted-digest/coverage checks remain mandatory. Two repository regression methods added (16 total in `test_validate_rust.py`). An isolated Python 3.13.5 reproduction of the predicate passed 4/4 local unittest methods; full committed 16-method orchestration, Cargo tests, compiled wheel and owner-data parity **not run** here.
