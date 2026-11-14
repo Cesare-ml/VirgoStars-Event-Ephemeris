@@ -430,7 +430,10 @@ class PythonApiTests(unittest.TestCase):
 
         # The wrapper must not quietly repair a contradictory native Moon
         # alias. Both omitted and value-divergent native fields are invalid.
-        for corruption in ("missing", "null", "wrong-id", "unrelated"):
+        for corruption in (
+            "missing", "null", "wrong-id", "unrelated",
+            "float-id", "bool-id", "float-next",
+        ):
             with self.subTest(corruption=corruption):
                 raw = fake_response()
                 if corruption == "missing":
@@ -439,6 +442,19 @@ class PythonApiTests(unittest.TestCase):
                     raw["new_moon"] = None
                 elif corruption == "wrong-id":
                     raw["new_moon"] = dict(raw["synods"]["Moon"], source_id=999)
+                elif corruption == "float-id":
+                    # Plain Python equality incorrectly regards 11 == 11.0.
+                    raw["new_moon"] = dict(raw["synods"]["Moon"], source_id=11.0)
+                elif corruption == "bool-id":
+                    # Rust JSON integers and booleans are distinct; Python
+                    # equality would otherwise accept 1 == True.
+                    raw["synods"]["Moon"]["source_id"] = 1
+                    raw["new_moon"] = dict(raw["synods"]["Moon"], source_id=True)
+                elif corruption == "float-next":
+                    # Type-sensitive matching also applies to nested fields.
+                    raw["new_moon"] = dict(
+                        raw["synods"]["Moon"], next_cycle_start_us=2_000_000.0
+                    )
                 else:
                     raw["new_moon"] = raw["synods"]["Mercury"]
                 with self.assertRaisesRegex(ValueError, "new_moon disagrees"):
