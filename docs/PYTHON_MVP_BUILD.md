@@ -1,5 +1,18 @@
 # Windows: build and test the first Python/Rust synod MVP
 
+## Hermetic pip environment in the offline wheel verifier (2026-11-14, draft PR #5)
+
+`tools/verify_python_wheel.py::run_checked` now removes inherited `PIP_*` variables (including `PIP_TARGET`, `PIP_PREFIX`, `PIP_ROOT`, `PIP_USER`, `PIP_INDEX_URL` and an externally selected `PIP_CONFIG_FILE`) alongside the existing `PYTHONPATH`/`PYTHONHOME`/`PYTHONUSERBASE` sanitization. It then sets `PIP_CONFIG_FILE` to `os.devnull` to disable system/user/site pip config files. The wheel is still a private checked copy installed with `--no-index --no-deps` in the temporary venv. These controls prevent locally inherited pip configuration from changing the intended install target. This is an isolated installation-policy improvement, **not** evidence that a native wheel has been built.
+
+Regression command for a complete source checkout:
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_verify_python_wheel.py" -v
+```
+
+One new test method starts a **real Python child** with deliberately hostile pip variables and checks that it sees only `PIP_CONFIG_FILE=os.devnull`; the module now declares **11 tests**. **Executed here:** 2/2 local isolated Python 3.13.5 tests against an exact copy of the changed `run_checked` function: inherited configuration removed and nonzero child exit rejected. **Not executed:** the complete 11-test source module, pip installation, compiled PyO3 wheel, locked Cargo checks, 42 source/51 native acceptance or owner-data parity.
+
+
 ## Mandatory P0 synthetic audit count restored (2026-11-14, draft PR #5)
 
 The independent `tools/test_audit_p0_bytes.py` suite now contains **15 mandatory synthetic tests** plus one optional owner-data test. After a duplicate-P0-JSON-key regression was added, `tools/validate_p0_synthetic.py` still demanded only 14; its fail-closed count check therefore prevented all downstream build stages from starting, even in a correctly configured environment. The gate and `tools/test_validate_p0_synthetic.py` are updated to require 15. This is an actual build-blocking count mismatch fix, **not** a completed native wheel build.
