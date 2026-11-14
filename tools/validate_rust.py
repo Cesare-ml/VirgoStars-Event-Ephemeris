@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 from audit_report_json import decode_audit_report
+from bounded_audit import run_bounded_audit
 
 ROOT = Path(__file__).resolve().parent.parent
 RUSTUP_URL = "https://rustup.rs/"
@@ -85,7 +86,7 @@ def validate_archive_options(
 def run_gates(
     *, root: Path = ROOT, archive: Path | None = None,
     expected_sha256: str | None = None, cargo: str | None = None,
-    invoke=subprocess.run,
+    invoke=None,
 ) -> None:
     """Sequential mandatory gates; stop immediately on any failed command."""
     executable = cargo or shutil.which("cargo")
@@ -99,10 +100,13 @@ def run_gates(
     if archive is not None and not expected_sha256:
         raise ValueError("cannot audit a real archive without a trusted --sha256")
 
+    # The caller-supplied invoke is a test seam. In production, auditors use
+    # bounded streaming pipes instead of subprocess.run(capture_output=True).
+    gate_invoke = subprocess.run if invoke is None else invoke
     for label, args in GATES:
         cmd = [executable, *args]
         print(f"\n[{label}] {' '.join(cmd)}", flush=True)
-        invoke(cmd, cwd=root, check=True)
+        gate_invoke(cmd, cwd=root, check=True)
 
     if archive is not None:
         # The independent Python byte-level validator must also pass.
@@ -114,14 +118,16 @@ def run_gates(
             expected_sha256 or "",
         ]
         print("\n[Independent P0 byte audit]", flush=True)
-        py_result = invoke(python_cmd, cwd=root, check=True, capture_output=True, text=True)
+        py_result = (run_bounded_audit(python_cmd, cwd=root) if invoke is None
+                     else invoke(python_cmd, cwd=root, check=True, capture_output=True, text=True))
         # The Rust CLI performs complete block decoding AND full-file hashing.
         cli_cmd = [
             executable, "run", "--locked", "-p", "virgostars-events-p0", "--bin",
             "p0-verify", "--", str(archive), "--sha256", expected_sha256 or "",
         ]
         print("\n[Rust P0 complete archive audit]", flush=True)
-        rust_result = invoke(cli_cmd, cwd=root, check=True, capture_output=True, text=True)
+        rust_result = (run_bounded_audit(cli_cmd, cwd=root) if invoke is None
+                       else invoke(cli_cmd, cwd=root, check=True, capture_output=True, text=True))
 
         # Fail before checking audit fields if JSON itself is ambiguous:
         # duplicate object keys and nonfinite numbers must never be silently
