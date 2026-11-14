@@ -181,8 +181,8 @@ class CsvP0ParityTest(unittest.TestCase):
                 )
                 self.assertEqual((body, source_id, fields), (valid, 1, [0, None]))
 
-        for invalid in ("", " Moon", "Moon ", "Moon\\t", "Moon\\x00",
-                        "Moon\\x7f", "Moon\\u009f", "Moon\\ud800"):
+        for invalid in ("", " Moon", "Moon ", "Moon\t", "Moon\x00",
+                        "Moon\x7f", "Moon\u009f", "Moon\ud800"):
             with self.subTest(invalid=repr(invalid)):
                 with self.assertRaisesRegex(ValueError, "invalid body name"):
                     normalized_row("synod", dict(original, elemento=invalid))
