@@ -47,6 +47,13 @@ def validate_recorded_thresholds(
 # computing the stage from astronomical phase times remains in Rust.
 _PLANET_STAGE_CODES = frozenset({"D1", "R2", "R3", "D4"})
 _MOON_STAGE_CODES = frozenset({"CRESC1", "CRESC2", "CAL1", "CAL2"})
+# The code's stage-start instant must be an original recorded threshold.
+# -1 means the cycle anchor itself (D1/CRESC1), not an extra phase.
+# This is a wire consistency check, not an independent stage classifier.
+_STAGE_START_EXTRA_INDEX = {
+    "D1": -1, "R2": 0, "R3": 1, "D4": 2,
+    "CRESC1": -1, "CRESC2": 0, "CAL1": 1, "CAL2": 2,
+}
 _PLANET_STAGE_BODIES = frozenset({
     "Mercury", "Venus", "Sun", "Mars", "Jupiter",
     "Saturn", "Uranus", "Neptune", "Pluto",
@@ -107,5 +114,9 @@ def validate_native_stage(
             or len(thresholds) != 3
         ):
             raise ValueError(f"native synod phase status invalid for {body}")
+        start_index = _STAGE_START_EXTRA_INDEX[code]
+        recorded_start = anchor_us if start_index == -1 else thresholds[start_index]
+        if started_at_us != recorded_start:
+            raise ValueError(f"native synod phase start disagrees with thresholds for {body}")
     elif status not in _UNKNOWN_STAGE_STATUSES or code is not None or started_at_us is not None:
         raise ValueError(f"native synod phase status invalid for {body}")
