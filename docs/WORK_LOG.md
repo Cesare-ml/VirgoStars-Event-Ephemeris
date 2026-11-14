@@ -1,3 +1,12 @@
+## 2026-11-14 — Reject lone Unicode surrogates in native synod JSON (stacked draft PR #14)
+
+- **Task / PR:** Isolated transport-hardening patch on `fix/python-native-json-unicode-scalars-20261114`, stacked on Rust/Python draft PR #5 at base commit `471a7dafe7e7dbc9ff8a9287aed6cf6f657e2899`; review at https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/14. Does not claim pilot issue #13.
+- **Reproduced defect:** Python `json.loads` accepts a lone `\\ud800` escaped surrogate in a nested synod response, even though it cannot be encoded as Unicode scalar UTF-8. The pre-fix source matched Git blob `f34f8c5ab8bf0b1de0cfe2489010f423eee09398`.
+- **Fix:** `python/virgostars_events/_wire.py` now rejects any unpaired surrogate within JSON keys/values using a nonrecursive traversal, while retaining the strict duplicate-key and nonfinite-number parser. Adds `python/tests/test_native_json_unicode.py` for valid paired characters, invalid high/low surrogates, raw Python surrogate text, and previous guardrails.
+- **Actually executed:** isolated Python `PYTHONPATH=python python3 -m unittest discover -s python/tests -p test_native_json_unicode.py -v` **5/5 PASS** and `python3 -m py_compile python/virgostars_events/_wire.py python/tests/test_native_json_unicode.py` **PASS**. Local mirror contained the exact source helper and test plus a stub package initializer, **not** the full repository checkout. GitHub byte identity confirmed by blob SHA-1: helper `7bd9aa9a0fb5d2aa92b7eb26dd77742c4a6d6d17`, test `c48f33e9bdfd3de00bad27576d47ed173b705754`.
+- **Not run / blockers:** complete Python source suite, compiled PyO3 wheel and Rust Cargo checks, original owner data parity. `cargo`/`rustc` unavailable in local runtime; no scientific accuracy or release claim.
+- **Next:** run full Python tests and native acceptance on a clean checkout; review and incorporate this stacked PR into #5 only after CI-equivalent checks. No production, dataset, GitHub Actions, merge or release changes.
+
 ## 2026-11-14 — Configurable fail-closed independent P0 audit timeout (draft PR #5)
 
 - **Need:** the full owner 380,844-event P0 archive may take longer than the hard-coded 900 seconds on slower Windows/macOS/Linux hosts. The bounded subprocess helper supports custom deadlines, but the actual `tools/validate_rust.py` CLI and direct `run_gates()` interface could not pass one.
