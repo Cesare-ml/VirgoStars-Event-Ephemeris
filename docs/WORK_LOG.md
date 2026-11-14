@@ -1,3 +1,10 @@
+## 2026-11-14 — Reject Unicode CSV datetime digits and repeated P0 block source IDs (draft PR #5)
+
+- **Code:** The independent CSV/P0 parity oracle now requires ASCII decimal digits for normalized UTC timestamps and explicitly rejects source row ID `0` and repeated source IDs within the same decoded P0 block, matching Rust's existing typed record restrictions. Original scientific records remain unchanged.
+- **Regression:** Added 2 synthetic test methods (14 total) in `tools/test_verify_csv_p0.py`: valid year 0002 vs four non-ASCII numeral inputs, zero/repeated source IDs and a valid two-record synod block. Updated `docs/CSV_P0_FIELD_PARITY.md`.
+- **Executed:** 2/2 standalone local Python regression tests PASS, using the same timestamp regex, unsigned varint and block source-ID checks; **NOT** the full committed repository unittest module. Published files were reread from GitHub after commit.
+- **Not run:** Full 14-case synthetic CSV/P0 suite on checkout; Rust fmt/Clippy/tests/release, Python wheel/native tests, original authorized owner CSV/P0 parity. Keep PR #5 draft, no merges, releases, GitHub Actions, astronomical calculations or changes to PR #6.
+
 ## 2026-11-14 — Canonical unsigned varints in CSV/P0 parity oracle (draft PR #5)
 
 - **Code:** `tools/verify_csv_p0.py::uvar` now rejects redundant terminal zero groups in unsigned LEB128, consistent with the Rust `take_varint` decoder and the existing independent P0 byte auditor. It does not change any archive or scientific record.
