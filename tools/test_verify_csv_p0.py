@@ -11,7 +11,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
-from verify_csv_p0 import utc_microseconds, verify
+from verify_csv_p0 import utc_microseconds, verify, uvar
 
 DAY_US=86_400_000_000
 EPOCH=dt.date(1970,1,1)
@@ -106,6 +106,29 @@ class CsvP0ParityTest(unittest.TestCase):
         self.assertEqual(utc_microseconds(iso(-876544)),-876544)
         self.assertEqual(utc_microseconds('0002-01-30 05:04:51+00'),
                          (dt.date(2,1,30)-EPOCH).days*DAY_US+(5*3600+4*60+51)*1000000)
+
+    def test_varint_canonical_encoding_matches_rust(self):
+        # Rust's take_varint rejects overlong LEB128 spellings, even when
+        # their numeric value equals a valid source ID or timestamp delta.
+        for encoded, number in (
+            (b"\x00", 0),
+            (b"\x01", 1),
+            (b"\x7f", 127),
+            (b"\x80\x01", 128),
+            (b"\xff" * 9 + b"\x01", (1 << 64) - 1),
+        ):
+            with self.subTest(valid=encoded):
+                self.assertEqual(uvar(encoded, 0), (number, len(encoded)))
+        for encoded in (
+            b"\x80\x00", b"\x81\x00", b"\xff\x00",
+            b"\x80\x80\x00", b"\x80" * 9 + b"\x00",
+            b"\x80", b"\xff" * 9 + b"\x02",
+        ):
+            with self.subTest(invalid=encoded):
+                with self.assertRaisesRegex(
+                    ValueError, "non-canonical|truncated|unsigned 64-bit"
+                ):
+                    uvar(encoded, 0)
 
     def test_rejects_changed_ingress_sign(self):
         path=self.folder/'ingresso_segni.csv'
