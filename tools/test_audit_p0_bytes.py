@@ -99,6 +99,19 @@ class AuditP0BytesTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'section record totals'):
             self.audit(rewrite_header(tiny, tiny_header))
 
+        # A checksum-valid header may still contain body names that the
+        # Rust BodyId parser refuses; the independent auditor must agree.
+        for bad_body in ("", " Moon", "Moon ", "Moon\\t", "Moon\\x00",
+                         "Moon\\x7f", "Moon\\u009f", "Moon\\ud800"):
+            with self.subTest(invalid_body=repr(bad_body)):
+                header = dict(original)
+                header["table_of_contents"] = [
+                    dict(item) for item in original["table_of_contents"]
+                ]
+                header["table_of_contents"][0]["body"] = bad_body
+                with self.assertRaisesRegex(ValueError, "invalid TOC family or body"):
+                    self.audit(rewrite_header(self.good, header))
+
     def test_compressed_block_corruption_detected(self):
         corrupted = bytearray(self.good)
         corrupted[-6] ^= 0x7f
