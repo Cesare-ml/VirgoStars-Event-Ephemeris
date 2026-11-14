@@ -771,6 +771,32 @@ class PythonApiTests(unittest.TestCase):
         )
         self.assertEqual(equal_boundary["synods"]["Mercury"]["phase"]["code"], "R2")
 
+
+        # Unknown Rust statuses also have recorded-data requirements. The
+        # Python facade must not expose contradictory reason labels.
+        for body, status, extras, next_us in (
+            ("Mercury", "unknown_missing_phase_thresholds", [-200, -100, 100], 400),
+            ("Mercury", "unknown_incomplete_phase_thresholds", [-200, -100, 100], 400),
+            ("Mercury", "unknown_unsupported_phase_convention", [-200, -100, 100], 400),
+            ("Mercury", "unknown_open_ended_cycle", [-200, -100, 100], 400),
+            ("Mercury", "before_recorded_anchor", [-200, -100, 100], 400),
+            ("Moon", "unknown_discontinuous_moon_anchors", None, 2_000_000),
+        ):
+            with self.subTest(invalid_unknown_body=body, invalid_unknown_status=status):
+                broken = fake_response()
+                record = broken["synods"][body]
+                record["phase_thresholds_us"] = extras
+                record["next_cycle_start_us"] = next_us
+                record["phase"] = {
+                    "code": None, "started_at_us": None, "status": status,
+                }
+                with self.assertRaisesRegex(
+                    ValueError, "native synod unknown phase reason inconsistent"
+                ):
+                    VirgoStarsEvents(DummyNative(broken)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
     def test_missing_previous_moon_anchor_returns_none_alias(self):
         raw = fake_response()
         raw["synods"]["Moon"]["source_id"] = None

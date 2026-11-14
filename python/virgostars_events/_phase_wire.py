@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ._unknown_status import validate_unknown_stage_reason
+
 
 _I64_MIN = -(1 << 63)
 _I64_MAX = (1 << 63) - 1
@@ -76,6 +78,7 @@ def validate_native_stage(
     anchor_us: int | None,
     thresholds: list[int] | None,
     requested_at_us: int,
+    next_anchor_us: int | None,
 ) -> None:
     """Reject inconsistent Rust phase status/code pairs, without classifying.
 
@@ -131,3 +134,7 @@ def validate_native_stage(
             raise ValueError(f"native synod phase code expired at a source threshold for {body}")
     elif status not in _UNKNOWN_STAGE_STATUSES or code is not None or started_at_us is not None:
         raise ValueError(f"native synod phase status invalid for {body}")
+    else:
+        # The native classifier may report unknown, but its *reason* must
+        # still agree with the same raw source events and next-anchor field.
+        validate_unknown_stage_reason(status, body, thresholds, next_anchor_us)
