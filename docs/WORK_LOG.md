@@ -1,3 +1,10 @@
+## 2026-11-14 — Verify exact phase onset against its recorded source threshold (draft PR #5)
+
+- **Code:** `python/virgostars_events/_phase_wire.py` now checks that known stage `D1`/`CRESC1` begins at its recorded cycle anchor, `R2`/`CRESC2` at extra #1, `R3`/`CAL1` at extra #2, and `D4`/`CAL2` at extra #3. This is a transport-consistency check; Rust remains the sole stage classifier. A concurrent change additionally rejects derived starts outside the known anchor/threshold set.
+- **Tests:** Added six cases of a wrong start assigned to an otherwise valid code, inside the existing 18-method `python/tests/test_python_api.py` suite (42 source-only / 51 native cases unchanged).
+- **Executed:** A four-method local Python 3.13.5 unit harness passed 4/4, covering all eight valid code/onset mappings, six wrong code/onset pairs, absent/unknown stages, and NULL/empty phase arrays. The tested helper's Git blob `7417afd7f7191064613563f03f51a6ff2c482e84` matches the current GitHub file. This does not prove the full source suite or native integration.
+- **Outstanding:** Full 42-case source gate, synthetic P0 gate, Cargo/Rust compile, 51-case installed-wheel acceptance, owner CSV/P0 parity and dataset license. PR #5 stays draft; no main merge, GitHub Actions, deployment, or scientific source-data edits.
+
 ## 2026-11-14 — Rust BodyId parity for independent P0/CSV auditors (draft PR #5)
 
 - **Issue:** Rust `BodyId::try_from` rejects empty, whitespace-trimmed, or control-containing names, while `tools/audit_p0_bytes.py` used to accept any nonempty TOC body and `tools/verify_csv_p0.py` did not reject embedded control characters. The independent byte/parity tools could therefore accept malformed input rejected by the real Rust reader.
