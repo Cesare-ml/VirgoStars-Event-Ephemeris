@@ -26,7 +26,7 @@ from audit_p0_bytes import audit_file
 EPOCH = dt.date(1970, 1, 1).toordinal()
 DAY_US = 86_400_000_000
 I64_MIN, I64_MAX = -(1 << 63), (1 << 63) - 1
-DATE = re.compile(r"(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)(?:\.(\d{1,6}))?\+00\Z")
+DATE = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,6}))?\+00\Z")
 SIGN_INDEX_TEXT = frozenset(str(i) for i in range(12))
 HEADERS = {
     "synod": ("sinodi.csv", ("id", "elemento", "dataora_utc", "dataora_extra_utc_json")),
@@ -118,8 +118,14 @@ def decoded_block(family: str, plain: bytes, count: int):
         raise ValueError("truncated P0 base timestamp")
     previous = struct.unpack_from("<q", plain)[0]
     pos = 8
+    seen_source_ids: set[int] = set()
     for n in range(count):
         source_id, pos = uvar(plain, pos)
+        # Keep this independent CSV/P0 oracle consistent with the Rust
+        # decoder: zero and repeated original IDs are not valid records.
+        if source_id == 0 or source_id in seen_source_ids:
+            raise ValueError("zero or duplicate P0 source ID inside block")
+        seen_source_ids.add(source_id)
         delta, pos = uvar(plain, pos)
         instant = previous + delta
         if not I64_MIN <= instant <= I64_MAX or (n == 0 and delta != 0) or (n > 0 and instant <= previous):
