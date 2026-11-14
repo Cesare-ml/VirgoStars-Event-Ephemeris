@@ -142,7 +142,10 @@ class ValidateRustToolTest(unittest.TestCase):
                 report = {"sha256": DIGEST, "bytes": 20, "blocks": 4, "records": 8,
                           "sections": {"ingress": 3, "motion": 2, "synod": 3}}
                 if command[0] == "mock-cargo":
+                    # Both reports must be internally valid; this test then
+                    # verifies that cross-reader disagreement still fails.
                     report["records"] = 7
+                    report["sections"] = {"ingress": 2, "motion": 2, "synod": 3}
                     report.update(format="VSEPH-P0-EXPERIMENTAL",
                                   sha256_checked_against_expected=True,
                                   coverage_certified=False)
