@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import struct
 import unicodedata
 import zlib
@@ -40,6 +41,34 @@ def valid_body_id(value: object) -> bool:
         and value.strip() == value
         and not any(unicodedata.category(ch) in ("Cc", "Cs") for ch in value)
     )
+
+
+def parse_header_json(data: bytes) -> object:
+    """Read P0 metadata with Rust-compatible UTF-8 and finite JSON numbers.
+
+    json.loads(bytes) auto-detects UTF-16/32, and the default parser accepts
+    NaN/Infinity and numeric exponents overflowing to float infinity.
+    serde_json rejects those malformed inputs; the independent oracle must
+    reject them too, including in currently unused metadata fields.
+    """
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("P0 header must be UTF-8 JSON") from exc
+
+    def reject_constant(token: str):
+        raise ValueError(f"non-finite P0 JSON literal {token}")
+
+    def finite_float(token: str) -> float:
+        number = float(token)
+        if not math.isfinite(number):
+            raise ValueError("non-finite P0 JSON number")
+        return number
+
+    try:
+        return json.loads(text, parse_constant=reject_constant, parse_float=finite_float)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid UTF-8 JSON header: {exc}") from exc
 
 
 def _varint(data: bytes, pos: int) -> tuple[int, int]:
@@ -122,7 +151,7 @@ def audit_file(path: str | Path, expected_sha256: str | None = None) -> dict:
     header_len = struct.unpack_from("<I", raw_file, 8)[0]
     if not 0 < header_len <= MAX_HEADER or header_len + 12 > len(raw_file):
         raise ValueError("invalid JSON header size")
-    doc = json.loads(raw_file[12:12 + header_len])
+    doc = parse_header_json(raw_file[12:12 + header_len])
     if not isinstance(doc, dict):
         raise ValueError("P0 header must be a JSON object")
     version = doc.get("format_version")
