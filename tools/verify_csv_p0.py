@@ -21,7 +21,7 @@ import tempfile
 import zlib
 from pathlib import Path
 
-from audit_p0_bytes import audit_file
+from audit_p0_bytes import audit_file, valid_body_id
 
 EPOCH = dt.date(1970, 1, 1).toordinal()
 DAY_US = 86_400_000_000
@@ -69,7 +69,7 @@ def sign_index(value: str) -> int:
 def normalized_row(family: str, row: dict) -> tuple[str, int, list]:
     source_id = positive_id(row["id"])
     body = row["elemento"] if family == "synod" else row["elemento_celeste"]
-    if not body or body.strip() != body:
+    if not valid_body_id(body):
         raise ValueError(f"invalid body name {body!r}")
     t = utc_microseconds(row["dataora_utc"])
     if family == "synod":
