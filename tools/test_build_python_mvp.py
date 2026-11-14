@@ -68,6 +68,78 @@ class BuildTests(unittest.TestCase):
             self.assertIn("verify_python_wheel.py", called[4][1])
             self.assertEqual([w.name for w in out.glob("*.whl")], ["virgostars-0.1.0-cp310-abi3-win_amd64.whl"])
 
+    def test_authorized_archive_runs_rust_and_wheel_audits_with_same_digest(self):
+        # An owner archive must be audited at the Rust/independent-byte
+        # boundary, not only after building the Python wheel.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Cargo.toml").touch()
+            (root / "pyproject.toml").touch()
+            archive, csv = root / "owner.p0", root / "sinodi.csv"
+            archive.write_bytes(b"authorized-local-fixture")
+            csv.write_text("test", encoding="utf-8")
+            out = root / "dist"
+            commands = []
+
+            def fake_run(command):
+                args = [str(arg) for arg in command]
+                commands.append(args)
+                if len(commands) == 4:
+                    wheels = Path(args[args.index("--out") + 1])
+                    wheels.mkdir(parents=True)
+                    (wheels / "virgostars-0.1.0-cp310-abi3-win_amd64.whl").write_bytes(
+                        b"fixture-wheel"
+                    )
+
+            with patch.object(build, "ROOT", root), patch.object(
+                build, "maturin_executable", return_value=Path("maturin")
+            ), patch.object(build, "run", side_effect=fake_run):
+                self.assertEqual(build.main([
+                    "--out-dir", str(out),
+                    "--archive", str(archive),
+                    "--sha256", "A" * 64,
+                    "--synods-csv", str(csv),
+                ]), 0)
+
+            self.assertEqual(len(commands), 5)
+            rust_gate, wheel_gate = commands[2], commands[4]
+            expected_archive = ["--archive", str(archive.resolve()), "--sha256", "a" * 64]
+            self.assertIn("validate_rust.py", rust_gate[1])
+            self.assertEqual(rust_gate[2:], expected_archive)
+            self.assertIn("verify_python_wheel.py", wheel_gate[1])
+            self.assertEqual(wheel_gate[wheel_gate.index("--archive"):wheel_gate.index("--synods-csv")], expected_archive)
+            self.assertEqual(wheel_gate[-2:], ["--synods-csv", str(csv.resolve())])
+            self.assertEqual(len(list(out.glob("*.whl"))), 1)
+
+    def test_failed_owner_rust_audit_prevents_wheel_build(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Cargo.toml").touch()
+            (root / "pyproject.toml").touch()
+            archive = root / "owner.p0"
+            archive.write_bytes(b"authorized-local-fixture")
+            out = root / "dist"
+            commands = []
+
+            def fake_run(command):
+                commands.append([str(item) for item in command])
+                if len(commands) == 3:
+                    raise RuntimeError("owner archive Rust/Python parity failed")
+
+            with patch.object(build, "ROOT", root), patch.object(
+                build, "maturin_executable", return_value=Path("maturin")
+            ), patch.object(build, "run", side_effect=fake_run), redirect_stderr(StringIO()):
+                self.assertEqual(build.main([
+                    "--out-dir", str(out), "--archive", str(archive),
+                    "--sha256", "b" * 64,
+                ]), 1)
+            self.assertEqual(len(commands), 3)
+            self.assertIn("validate_rust.py", commands[2][1])
+            self.assertEqual(commands[2][-4:], [
+                "--archive", str(archive.resolve()), "--sha256", "b" * 64
+            ])
+            self.assertFalse(out.exists())
+
     def test_gate_failure_does_not_leave_distributable_wheel(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
