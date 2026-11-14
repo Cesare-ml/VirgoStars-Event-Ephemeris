@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from ._time import iso_utc_from_microseconds, to_utc_microseconds
-from ._phase_wire import validate_recorded_thresholds
+from ._phase_wire import validate_native_stage, validate_recorded_thresholds
 from ._wire import decode_native_json
 
 __all__ = ["VirgoStarsEvents"]
@@ -197,6 +197,7 @@ class VirgoStarsEvents:
             # Verify the recorded model without inferring a scientifically
             # complete cycle: preserve NULL vs [] and future source phases.
             extras = validate_recorded_thresholds(record, current_us, body)
+            validate_native_stage(phase, body, current_us, extras)
 
             record["status"] = (
                 "recorded" if record["cycle_start_us"] is not None
