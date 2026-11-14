@@ -14,6 +14,7 @@ import argparse
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -99,15 +100,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--synods-csv requires an archive and an existing source CSV")
 
     wheel = args.wheel.resolve()
-    # Enforce dataset exclusion and ZIP safety before pip touches the wheel.
-    try:
-        inspect_wheel_contents(wheel)
-    except (ValueError, OSError, RuntimeError) as exc:
-        print(f"FAIL: pre-install wheel content check: {exc}", file=sys.stderr)
-        return 1
     validator = ROOT / "tools" / "validate_python_mvp.py"
     with tempfile.TemporaryDirectory(prefix="virgostars-wheel-verify-") as tmp:
         temp = Path(tmp)
+        # A wheel can be replaced at its original path after inspecting it.
+        # Validate and install the SAME private snapshot instead. The path
+        # remains available to pip for the lifetime of this isolated venv.
+        verified_wheel = temp / wheel.name
+        try:
+            shutil.copyfile(wheel, verified_wheel)
+            inspect_wheel_contents(verified_wheel)
+        except (ValueError, OSError, RuntimeError) as exc:
+            print(f"FAIL: pre-install wheel content check: {exc}", file=sys.stderr)
+            return 1
+
         venv_dir = temp / "venv"
         try:
             venv.EnvBuilder(with_pip=True, clear=True).create(str(venv_dir))
@@ -116,7 +122,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             # installation proof, not a request to fetch/build dependencies.
             run_checked(
                 [python, "-m", "pip", "install", "--no-index", "--no-deps",
-                 "--disable-pip-version-check", wheel], cwd=temp
+                 "--disable-pip-version-check", verified_wheel], cwd=temp
             )
             run_checked([python, "-I", "-c", INSTALLED_PROBE], cwd=temp)
             run_checked([python, "-I", "-m", "virgostars_events", "--version"], cwd=temp)
