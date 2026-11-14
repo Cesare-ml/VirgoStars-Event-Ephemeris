@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import time
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,23 @@ class BoundedAuditSubprocessTests(unittest.TestCase):
         self.assertEqual(raised.exception.returncode, 9)
         self.assertEqual(raised.exception.output, "{}")
         self.assertIn("failed", raised.exception.stderr)
+
+    def test_silent_hung_child_is_terminated_at_deadline(self):
+        start = time.monotonic()
+        with self.assertRaisesRegex(RuntimeError, "exceeded 0.2 seconds"):
+            run_bounded_audit(
+                [sys.executable, "-c", "import time; time.sleep(20)"],
+                cwd=self.root, timeout_seconds=0.2,
+            )
+        self.assertLess(time.monotonic() - start, 4)
+
+    def test_invalid_timeouts_fail_before_launch(self):
+        for timeout in (0, -1, float("inf"), float("nan"), True, "1"):
+            with self.subTest(timeout=timeout), self.assertRaisesRegex(ValueError, "positive and finite"):
+                run_bounded_audit(
+                    [sys.executable, "-c", "print('ok')"], cwd=self.root,
+                    timeout_seconds=timeout,
+                )
 
     def test_invalid_utf8_stdout_fails(self):
         with self.assertRaisesRegex(RuntimeError, "stdout is not UTF-8"):
