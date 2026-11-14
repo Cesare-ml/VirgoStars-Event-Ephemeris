@@ -49,7 +49,9 @@ It also reports the SHA-256 for each normalized CSV file and the complete binary
 python -m unittest discover -s tools -p test_verify_csv_p0.py -v
 ```
 
-The 11 synthetic tests deliberately exercise exact parity, negative and year-0002 timestamps, modified ingress sign, changed station direction, loss of the NULL/empty phase distinction, changed synod phase time, missing and duplicate rows, a damaged archive, mismatched expected hash and an invalid CSV header.
+The 12 synthetic tests deliberately exercise exact parity, negative and year-0002 timestamps, modified ingress sign, changed station direction, loss of the NULL/empty phase distinction, changed synod phase time, missing and duplicate rows, a damaged archive, mismatched expected hash and an invalid CSV header.
+
+The CSV/P0 parity decoder now rejects **non-canonical unsigned LEB128** (redundant zero groups), matching the Rust `take_varint()` decoder; its boundary regression checks valid 0, 127, 128 and `u64::MAX`, plus overlong/truncated/overflow encodings. This is byte-level transport safety, not astronomical coverage certification.
 
 ### Verified in the authoring environment
 
