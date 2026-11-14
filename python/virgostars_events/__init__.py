@@ -14,6 +14,7 @@ from typing import Any
 
 from ._time import iso_utc_from_microseconds, to_utc_microseconds
 from ._phase_wire import validate_native_stage, validate_recorded_thresholds
+from ._coverage_wire import validate_native_coverage
 from ._wire import decode_native_json, same_json_value
 
 __all__ = ["VirgoStarsEvents"]
@@ -169,13 +170,7 @@ class VirgoStarsEvents:
             # transport payload that omits the mandatory warning or falsely
             # claims a scientifically certified body-specific event history.
             coverage = record.get("coverage")
-            if (
-                not isinstance(coverage, dict)
-                or coverage.get("status") != "unreviewed"
-                or not isinstance(coverage.get("warnings"), list)
-                or "no_reviewed_coverage_policy" not in coverage["warnings"]
-            ):
-                raise ValueError(f"native synod coverage claim invalid for {body}")
+            validate_native_coverage(coverage, body, current_us, next_us)
             phase = record.get("phase")
             if not isinstance(phase, dict):
                 raise ValueError(f"native synod phase must be an object for {body}")

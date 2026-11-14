@@ -1,5 +1,26 @@
 # Windows: build and test the first Python/Rust synod MVP
 
+## Mandatory pre-Cargo wheel-policy regression gate (2026-11-14, draft PR #5)
+
+The M0 builder now runs `tools/validate_wheel_preflight.py` **after the 42 source tests and 15 P0 synthetic byte audits but before any Cargo command, maturin build or wheel publication**. It runs the real existing unit test modules without Rust or a dataset:
+
+- `test_wheel_contents_policy.py`: at least **16** ZIP/dataset/Windows-path regressions
+- `test_wheel_identity.py`: at least **9** distribution/metadata identity regressions
+- `test_verify_python_wheel.py`: at least **12** isolated-install orchestration regressions
+
+The baseline is **37 test methods**; additional tests are automatically discovered. The gate fails if a module is missing or below its baseline, any test fails or is skipped/expected-failed, or an early-stop leaves a discovered test unexecuted. This prevents an otherwise successful Rust build from masking unsafe wheel packing behavior. It is a packaging preflight, **not** an installed PyO3 acceptance or scientific-data audit.
+
+On a full checkout:
+
+```powershell
+py -3 tools\validate_wheel_preflight.py
+py -3 -m unittest discover -s tools -p "test_validate_wheel_preflight.py" -v
+py -3 tools\build_python_mvp.py
+```
+
+**Executed in this increment:** `python -m unittest -v test_validate_wheel_preflight` on Python 3.13.5: **7/7 PASS**, with exact GitHub-blob-matching copies of both new files (`git hash-object` verified). `python -m py_compile` also passed for both. GitHub readback confirmed the mandatory build sequence and that the three existing test modules declare 16, 9 and 12 test methods. **Not run here:** the actual 37 existing wheel-policy methods, updated 17-method build-orchestrator suite in a full checkout, Cargo/Rust/PyO3, installed native wheel tests or authorized owner-data parity. The stale `Cargo.lock` remains the native build blocker.
+
+
 ## Windows reserved device name regex: verified fix (2026-11-14, PR #5)
 
 A cross-check found that the `tools/wheel_contents_policy.py` pattern for Windows device basenames had **double-escaped regex metacharacters**: the regex literally looked for backslashes instead of matching `CON`, `CON.py`, `NUL.txt`, `COM1.pyd`, `LPT9.dll` and similar names. This let a malformed wheel ZIP member bypass the reserved-name protection. The expression now uses a real optional literal-dot extension and end-of-string assertion; ordinary filenames such as `console.py` and `com10.py` remain permitted.

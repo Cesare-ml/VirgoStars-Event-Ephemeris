@@ -584,6 +584,49 @@ class PythonApiTests(unittest.TestCase):
             accepted["synods"]["Mercury"]["coverage"]["warnings"],
         )
 
+
+        # The Moon coverage warning must match source-recorded intervals:
+        # accepting a fabricated gap (or hiding an actual one) would give
+        # consumers a false impression of the source's completeness.
+        for body, mutation, warning, expected_error in (
+            ("Moon", "unexpected gap", "moon_recorded_cycle_gap_over_45_days",
+             "Moon gap warning inconsistent"),
+            ("Mercury", "planet gap", "moon_recorded_cycle_gap_over_45_days",
+             "Moon gap warning inconsistent"),
+            ("Moon", "duplicate base", "no_reviewed_coverage_policy",
+             "coverage claim invalid"),
+            ("Moon", "non-string warning", None,
+             "coverage claim invalid"),
+        ):
+            with self.subTest(body=body, mutation=mutation):
+                bad = fake_response()
+                bad["synods"][body]["coverage"]["warnings"].append(warning)
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    VirgoStarsEvents(DummyNative(bad)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        long_moon_gap = fake_response()
+        moon = long_moon_gap["synods"]["Moon"]
+        moon["next_cycle_start_us"] = (
+            moon["cycle_start_us"] + 45 * 86_400 * 1_000_000 + 1
+        )
+        # The original recorded data clearly exceed the provisional
+        # continuity guard, but Rust must still disclose unreviewed coverage.
+        with self.assertRaisesRegex(ValueError, "Moon gap warning inconsistent"):
+            VirgoStarsEvents(DummyNative(long_moon_gap)).get_synods_at(
+                "1970-01-01T00:00:00Z"
+            )
+        moon["coverage"]["warnings"].append("moon_recorded_cycle_gap_over_45_days")
+        accepted_gap = VirgoStarsEvents(DummyNative(long_moon_gap)).get_synods_at(
+            "1970-01-01T00:00:00Z"
+        )
+        self.assertIn(
+            "moon_recorded_cycle_gap_over_45_days",
+            accepted_gap["new_moon"]["coverage"]["warnings"],
+        )
+        self.assertFalse(accepted_gap["dataset"]["coverage_certified"])
+
     def test_empty_extra_array_not_confused_with_sql_null(self):
         raw = fake_response()
         raw["synods"]["Moon"]["phase_thresholds_us"] = []

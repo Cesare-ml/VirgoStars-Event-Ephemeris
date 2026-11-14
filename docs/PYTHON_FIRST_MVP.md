@@ -216,3 +216,6 @@ The standalone independent CSV verifier now checks `--sha256` shape (exactly 64 
 
 
 **Recorded end-of-cycle guard (2026-11-14, draft PR #5):** A Rust-derived known fourth phase (planetary `D4` or lunar `CAL2`) is rejected in Python when no next recorded anchor exists; a lunar `CAL2` is rejected if its recorded interval exceeds the provisional 45-day Moon discontinuity guard. All three recorded phase boundaries must precede the next anchor, even if the claimed current stage is an earlier one. This rejects contradictory transport evidence without deriving astronomy, inventing missing events or certifying completeness.
+
+
+**Moon coverage-warning integrity (2026-11-14, draft PR #5):** The Python public API now verifies that every native per-body coverage result discloses `unreviewed` and `no_reviewed_coverage_policy`, with a list of unique nonempty string warning codes. The existing `moon_recorded_cycle_gap_over_45_days` warning is required **iff** the recorded Moon anchors are separated by strictly more than the provisional 45-day threshold; spurious warnings on planets, short Moon intervals or unknown bounds are rejected. This is source-provenance validation, never a claim of scientific completeness. An existing Python API test method gained rejection/acceptance cases.
