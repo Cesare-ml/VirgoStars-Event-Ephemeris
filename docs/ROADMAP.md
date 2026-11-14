@@ -1,5 +1,7 @@
 # Roadmap and agent task queue
 
+**M0 mandatory synthetic gate repaired (2026-11-14, draft PR #5):** `test_audit_p0_bytes.py` now defines 15 synthetic regressions plus one optional owner-data integration test. `tools/validate_p0_synthetic.py` was still hardcoded to 14, making the whole Python wheel build pipeline fail closed before Cargo could start. The gate and its own five regressions now require 15/15, including the duplicate-JSON-header case. GitHub source/test static invariants checked; complete executable 15-test suite and Cargo/PyO3 wheel validation remain to run on a full checkout. The `Cargo.lock` is still stale and must be generated/reviewed with real Cargo.
+
 **M0 build-readiness diagnostics (2026-11-14, draft PR #5):** Added `tools/check_m0_build_env.py` and 4 fail-closed unit regressions. The read-only preflight reports missing Cargo/Rust/maturin, unsupported Python, missing manifests, symlinked `Cargo.lock` and absent PyO3/binding lock packages before anyone spends time on a wheel build. A byte-identical local Python 3.13.5 copy passed 4/4 synthetic unit cases, with a copied `missing_packages` helper; **actual Rust compilation and full 42/51 acceptance remain pending**. The tracked lockfile is stale; regenerate/review with real Cargo on a clean checkout.
 
 
