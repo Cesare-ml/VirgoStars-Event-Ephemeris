@@ -2,6 +2,12 @@
 
 **No implementation/tests have been run for this repository as of initial setup.** The following gates become executable as code is added; record actual commands and outcomes in PRs and [WORK_LOG](WORK_LOG.md).
 
+## Python phase-start transport guard (2026-11-14, draft PR #5)
+
+The Python `get_synods_at` facade now checks the native phase JSON before UTC projection: `phase.code` and `phase.started_at_us` must both be present or both absent; a present start must be a true Python integer inside the inclusive `[cycle_start_us, requested_at_us]` interval. This prevents a bad native payload from presenting a future or pre-cycle phase as the current recorded state. Null/unknown phases remain supported. Regression subcases were added **inside** the existing `test_native_cycle_boundaries_must_enclose_the_requested_instant` method, so the mandatory 18 API / 42 source / 51 wheel counts do not change.
+
+**Executed here:** 13 standalone Python 3.13.5 guard predicates passed (5 accepted, 8 rejected). **Not executed here:** the complete committed Python API test module, 42-case source preflight, 14-case P0 synthetic audit, Rust/Cargo, native wheel, 51-case installed-wheel acceptance, or authorized original dataset parity. Run `py -3 tools\\validate_python_sources.py` and `py -3 tools\\build_python_mvp.py` on an actual complete, clean Rust-equipped checkout after regenerating the tracked lockfile with Cargo. No GitHub Actions.
+
 ## Authenticate trusted archive before decompressing it (2026-11-12, draft PR #5)
 
 The standalone Rust `p0-verify <archive> --sha256 <trusted-lowercase-digest>` previously called `P0Archive::verify_all()` **before** comparing the complete input SHA-256 with the trusted digest, which forced the expensive zlib/block/event audit on an archive that might have the wrong identity. The CLI now first opens and bounds the **header/index**, then verifies the entire archive hash (or computes the informational hash when `--sha256` is absent), and only **after that** performs the exhaustive compressed-block validation. It still reports the same JSON fields (format, SHA, bytes, counts, independent coverage disclaimer). Without a trusted digest, full decoding is still required; an informational hash alone does not certify authenticity.
