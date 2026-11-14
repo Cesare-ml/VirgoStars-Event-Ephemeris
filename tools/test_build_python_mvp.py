@@ -52,20 +52,21 @@ class BuildTests(unittest.TestCase):
             def fake_run(command):
                 command = [str(a) for a in command]
                 called.append(command)
-                if len(called) == 4:
+                if len(called) == 5:
                     wheel_dir = Path(command[command.index("--out") + 1])
                     wheel_dir.mkdir(parents=True)
                     (wheel_dir / "virgostars-0.1.0-cp310-abi3-win_amd64.whl").write_bytes(b"fixture-wheel")
             with patch.object(build, "ROOT", root), patch.object(build, "maturin_executable", return_value=Path("maturin")), patch.object(build, "run", side_effect=fake_run):
                 result = build.main(["--out-dir", str(out)])
             self.assertEqual(result, 0)
-            self.assertEqual(len(called), 5)
+            self.assertEqual(len(called), 6)
             self.assertIn("validate_python_sources.py", called[0][1])
             self.assertIn("validate_p0_synthetic.py", called[1][1])
-            self.assertIn("validate_rust.py", called[2][1])
-            self.assertIn("--release", called[3])
-            self.assertIn("--locked", called[3])
-            self.assertIn("verify_python_wheel.py", called[4][1])
+            self.assertIn("validate_wheel_preflight.py", called[2][1])
+            self.assertIn("validate_rust.py", called[3][1])
+            self.assertIn("--release", called[4])
+            self.assertIn("--locked", called[4])
+            self.assertIn("verify_python_wheel.py", called[5][1])
             self.assertEqual([w.name for w in out.glob("*.whl")], ["virgostars-0.1.0-cp310-abi3-win_amd64.whl"])
 
     def test_authorized_archive_runs_rust_and_wheel_audits_with_same_digest(self):
@@ -84,7 +85,7 @@ class BuildTests(unittest.TestCase):
             def fake_run(command):
                 args = [str(arg) for arg in command]
                 commands.append(args)
-                if len(commands) == 4:
+                if len(commands) == 5:
                     wheels = Path(args[args.index("--out") + 1])
                     wheels.mkdir(parents=True)
                     (wheels / "virgostars-0.1.0-cp310-abi3-win_amd64.whl").write_bytes(
@@ -101,8 +102,8 @@ class BuildTests(unittest.TestCase):
                     "--synods-csv", str(csv),
                 ]), 0)
 
-            self.assertEqual(len(commands), 5)
-            rust_gate, wheel_gate = commands[2], commands[4]
+            self.assertEqual(len(commands), 6)
+            rust_gate, wheel_gate = commands[3], commands[5]
             expected_archive = ["--archive", str(archive.resolve()), "--sha256", "a" * 64]
             self.assertIn("validate_rust.py", rust_gate[1])
             self.assertEqual(rust_gate[2:], expected_archive)
@@ -123,7 +124,7 @@ class BuildTests(unittest.TestCase):
 
             def fake_run(command):
                 commands.append([str(item) for item in command])
-                if len(commands) == 3:
+                if len(commands) == 4:
                     raise RuntimeError("owner archive Rust/Python parity failed")
 
             with patch.object(build, "ROOT", root), patch.object(
@@ -133,9 +134,9 @@ class BuildTests(unittest.TestCase):
                     "--out-dir", str(out), "--archive", str(archive),
                     "--sha256", "b" * 64,
                 ]), 1)
-            self.assertEqual(len(commands), 3)
-            self.assertIn("validate_rust.py", commands[2][1])
-            self.assertEqual(commands[2][-4:], [
+            self.assertEqual(len(commands), 4)
+            self.assertIn("validate_rust.py", commands[3][1])
+            self.assertEqual(commands[3][-4:], [
                 "--archive", str(archive.resolve()), "--sha256", "b" * 64
             ])
             self.assertFalse(out.exists())
@@ -150,12 +151,12 @@ class BuildTests(unittest.TestCase):
             def fake_run(command):
                 nonlocal counter
                 counter += 1
-                if counter == 4:
+                if counter == 5:
                     args = list(map(str, command))
                     wheels = Path(args[args.index("--out") + 1])
                     wheels.mkdir()
                     (wheels / "fixture.whl").write_bytes(b"bad")
-                if counter == 5:
+                if counter == 6:
                     raise RuntimeError("native tests failed")
             with patch.object(build, "ROOT", root), patch.object(build, "maturin_executable", return_value=Path("maturin")), patch.object(build, "run", side_effect=fake_run):
                 with redirect_stderr(StringIO()):
@@ -204,6 +205,31 @@ class BuildTests(unittest.TestCase):
             self.assertIn("validate_p0_synthetic.py", commands[1][1])
             self.assertFalse(out.exists())
 
+    def test_wheel_policy_preflight_failure_prevents_rust_and_wheel(self):
+        # Mandatory packaging regressions must run after source/P0 tests
+        # and before any Cargo, maturin, or dist/ artifact creation.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Cargo.toml").touch()
+            (root / "pyproject.toml").touch()
+            out = root / "dist"
+            commands = []
+
+            def fail_policy(command):
+                commands.append([str(item) for item in command])
+                if len(commands) == 3:
+                    raise RuntimeError("unsafe Windows wheel path")
+
+            with patch.object(build, "ROOT", root), patch.object(
+                build, "maturin_executable", return_value=Path("maturin")
+            ), patch.object(build, "run", side_effect=fail_policy), redirect_stderr(StringIO()):
+                self.assertEqual(build.main(["--out-dir", str(out)]), 1)
+            self.assertEqual(len(commands), 3)
+            self.assertIn("validate_python_sources.py", commands[0][1])
+            self.assertIn("validate_p0_synthetic.py", commands[1][1])
+            self.assertIn("validate_wheel_preflight.py", commands[2][1])
+            self.assertFalse(out.exists())
+
     def test_cargo_failure_after_python_gate_prevents_wheel(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -214,17 +240,18 @@ class BuildTests(unittest.TestCase):
 
             def fail_rust(command):
                 commands.append([str(item) for item in command])
-                if len(commands) == 3:
+                if len(commands) == 4:
                     raise RuntimeError("Cargo lockfile stale")
 
             with patch.object(build, "ROOT", root), patch.object(
                 build, "maturin_executable", return_value=Path("maturin")
             ), patch.object(build, "run", side_effect=fail_rust), redirect_stderr(StringIO()):
                 self.assertEqual(build.main(["--out-dir", str(out)]), 1)
-            self.assertEqual(len(commands), 3)
+            self.assertEqual(len(commands), 4)
             self.assertIn("validate_python_sources.py", commands[0][1])
             self.assertIn("validate_p0_synthetic.py", commands[1][1])
-            self.assertIn("validate_rust.py", commands[2][1])
+            self.assertIn("validate_wheel_preflight.py", commands[2][1])
+            self.assertIn("validate_rust.py", commands[3][1])
             self.assertFalse(out.exists())
 
     def test_existing_dist_file_never_overwritten(self):
