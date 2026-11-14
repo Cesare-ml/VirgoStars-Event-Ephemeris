@@ -1,3 +1,12 @@
+## 2026-11-14 — Reject incomplete or type-coerced independent P0 audit reports (draft PR #5)
+
+- **Scope:** Reused `feat/p0-2-rust-workspace` / [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), after checking PRs #4/#5/#6, the native validation script and tests. No action on `main`, data PR #6, deployment, GitHub Actions or licensed data.
+- **Bug fixed:** Previous `validate_rust.run_gates` compared `sha256/bytes/blocks/records/sections` from Python and Rust by value, requiring only `bytes` to be a positive integer. Two reports with identical missing sections, bool/floating counts, inconsistent per-family sums, or jointly wrong physical byte length could escape the parity gate.
+- **Implementation:** Added `validate_audit_shape` to reject noncanonical digests, noninteger/negative or contradictory block/record totals, unrecognized/bad section counts and section sum disagreements. Each report must pass independently before equality comparison. Then compares agreed reported file byte count against `archive.stat().st_size`. Added two tests to `tools/test_validate_rust.py` (14 -> **16 methods**) covering 12 matching malformed report variants and 2 same-wrong-size reports. Updated a pre-existing digest-only test fixture to have valid section counts so it reaches the intended digest verification assertion.
+- **Actually executed:** Python 3.13.5 isolated predicate reproduction: `python -m unittest discover -v -s /mnt/data/vseph_audit_gate_preflight -p test_shape.py` -> **4/4 PASS**, including 12 malformed variants, positive and valid-empty cases. The reproduced predicate mirrors the new helper but this was **not** execution of the full committed `test_validate_rust.py` module. GitHub readback validated the changed source and regression test files.
+- **Still not run:** Full committed 16-method test module, Cargo fmt/Clippy/tests/build, 42 source / 51 installed-wheel gates, real owner dataset parity. Rust/Cargo absent and direct GitHub clone DNS blocked in this runtime. The tracked Cargo.lock still needs a proper reviewed Cargo regeneration.
+- **Next:** Execute the exact 16 orchestration tests from a full checkout, then Cargo-locked build/test + real Python and Rust full-archive parity before any PR merge or publication.
+
 ## 2026-11-14 — Strict UTF-8 and finite JSON P0 header parsing (draft PR #5)
 
 - **Issue:** Python `json.loads(bytes)` auto-detects UTF-16/32 P0 headers and accepts `NaN`/`Infinity` or exponents overflowing to infinity, which Rust serde_json rejects even inside unused metadata.
