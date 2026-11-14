@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone, tzinfo
 from unittest.mock import patch
 
 from virgostars_events import VirgoStarsEvents
-from virgostars_events._wire import decode_native_json
+from virgostars_events._wire import decode_native_json, same_json_value
 from virgostars_events._time import (
     iso_utc_from_microseconds,
     to_utc_microseconds,
@@ -381,6 +381,16 @@ class PythonApiTests(unittest.TestCase):
             decode_native_json('{"message":"\\ud83d\\ude00"}'),
             {"message": "😀"},
         )
+        # The same strict transport helper also checks the native
+        # new_moon alias; a deep but valid nested JSON structure must not
+        # exceed Python's recursion limit or coerce number/bool types.
+        nested_a, nested_b = 1, 1
+        for _ in range(700):
+            nested_a = [nested_a]
+            nested_b = [nested_b]
+        self.assertTrue(same_json_value(nested_a, nested_b))
+        self.assertFalse(same_json_value({"id": [1]}, {"id": [True]}))
+        self.assertFalse(same_json_value({"id": [1]}, {"id": [1.0]}))
         malformed_wire = (
             (
                 canonical.replace(
