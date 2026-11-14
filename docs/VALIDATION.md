@@ -1,5 +1,19 @@
 # Validation and quality gates
 
+## Native-u64 bounds for Python/Rust P0 audit reports (2026-11-14, draft PR #5)
+
+The independent Rust `p0-verify` report represents archive byte lengths and event/block counters as Rust integer JSON values, while Python can parse arbitrarily large JSON integers. The common `validate_audit_shape` in `tools/validate_rust.py` now accepts **only exact Python `int` in `0..=2^64-1`** for file size, blocks, records and family counts (file size remains strictly positive). It rejects `bool`, float, negatives and out-of-range values **before** the Rust audit is started when supplied by the Python auditor. The existing count consistency, SHA-256, physical-size, canonical JSON and independent parity gates remain.
+
+Execute these source-only checks (no Rust or owner dataset required):
+
+```sh
+python -m unittest discover -s tools -p test_p0_u64_report.py -v
+python -m unittest discover -s tools -p test_validate_bounded_integration.py -v
+python -m unittest discover -s tools -p test_bounded_audit.py -v
+```
+
+**Actually executed:** Python 3.13.5, `python -m unittest -q test_p0_u64_report test_validate_bounded_integration test_bounded_audit` → **21/21 PASS** against exact GitHub-blob-matching tracked helper, validator and test sources in a local isolated directory. Blob SHA-1 `759f7d79c52f09d91225e5f56b4adda85a4fa10c` (`validate_rust.py`) and `2b17ff2eaf617690dec10415748119d616bdd301` (new 5-method test file) match the executed files. **Not run:** the existing separate 17-method `test_validate_rust.py` module, Cargo locked fmt/Clippy/tests/build, 42 Python source/51 installed-native-wheel acceptance or original owner CSV/P0 parity; passing schema tests does not certify astronomy or approve release.
+
 ## Mandatory independent P0 audit: 15 synthetic tests (2026-11-14, draft PR #5)
 
 **Current acceptance count:** `tools/test_audit_p0_bytes.py` declares **16** unittest methods, including one explicitly optional real owner-data test. The independent no-dataset gate must therefore execute **15/15**, not 14/14; the stale 14-test requirement made `tools/validate_p0_synthetic.py` fail before the Cargo/PyO3 build despite valid fixture data. Updated the gate and its five test methods, including an assertion that the new duplicate-JSON-header regression cannot silently drop out of the mandatory set.
