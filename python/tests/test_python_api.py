@@ -391,6 +391,10 @@ class PythonApiTests(unittest.TestCase):
         self.assertTrue(same_json_value(nested_a, nested_b))
         self.assertFalse(same_json_value({"id": [1]}, {"id": [True]}))
         self.assertFalse(same_json_value({"id": [1]}, {"id": [1.0]}))
+        self.assertEqual(
+            decode_native_json('{"min":-9223372036854775808,"max":18446744073709551615}'),
+            {"min": -(1 << 63), "max": (1 << 64) - 1},
+        )
         malformed_wire = (
             (
                 canonical.replace(
@@ -436,6 +440,14 @@ class PythonApiTests(unittest.TestCase):
                     "non-finite JSON value",
                 )
                 for token in ("NaN", "Infinity", "-Infinity")
+            ),
+            # Rust serde_json cannot emit unbounded Python integers.
+            *(
+                (
+                    canonical.replace('"source_id": 27', f'"source_id": {token}', 1),
+                    "outside Rust i64/u64 range",
+                )
+                for token in ("-9223372036854775809", "18446744073709551616")
             ),
             # Python's default JSON decoder silently converts valid JSON
             # exponents beyond binary64 into infinity. Reject at parse time.
