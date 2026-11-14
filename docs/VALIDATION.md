@@ -1,5 +1,10 @@
 # Validation and quality gates
 
+## Native synod phase arrays (2026-11-14, draft PR #5)
+
+Validate the Python native transport before any ISO projection: `phase_thresholds_us` must be explicitly present and either null (unknown) or an array of strictly increasing **signed i64** microsecond integers strictly after its recorded anchor. Explicit `[]` is valid only when an anchor is recorded. Never treat a future phase as current, infer missing phases, or reject an originally recorded phase merely because it lies after the requested instant or later source cycle. The existing API method now covers malformed arrays and legitimate NULL/empty/future cases; counts stay 18 API / 42 source / 51 installed wheel. The standalone exact-helper preflight passed 4/4 in Python 3.13.5, **not** the full repository suite, installed wheel or Rust build.
+
+
 **No implementation/tests have been run for this repository as of initial setup.** The following gates become executable as code is added; record actual commands and outcomes in PRs and [WORK_LOG](WORK_LOG.md).
 
 ## Native cycle-anchor validation precedes phase checks (2026-11-14, draft PR #5)
