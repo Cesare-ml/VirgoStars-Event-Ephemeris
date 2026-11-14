@@ -150,3 +150,6 @@ M0 input preflight (PR #5, 2026-11-11): reject invalid SHA-256 before native imp
 
 
 **M0.2 known terminal phase and source-anchor consistency (2026-11-14, draft PR #5):** The Python wire validator now rejects unsupported open-ended `D4`/`CAL2`, `CAL2` across source Moon gaps >45d, and any known stage whose final recorded phase threshold reaches/passes the next recorded anchor. Ten new isolated synthetic unittest cases PASS against SHA-matching module/test sources, plus integration regressions in the existing 18-method Python API suite. Cargo, complete 42/51 Python acceptance and owner data parity still not run.
+
+
+**M0.2 prebuilt wheel identity preflight (2026-11-14, draft PR #5):** match distribution/version across wheel filename, `.dist-info` and unique METADATA headers before pip; enforce Wheel-Version 1.0 and a bounded metadata read. 9 standalone synthetic Python tests actually passed, existing verifier fixture updated. Not a Rust build, installed native wheel test, or owner-data license release approval.

@@ -13,6 +13,8 @@ import re
 import stat
 import zipfile
 
+from wheel_identity import validate_wheel_identity
+
 # These are all source/archive formats used by the project's owner dataset.
 # A compressed archive with an unrelated extension cannot be classified by
 # filename alone; a packaging review is still mandatory before any release.
@@ -115,6 +117,10 @@ def inspect_wheel_contents(wheel: Path) -> None:
             metadata = next(iter(dist_info))
             if not {f"{metadata}/WHEEL", f"{metadata}/METADATA"}.issubset(names):
                 raise ValueError("wheel lacks mandatory WHEEL or METADATA")
+            # Verify that this is the *intended* VirgoStars distribution,
+            # with matching PEP 427 filename and PEP 566 Name/Version headers.
+            # This runs on the same private wheel snapshot pip will install.
+            validate_wheel_identity(wheel, archive, metadata)
             bad_member = archive.testzip()
             if bad_member is not None:
                 raise ValueError(f"wheel has a corrupt ZIP member: {bad_member!r}")

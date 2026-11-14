@@ -16,12 +16,12 @@ import verify_python_wheel as wheel_check
 
 
 class WheelGateTests(unittest.TestCase):
-    def make_wheel(self, directory: Path) -> Path:
+    def make_wheel(self, directory: Path, *, project_name: str = "virgostars-event-ephemeris") -> Path:
         result = directory / "virgostars_event_ephemeris-0.1.0-py3-none-any.whl"
         with zipfile.ZipFile(result, "w") as package:
             metadata = "virgostars_event_ephemeris-0.1.0.dist-info"
             package.writestr(f"{metadata}/WHEEL", "Wheel-Version: 1.0\n")
-            package.writestr(f"{metadata}/METADATA", "Name: virgostars-event-ephemeris\n")
+            package.writestr(f"{metadata}/METADATA", f"Name: {project_name}\nVersion: 0.1.0\n")
             package.writestr("virgostars_events/__init__.py", "__version__ = '0.1.0'\n")
         return result
 
@@ -191,6 +191,15 @@ class WheelGateTests(unittest.TestCase):
                     self.assertEqual(wheel_check.main(["--wheel", str(wheel)]), 1)
                 builder.assert_not_called()
             self.assertIn("pre-install wheel content check", errors.getvalue())
+
+    def test_unrelated_wheel_metadata_rejected_before_creating_venv(self):
+        with tempfile.TemporaryDirectory() as temp:
+            wheel = self.make_wheel(Path(temp), project_name="unrelated-package")
+            with patch.object(wheel_check.venv, "EnvBuilder") as builder:
+                with redirect_stderr(StringIO()) as errors:
+                    self.assertEqual(wheel_check.main(["--wheel", str(wheel)]), 1)
+                builder.assert_not_called()
+            self.assertIn("METADATA Name", errors.getvalue())
 
     def test_venv_bootstrap_failure_returns_nonzero_not_success(self):
         with tempfile.TemporaryDirectory() as temp:
