@@ -1,5 +1,18 @@
 # Validation and quality gates
 
+## Fail-fast independent Python P0 report preflight (2026-11-14, draft PR #5)
+
+`tools/validate_rust.py` now **parses and validates the Python independent audit report before launching** the potentially expensive Rust `p0-verify` audit. The Python report must already have strict JSON, canonical digest, correctly typed/coherent section counts, SHA-256 matching `--sha256`, and a byte count equal to the actual archive size. Any failure stops the pipeline before the Rust auditor. Rust is still run when these preliminary checks pass, and all previously required Rust/Python parity, full-file SHA, format and `coverage_certified=false` checks remain mandatory. Early agreement with a Python report **does not prove** archive content or astronomical completeness.
+
+```sh
+python -m unittest discover -s tools -p test_validate_bounded_integration.py -v
+python -m unittest discover -s tools -p test_validate_rust.py -v
+```
+
+Two new test methods extend `test_validate_bounded_integration.py` from **6 to 8**. They cover wrong Python SHA-256, incorrect file length and malformed family-count data (mocked auditor returns) plus malformed JSON emitted by a real synthetic Python subprocess. For every invalid Python report, the mock Rust audit must **not** start. The previously recorded eight `test_bounded_audit.py` helper regressions remain.
+
+**Actually executed:** Python 3.13.5 `python -m unittest -q test_validate_bounded_integration test_bounded_audit` **16/16 PASS**, against a local isolated reconstruction of `run_gates` with the new preflight, exact tracked helper, strict JSON decoder and the exact newly published integration test file. Git blob readback **`2d9ee15a85b6d5bb9fda6dc26316d62edb3b2a15`** matches executed integration tests. **Not executed:** the complete exact `validate_rust.py` from a clean checkout, the separate 17-method orchestration module, Cargo locked gates, source/native Python package acceptance and owner-data CSV/P0 parity. Do not mark the M0 deliverable complete.
+
 ## Validate real bounded-audit routing from the Rust gate orchestrator (2026-11-14, draft PR #5)
 
 Run after cloning the complete branch:
