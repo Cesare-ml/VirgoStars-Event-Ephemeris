@@ -1,3 +1,11 @@
+## 2026-11-14 — Block inherited pip settings from redirecting isolated M0 wheel installation (draft PR #5)
+
+- **Risk:** the offline prebuilt-wheel verifier sanitized inherited `PYTHONPATH`/`PYTHONHOME`/`PYTHONUSERBASE`, but still passed arbitrary `PIP_TARGET`, `PIP_PREFIX`, `PIP_USER`, `PIP_ROOT`, index and `PIP_CONFIG_FILE` settings to its pip subprocess. A developer's global pip configuration could silently redirect the claimed temporary-venv installation or alter its isolation.
+- **Implementation:** `tools/verify_python_wheel.py::run_checked` strips all `PIP_*` variables for every subprocess in the verifier and sets `PIP_CONFIG_FILE=os.devnull` to disable inherited pip config files, in addition to the existing Python import environment sanitization and explicit `--no-index --no-deps` pip flags. No wheel, owner dataset, event record or Rust source changed.
+- **Regression:** added `test_real_subprocess_strips_inherited_pip_target_and_config` to `tools/test_verify_python_wheel.py`; it actually launches CPython under injected hostile pip variables and checks child environment is exactly `{PIP_CONFIG_FILE: os.devnull}` for tracked pip/import keys. The committed module now declares 11 test methods.
+- **Executed locally:** 2/2 real-subprocess tests on Python 3.13.5 using an isolated copy of the exact committed `run_checked` function: hostile PIP_* overrides are absent in the child, and a child exiting 7 fails closed with RuntimeError. **Not executed:** the entire committed 11-test module from a full checkout, actual pip wheel install, locked Cargo/Rust/PyO3 build, 42 source / 51 installed-native Python tests and authorized 380,844-event parity.
+- **Next:** execute `python -m unittest discover -s tools -p test_verify_python_wheel.py -v` in the full branch checkout, regenerate/review the stale `Cargo.lock` with real Cargo, and prove native wheel install and owner-data parity. No main merge, Actions, release or production changes. PR #5 remains draft.
+
 ## 2026-11-14 — Guard direct `run_gates` invocations before Cargo (draft PR #5)
 
 - **Problem:** the command-line entry point `validate_archive_options` checks trusted `--sha256` syntax and archive existence, but callers that invoke `run_gates` directly could bypass those checks. Missing independent `tools/audit_p0_bytes.py` was also detected *after* five potentially expensive Cargo gates.
