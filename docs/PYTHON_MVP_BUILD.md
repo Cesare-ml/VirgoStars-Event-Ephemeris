@@ -1,5 +1,18 @@
 # Windows: build and test the first Python/Rust synod MVP
 
+## Windows reserved ZIP member names and NTFS ADS preflight (2026-11-14, draft PR #5)
+
+`tools/wheel_contents_policy.py` now also rejects wheel paths containing Windows device names (`CON`, `NUL`, `AUX`, `PRN`, `COM1`–`COM9`, `LPT1`–`LPT9`, including file extensions), reserved punctuation such as colon/`?`/`*`, control characters and segments ending in a space or dot. This prevents an offline wheel check from accepting ZIP paths that could be interpreted differently by a Windows installer; it remains a pre-install packaging check, not proof of a compiled native module.
+
+Run the committed policy tests from a complete checkout before the native wheel gate:
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_wheel_contents_policy.py" -v
+```
+
+**This increment:** three locally executed isolated Python 3.13.5 smoke tests passed (11 forbidden basename/path cases, four valid names, one real synthetic ZIP inspection). Exact source and test files were pushed/read back on GitHub. The full committed 14-test wheel-policy suite, Cargo/Rust build, 42 source tests, 51 native wheel tests and owner-data parity **have not been executed** here.
+
+
 ## Windows wheel path collision preflight (2026-11-14, draft PR #5)
 
 The offline pre-install policy (`tools/wheel_contents_policy.py`) now rejects two distinct ZIP members that become the same filesystem path when case-insensitively compared, including a duplicate package `__init__.py` with different capitalization. This avoids silent overwrites when a wheel is unpacked on common case-insensitive Windows filesystems. No dataset is embedded, and this is a packaging-safety check rather than a native build or scientific test.
