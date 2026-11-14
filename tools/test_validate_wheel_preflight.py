@@ -30,7 +30,7 @@ class WheelPreflightGateTests(unittest.TestCase):
             (("test_wheel_contents_policy.py", 16),
              ("test_wheel_identity.py", 9),
              ("test_verify_python_wheel.py", 12),
-             ("test_build_python_mvp.py", 17)),
+             ("test_build_python_mvp.py", 18)),
         )
 
     def test_missing_suite_source_fails_before_discovery(self):
@@ -99,7 +99,7 @@ class WheelPreflightGateTests(unittest.TestCase):
             ) as runner, redirect_stdout(StringIO()):
                 self.assertEqual(gate.main(), 1)
             self.assertEqual(runner.call_count, 4)
-            self.assertEqual(runner.call_args.args, ("test_build_python_mvp.py", 17))
+            self.assertEqual(runner.call_args.args, ("test_build_python_mvp.py", 18))
 
     def test_main_checks_all_four_and_stops_on_first_failure(self):
         # Use dummy source paths because run_suite is deliberately mocked;

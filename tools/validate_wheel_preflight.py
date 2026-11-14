@@ -20,7 +20,7 @@ REQUIRED_SUITES = (
     ("test_wheel_identity.py", 9),
     ("test_verify_python_wheel.py", 12),
     # Builder tests mock Cargo/pip; check artifact non-clobber and gate ordering.
-    ("test_build_python_mvp.py", 17),
+    ("test_build_python_mvp.py", 18),
 )
 
 

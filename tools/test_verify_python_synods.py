@@ -385,6 +385,31 @@ class SourceCsvTests(unittest.TestCase):
             assert_parity(OracleReader(synthetic_source(), bad),
                           synthetic_source(), [150], "a" * 64)
 
+        # Python numeric equality would incorrectly accept 11.0 for the
+        # integer source ID 11. Original PostgreSQL IDs are integer values.
+        for impostor in (11.0, "11"):
+            def wrong_type(result):
+                result["synods"]["Moon"]["source_id"] = impostor
+            with self.subTest(source_id=impostor), self.assertRaisesRegex(
+                ValueError, "source_id"
+            ):
+                assert_parity(
+                    OracleReader(synthetic_source(), wrong_type),
+                    synthetic_source(), [150], "a" * 64,
+                )
+
+        # Even a native JSON boolean True must not masquerade as integer 1.
+        one_id_source = {"Moon": [SourceSynod(50, 1, None)]}
+        def boolean_id(result):
+            result["synods"]["Moon"]["source_id"] = True
+        with self.assertRaisesRegex(ValueError, "source_id"):
+            assert_parity(
+                OracleReader(one_id_source, boolean_id),
+                one_id_source, [50], "a" * 64,
+            )
+        # Preserve the genuine integer and nullable-field success path.
+        assert_parity(OracleReader(one_id_source), one_id_source, [50], "a" * 64)
+
     def test_missing_body_and_unreviewed_coverage_claim_rejected(self):
         def missing(result):
             del result["synods"]["Mercury"]

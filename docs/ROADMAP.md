@@ -163,3 +163,6 @@ M0 input preflight (PR #5, 2026-11-11): reject invalid SHA-256 before native imp
 
 
 **M0.2 lunar coverage warning wire consistency (2026-11-14, draft PR #5):** checked warnings (typed, nonduplicated) and the exact Moon >45-day recorded-anchor condition at the Python boundary. 12/12 focused Python stdlib tests executed; comprehensive 42 source/51 native, Cargo and real owner parity remain pending.
+
+
+**M0 build readiness fail-fast (2026-11-14, draft PR #5):** before running any expensive Python or Rust gate, `build_python_mvp.py` now checks the existing read-only native toolchain/Cargo.lock preflight and reports missing binding lock entries. Builder orchestration minimum increased 17→18 and synchronized with wheel preflight regressions. Four isolated readiness-path simulations PASS; committed full 18-case suite, 42/51 acceptance, genuine Cargo.lock regeneration and real CSV/P0 parity remain pending.

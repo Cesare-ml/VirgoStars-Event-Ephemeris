@@ -23,6 +23,8 @@ import sysconfig
 import tempfile
 from typing import Sequence
 
+from check_m0_build_env import problems as build_environment_problems
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -112,6 +114,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not (ROOT / "Cargo.toml").is_file() or not (ROOT / "pyproject.toml").is_file():
         print("FAIL: run from the source checkout containing Cargo.toml and pyproject.toml", file=sys.stderr)
         return 1
+    # Reject stale Cargo.lock, missing Rust tools and unsupported Python
+    # before running time-consuming source/P0/packaging tests. This check is
+    # read-only: real Cargo regeneration and manual lockfile review are still
+    # required before any successful native build.
+    issues = build_environment_problems(ROOT)
+    if issues:
+        print("FAIL: M0 build prerequisites are not ready:", file=sys.stderr)
+        for issue in issues:
+            print(f" - {issue}", file=sys.stderr)
+        print("No tests run, wheel built or artifact published.", file=sys.stderr)
+        return 1
+
     maturin = maturin_executable()
     if maturin is None:
         print("FAIL: maturin missing. Install it for this Python interpreter first.", file=sys.stderr)
