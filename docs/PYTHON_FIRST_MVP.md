@@ -1,5 +1,8 @@
 # Python-first MVP — latest synods, previous new moon and cycle phases
 
+**Strict Rust stage identity (2026-11-14, PR #5 draft):** The Python facade now checks `phase.status` and `phase.code` against the current Rust enum values: known `derived_from_recorded_thresholds` stages require a supported Moon/planet code and precisely three stored phase timestamps; unknown statuses must carry neither a stage code nor a stage start, and a body without a preceding anchor must return `no_preceding_recorded_cycle`. This is a transport invariant, **not a second stage classifier or independent completeness audit**. The existing 18 API test methods now exercise malformed and legitimate Moon/planet states. Four isolated exact-helper tests passed on Python 3.13.5; **42 source / 51 wheel and Rust build still unexecuted**.
+
+
 **Native synod phase-array integrity (2026-11-14, draft PR #5):** Python now validates the Rust JSON `phase_thresholds_us` field **before** converting any phase timestamp to an ISO string. It preserves SQL NULL (`None`) versus explicit empty arrays (`[]`), rejects a missing field, non-array values, non-integer/boolean/floating-point entries, out-of-i64 integers, non-increasing timestamps, phases at/before the recorded cycle anchor, or a non-null array without a recorded anchor. Future recorded phase timestamps are preserved instead of guessed as current stages; scientific stage classification remains in Rust. Existing `test_empty_extra_array_not_confused_with_sql_null` gains malformed/future subcases and source acceptance counts stay **18 API / 42 source / 51 wheel**. Exact-helper four-method Python 3.13.5 preflight **PASS 4/4**, Git blob SHA-1 verified; full source, wheel, Cargo and original-dataset gates **not run** here.
 
 
