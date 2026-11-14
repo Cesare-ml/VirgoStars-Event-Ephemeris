@@ -120,6 +120,15 @@ def run_gates(
         print("\n[Independent P0 byte audit]", flush=True)
         py_result = (run_bounded_audit(python_cmd, cwd=root) if invoke is None
                      else invoke(python_cmd, cwd=root, check=True, capture_output=True, text=True))
+        # Fail fast on a malformed/foreign Python report before starting the
+        # independent and potentially costly Rust full-archive audit.
+        python_report = decode_audit_report(py_result.stdout, source="Python")
+        validate_audit_shape(python_report, "Python")
+        if python_report["sha256"] != expected_sha256:
+            raise RuntimeError("Python P0 audit digest differs from the trusted manifest")
+        if python_report["bytes"] != archive.stat().st_size:
+            raise RuntimeError("Python P0 auditor physical byte length differs from source file")
+
         # The Rust CLI performs complete block decoding AND full-file hashing.
         cli_cmd = [
             executable, "run", "--locked", "-p", "virgostars-events-p0", "--bin",
@@ -132,9 +141,7 @@ def run_gates(
         # Fail before checking audit fields if JSON itself is ambiguous:
         # duplicate object keys and nonfinite numbers must never be silently
         # interpreted differently by a Python or Rust JSON parser.
-        python_report = decode_audit_report(py_result.stdout, source="Python")
         rust_report = decode_audit_report(rust_result.stdout, source="Rust")
-        validate_audit_shape(python_report, "Python")
         validate_audit_shape(rust_report, "Rust")
         if rust_report.get("format") != "VSEPH-P0-EXPERIMENTAL":
             raise RuntimeError("Rust P0 audit reported an unexpected archive format")
