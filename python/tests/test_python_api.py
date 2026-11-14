@@ -595,6 +595,84 @@ class PythonApiTests(unittest.TestCase):
             ],
         )
 
+
+        # Rust is the only phase classifier. The Python transport must still
+        # reject impossible labels and false 'derived' scientific states.
+        for mutation in (
+            "missing status", "boolean status", "unknown status",
+            "derived without code", "wrong body code", "partial derived",
+            "unknown carrying stage", "missing phase field",
+            "no-predecessor status with anchor", "derived with null thresholds",
+        ):
+            with self.subTest(mutation=mutation):
+                broken = fake_response()
+                phase = broken["synods"]["Mercury"]["phase"]
+                if mutation == "missing status":
+                    del phase["status"]
+                elif mutation == "boolean status":
+                    phase["status"] = True
+                elif mutation == "unknown status":
+                    phase["status"] = "certified"
+                elif mutation == "derived without code":
+                    phase["code"] = None
+                    phase["started_at_us"] = None
+                elif mutation == "wrong body code":
+                    phase["code"] = "CAL1"
+                elif mutation == "partial derived":
+                    broken["synods"]["Mercury"]["phase_thresholds_us"] = [-200, -100]
+                elif mutation == "unknown carrying stage":
+                    phase["status"] = "unknown_missing_phase_thresholds"
+                elif mutation == "missing phase field":
+                    del phase["status"]
+                    del phase["started_at_us"]
+                    phase["code"] = None
+                elif mutation == "no-predecessor status with anchor":
+                    phase["status"] = "no_preceding_recorded_cycle"
+                    phase["code"] = None
+                    phase["started_at_us"] = None
+                elif mutation == "derived with null thresholds":
+                    broken["synods"]["Mercury"]["phase_thresholds_us"] = None
+                with self.assertRaisesRegex(
+                    ValueError, "native synod phase status invalid"
+                ):
+                    VirgoStarsEvents(DummyNative(broken)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        for body, code in (("Moon", "D1"), ("Mercury", "CAL2")):
+            with self.subTest(body=body, code=code):
+                broken = fake_response()
+                phase = broken["synods"][body]["phase"]
+                phase["code"] = code
+                phase["status"] = "derived_from_recorded_thresholds"
+                phase["started_at_us"] = broken["synods"][body]["cycle_start_us"]
+                broken["synods"][body]["phase_thresholds_us"] = (
+                    [-1500, -1000, -500] if body == "Moon"
+                    else [-200, -100, 100]
+                )
+                with self.assertRaisesRegex(
+                    ValueError, "native synod phase status invalid"
+                ):
+                    VirgoStarsEvents(DummyNative(broken)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        # A valid future/source-threshold Moon stage and a legitimate
+        # unknown unsupported body still pass without Python classification.
+        recorded_moon = fake_response()
+        recorded_moon["synods"]["Moon"]["phase_thresholds_us"] = [-1500, -1000, -500]
+        recorded_moon["synods"]["Moon"]["phase"] = {
+            "code": "CAL1", "started_at_us": -1000,
+            "status": "derived_from_recorded_thresholds",
+        }
+        recorded_moon["new_moon"] = recorded_moon["synods"]["Moon"]
+        self.assertEqual(
+            VirgoStarsEvents(DummyNative(recorded_moon)).get_synods_at(
+                "1970-01-01T00:00:00Z"
+            )["new_moon"]["phase"]["code"],
+            "CAL1",
+        )
+
     def test_missing_previous_moon_anchor_returns_none_alias(self):
         raw = fake_response()
         raw["synods"]["Moon"]["source_id"] = None
