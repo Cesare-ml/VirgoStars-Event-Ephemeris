@@ -121,6 +121,39 @@ class BoundedAuditIntegrationTests(unittest.TestCase):
         self.assertEqual(cargo.call_count, len(GATES))
         bounded.assert_called_once()
 
+    def test_invalid_python_report_short_circuits_before_rust(self):
+        for changes, reason in (
+            ({"sha256": "b" * 64}, "digest differs from the trusted manifest"),
+            ({"bytes": 21}, "physical byte length differs"),
+            ({"sections": None}, "invalid family section counts"),
+        ):
+            with self.subTest(changes=changes):
+                def python_only(command, *, cwd):
+                    self.assertNotEqual(command[0], "mock-cargo")
+                    report = dict(self.base, **changes)
+                    return subprocess.CompletedProcess(command, 0,
+                                                      stdout=json.dumps(report))
+
+                with patch("validate_rust.subprocess.run", side_effect=self.mock_cargo) as cargo, \
+                     patch("validate_rust.run_bounded_audit", side_effect=python_only) as bounded:
+                    with self.assertRaisesRegex(RuntimeError, reason):
+                        run_gates(root=self.root, archive=self.archive,
+                                  expected_sha256=DIGEST, cargo="mock-cargo")
+                self.assertEqual(cargo.call_count, len(GATES))
+                bounded.assert_called_once()
+
+    def test_real_malformed_python_json_stops_before_rust(self):
+        (self.root / "tools" / "audit_p0_bytes.py").write_text(
+            "import sys\nsys.stdout.write('{broken-json')\n", encoding="utf-8"
+        )
+        with patch("validate_rust.subprocess.run", side_effect=self.mock_cargo) as cargo, \
+             patch("validate_rust.run_bounded_audit", wraps=run_bounded_audit) as bounded:
+            with self.assertRaisesRegex(RuntimeError, "invalid or ambiguous JSON"):
+                run_gates(root=self.root, archive=self.archive,
+                          expected_sha256=DIGEST, cargo="mock-cargo")
+        self.assertEqual(cargo.call_count, len(GATES))
+        bounded.assert_called_once()
+
     def test_no_archive_runs_only_cargo_gates(self):
         with patch("validate_rust.subprocess.run", side_effect=self.mock_cargo) as cargo, \
              patch("validate_rust.run_bounded_audit") as bounded:
