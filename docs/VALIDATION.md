@@ -28,7 +28,7 @@ The strict `decode_native_json` helper now checks `math.isfinite(float(token))` 
 
 A `derived_from_recorded_thresholds` phase now requires exact equality of `phase.started_at_us` with the original source instant belonging to that phase code: cycle anchor for `D1`/`CRESC1`, first stored extra for `R2`/`CRESC2`, second for `R3`/`CAL1`, third for `D4`/`CAL2`. This enforces cross-language wire consistency but **does not** decide which stage applies at X; that classification remains Rust-only. Unknown stages are unaffected.
 
-**Verified in local Python 3.13.5:** 4/4 isolated unittest methods PASS (eight valid mapping cases, six wrong boundary cases, and NULL/missing/empty states). `git hash-object` matched GitHub helper blob `042d5a53ddf512ec98f2244faa7d289073e5edc8`. The existing committed API test method was extended without changing the 18/42/51 mandatory counts. Full source and native suites, Rust compilation and scientific parity **not run** here.
+**Verified in local Python 3.13.5:** 4/4 isolated unittest methods PASS (eight valid mapping cases, six wrong boundary cases, and NULL/missing/empty states). `git hash-object` matched GitHub helper blob `7417afd7f7191064613563f03f51a6ff2c482e84`. The existing committed API test method was extended without changing the 18/42/51 mandatory counts. Full source and native suites, Rust compilation and scientific parity **not run** here.
 
 ## Python phase-start transport guard (2026-11-14, draft PR #5)
 
