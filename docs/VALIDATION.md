@@ -1,5 +1,20 @@
 # Validation and quality gates
 
+## Fail-fast direct-call archive trust preflight (2026-11-14, draft PR #5)
+
+`tools/validate_rust.py` now validates the inputs to `run_gates()` **before starting any Cargo command**, including when the Python API is called directly rather than through `main()` / `validate_archive_options()`. With an archive, the trusted digest must be a lowercase 64-character SHA-256, the archive must exist as a file and the independent byte auditor must be present. A digest without an archive is rejected as well. Missing trusted digest keeps its previous clear error. The normal Cargo command order, strictly bounded Python/Rust auditors, report parity checks and astronomical data remain unchanged.
+
+Synthetic, source-only regression gate (no real Cargo invocation):
+
+```sh
+python -m unittest discover -s tools -p test_validate_preflight.py -v
+python -m unittest discover -s tools -p test_p0_u64_report.py -v
+python -m unittest discover -s tools -p test_validate_bounded_integration.py -v
+python -m unittest discover -s tools -p test_bounded_audit.py -v
+```
+
+**Actually executed:** Python 3.13.5, combined suite **26/26 PASS** (new 5-method preflight module plus 21 prior bounded/shape/integration regressions), on an isolated folder containing the **exact GitHub blob-matching source files**. Exact hash of validator `8f829c12430dc1b57f8e01abca9f438e16890499` and new tests `d9d94cf04acd17c0d3398728f58e5f0f72b8d244`. The preflight suite asserts no mocked Cargo command is invoked for malformed inputs. **Not run:** original separate 17-method `tools/test_validate_rust.py` module, all locked Cargo gates, native 42-source/51-wheel acceptance or original owner scientific dataset parity. A clean checkout and complete native validation remain mandatory.
+
 ## Native-u64 bounds for Python/Rust P0 audit reports (2026-11-14, draft PR #5)
 
 The independent Rust `p0-verify` report represents archive byte lengths and event/block counters as Rust integer JSON values, while Python can parse arbitrarily large JSON integers. The common `validate_audit_shape` in `tools/validate_rust.py` now accepts **only exact Python `int` in `0..=2^64-1`** for file size, blocks, records and family counts (file size remains strictly positive). It rejects `bool`, float, negatives and out-of-range values **before** the Rust audit is started when supplied by the Python auditor. The existing count consistency, SHA-256, physical-size, canonical JSON and independent parity gates remain.
