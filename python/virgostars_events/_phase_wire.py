@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._unknown_status import validate_unknown_stage_reason
+from ._unknown_status import (
+    MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_US,
+    validate_unknown_stage_reason,
+)
 
 
 _I64_MIN = -(1 << 63)
@@ -132,6 +135,19 @@ def validate_native_stage(
             and requested_at_us >= thresholds[start_index + 1]
         ):
             raise ValueError(f"native synod phase code expired at a source threshold for {body}")
+        # Rust validates all three original phase thresholds against the
+        # next recorded anchor *before* returning any known stage. An early
+        # stage must not hide a corrupt final threshold crossing that anchor.
+        if next_anchor_us is not None and thresholds[2] >= next_anchor_us:
+            raise ValueError(f"native synod phase bounds conflict with next anchor for {body}")
+        if start_index == 2:
+            # Rust refuses to extend D4/CAL2 indefinitely without a next
+            # recorded anchor. A source gap >45d also makes Moon CAL2 unknown.
+            if next_anchor_us is None:
+                raise ValueError(f"native synod final stage lacks next recorded anchor for {body}")
+            if (body == "Moon" and
+                    next_anchor_us - anchor_us > MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_US):
+                raise ValueError(f"native synod lunar final stage crosses source gap for {body}")
     elif status not in _UNKNOWN_STAGE_STATUSES or code is not None or started_at_us is not None:
         raise ValueError(f"native synod phase status invalid for {body}")
     else:

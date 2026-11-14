@@ -213,3 +213,6 @@ The standalone independent CSV verifier now checks `--sha256` shape (exactly 64 
 
 
 **Unknown-stage temporal evidence check (2026-11-14, draft PR #5):** Python now rejects an unsupported Rust unknown-phase *reason* when a 45-day Moon gap is not actually present, a claimed open-ended cycle is earlier than its last recorded phase, or a claimed invalid bound still lies before the next anchor. Synthetic exact-boundary checks cover 45 days versus 45 days plus one microsecond. The 45-day constant mirrors the provisional Rust guard and is not scientific coverage certification. Full Cargo and installed-wheel tests remain pending.
+
+
+**Recorded end-of-cycle guard (2026-11-14, draft PR #5):** A Rust-derived known fourth phase (planetary `D4` or lunar `CAL2`) is rejected in Python when no next recorded anchor exists; a lunar `CAL2` is rejected if its recorded interval exceeds the provisional 45-day Moon discontinuity guard. All three recorded phase boundaries must precede the next anchor, even if the claimed current stage is an earlier one. This rejects contradictory transport evidence without deriving astronomy, inventing missing events or certifying completeness.

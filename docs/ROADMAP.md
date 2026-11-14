@@ -147,3 +147,6 @@ M0 input preflight (PR #5, 2026-11-11): reject invalid SHA-256 before native imp
 
 
 **M0.2 unknown-phase reason time windows (2026-11-14, draft PR #5):** guard Rust/Python response integrity for open-ended phases, the Moon gap threshold (strictly more than 45 days), and invalid third-phase/next-anchor ordering. The focused Python suite expands **9 to 15 methods**, all 15 executed locally; in-place API mock regressions added. Full source-only 42/native 51 acceptance and real dataset parity remain unverified.
+
+
+**M0.2 known terminal phase and source-anchor consistency (2026-11-14, draft PR #5):** The Python wire validator now rejects unsupported open-ended `D4`/`CAL2`, `CAL2` across source Moon gaps >45d, and any known stage whose final recorded phase threshold reaches/passes the next recorded anchor. Ten new isolated synthetic unittest cases PASS against SHA-matching module/test sources, plus integration regressions in the existing 18-method Python API suite. Cargo, complete 42/51 Python acceptance and owner data parity still not run.

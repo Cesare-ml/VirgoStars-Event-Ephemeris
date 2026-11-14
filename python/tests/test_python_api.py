@@ -865,6 +865,49 @@ class PythonApiTests(unittest.TestCase):
             )["synods"]["Mercury"]["phase"]["code"]
         )
 
+
+        # A known last-phase label needs an independently recorded cycle end.
+        # The byte-level record and its start may be valid while the phase
+        # declaration is stale or scientifically unjustified.
+        for body, phase_code, thresholds, next_start, phase_start, reason in (
+            ("Mercury", "D4", [-200, -100, -1], None, -1, "lacks next recorded anchor"),
+            ("Moon", "CAL2", [-1500, -1000, -500],
+             -2000 + 45 * 86_400 * 1_000_000 + 1, -500, "crosses source gap"),
+            ("Mercury", "R3", [-200, -100, 400],
+             400, -100, "bounds conflict with next anchor"),
+        ):
+            with self.subTest(last_phase=phase_code, reason=reason):
+                invalid = fake_response()
+                record = invalid["synods"][body]
+                record["phase_thresholds_us"] = thresholds
+                record["next_cycle_start_us"] = next_start
+                record["phase"] = {
+                    "code": phase_code, "started_at_us": phase_start,
+                    "status": "derived_from_recorded_thresholds"
+                }
+                with self.assertRaisesRegex(ValueError, "native synod .*" + reason):
+                    VirgoStarsEvents(DummyNative(invalid)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        # Valid source-bounded fourth stages must remain accepted.
+        for body, code, extras, start in (
+            ("Mercury", "D4", [-200, -100, -1], -1),
+            ("Moon", "CAL2", [-1500, -1000, -500], -500),
+        ):
+            with self.subTest(valid_final_stage=code):
+                valid = fake_response()
+                record = valid["synods"][body]
+                record["phase_thresholds_us"] = extras
+                record["phase"] = {
+                    "code": code, "started_at_us": start,
+                    "status": "derived_from_recorded_thresholds"
+                }
+                result = VirgoStarsEvents(DummyNative(valid)).get_synods_at(
+                    "1970-01-01T00:00:00Z"
+                )
+                self.assertEqual(result["synods"][body]["phase"]["code"], code)
+
     def test_missing_previous_moon_anchor_returns_none_alias(self):
         raw = fake_response()
         raw["synods"]["Moon"]["source_id"] = None
