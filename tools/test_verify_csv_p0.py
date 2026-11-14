@@ -11,7 +11,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
-from verify_csv_p0 import utc_microseconds, verify, uvar
+from verify_csv_p0 import decoded_block, utc_microseconds, verify, uvar
 
 DAY_US=86_400_000_000
 EPOCH=dt.date(1970,1,1)
@@ -129,6 +129,44 @@ class CsvP0ParityTest(unittest.TestCase):
                     ValueError, "non-canonical|truncated|unsigned 64-bit"
                 ):
                     uvar(encoded, 0)
+
+    def test_csv_timestamps_require_ascii_decimal_digits(self):
+        # Python \d and int() accept Unicode numerals, but a normalized
+        # scientific UTC CSV timestamp must use unambiguous ASCII digits.
+        self.assertEqual(
+            utc_microseconds("0002-01-30 05:04:51+00"),
+            (dt.date(2, 1, 30) - EPOCH).days * DAY_US
+            + (5 * 3600 + 4 * 60 + 51) * 1_000_000,
+        )
+        for value in (
+            "٢٠٢٦-11-14 12:30:01+00",
+            "２０２６-11-14 12:30:01+00",
+            "2026-١١-14 12:30:01+00",
+            "2026-11-14 12:30:٠١+00",
+        ):
+            with self.subTest(timestamp=value), self.assertRaisesRegex(
+                ValueError, "invalid UTC timestamp"
+            ):
+                utc_microseconds(value)
+
+    def test_decoded_p0_block_requires_unique_nonzero_source_ids(self):
+        # Call the independent block decoder directly: checksum validation
+        # and SQLite parity must not be relied upon for these invariants.
+        first = struct.pack("<q", 0)
+        for payload, count in (
+            (first + b"\x00\x00\x00", 1),  # ID 0
+            (first + b"\x07\x00\x00\x07\x01\x00", 2),  # repeated ID 7
+        ):
+            with self.subTest(payload=payload), self.assertRaisesRegex(
+                ValueError, "zero or duplicate P0 source ID"
+            ):
+                list(decoded_block("synod", payload, count))
+
+        valid = first + b"\x07\x00\x00\x08\x01\x00"
+        self.assertEqual(
+            list(decoded_block("synod", valid, 2)),
+            [(7, [0, None]), (8, [1, None])],
+        )
 
     def test_rejects_changed_ingress_sign(self):
         path=self.folder/'ingresso_segni.csv'
