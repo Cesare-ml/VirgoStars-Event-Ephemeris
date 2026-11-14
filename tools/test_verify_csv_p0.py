@@ -11,7 +11,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
-from verify_csv_p0 import decoded_block, utc_microseconds, verify, uvar
+from verify_csv_p0 import decoded_block, normalized_row, utc_microseconds, verify, uvar
 
 DAY_US=86_400_000_000
 EPOCH=dt.date(1970,1,1)
@@ -167,6 +167,25 @@ class CsvP0ParityTest(unittest.TestCase):
             list(decoded_block("synod", valid, 2)),
             [(7, [0, None]), (8, [1, None])],
         )
+
+    def test_body_names_follow_rust_body_id_contract(self):
+        original = {
+            "id": "1", "elemento": "Moon",
+            "dataora_utc": "1970-01-01 00:00:00+00",
+            "dataora_extra_utc_json": "",
+        }
+        for valid in ("Moon", "Sun", "Alpha-Centauri", "星"):
+            with self.subTest(valid=valid):
+                body, source_id, fields = normalized_row(
+                    "synod", dict(original, elemento=valid)
+                )
+                self.assertEqual((body, source_id, fields), (valid, 1, [0, None]))
+
+        for invalid in ("", " Moon", "Moon ", "Moon\\t", "Moon\\x00",
+                        "Moon\\x7f", "Moon\\u009f", "Moon\\ud800"):
+            with self.subTest(invalid=repr(invalid)):
+                with self.assertRaisesRegex(ValueError, "invalid body name"):
+                    normalized_row("synod", dict(original, elemento=invalid))
 
     def test_rejects_changed_ingress_sign(self):
         path=self.folder/'ingresso_segni.csv'
