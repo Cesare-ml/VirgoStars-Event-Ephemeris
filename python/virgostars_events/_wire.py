@@ -34,16 +34,43 @@ def _finite_json_float(token: str) -> float:
     return value
 
 
+def _require_unicode_scalars(value: Any) -> None:
+    """Reject lone UTF-16 surrogates in JSON keys and values, at any depth.
+
+    Python's json decoder accepts ``\\ud800`` on its own even though it
+    cannot be represented as a Unicode scalar in UTF-8. The Rust side emits
+    valid UTF-8, so accepting such strings would mask malformed test/native
+    transport data. Traverse iteratively to avoid a second recursion limit.
+    """
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            try:
+                item.encode("utf-8", errors="strict")
+            except UnicodeEncodeError as exc:
+                raise ValueError(
+                    "native synod response contains an unpaired Unicode surrogate"
+                ) from exc
+        elif isinstance(item, dict):
+            pending.extend(item.keys())
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+
+
 def decode_native_json(payload: str) -> Any:
     """Parse only standard, unambiguous JSON (including nested objects)."""
     if type(payload) is not str:
         raise ValueError("native synod response must be JSON text")
-    return json.loads(
+    result = json.loads(
         payload,
         object_pairs_hook=_unique_object,
         parse_constant=_reject_nonfinite,
         parse_float=_finite_json_float,
     )
+    _require_unicode_scalars(result)
+    return result
 
 
 def same_json_value(left: Any, right: Any) -> bool:
