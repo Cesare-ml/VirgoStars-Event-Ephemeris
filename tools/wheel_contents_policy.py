@@ -27,6 +27,23 @@ MAX_EXPANSION_RATIO = 1000
 MAX_UNCOMPRESSED_MEMBER = 64 * 1024 * 1024
 MAX_UNCOMPRESSED_TOTAL = 128 * 1024 * 1024
 
+# ZIP member names may be accepted on Linux but redirect or conflict with
+# special Windows names when the same wheel is installed on Windows.
+_WINDOWS_INVALID = frozenset('<>:"|?*')
+_WINDOWS_DEVICE = re.compile(
+    r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\..*)?\\Z",
+    re.IGNORECASE,
+)
+
+
+def unsafe_windows_component(part: str) -> bool:
+    """Reject Win32 forbidden components without consulting host OS rules."""
+    return (
+        not part or part[-1] in (".", " ")
+        or any(ord(ch) < 32 or ch in _WINDOWS_INVALID for ch in part)
+        or _WINDOWS_DEVICE.fullmatch(part) is not None
+    )
+
 
 def inspect_wheel_contents(wheel: Path) -> None:
     """Reject malformed/unsafe ZIP members and accidental scientific datasets.
@@ -51,6 +68,7 @@ def inspect_wheel_contents(wheel: Path) -> None:
                     or re.match(r"^[A-Za-z]:", name)
                     or any(part in ("", ".", "..") for part in parts[:-1])
                     or (not info.is_dir() and parts[-1] in ("", ".", ".."))
+                    or any(unsafe_windows_component(part) for part in parts if part)
                 ):
                     raise ValueError(f"unsafe wheel member path: {name!r}")
                 if not info.is_dir() and (not parts[-1] or name in names):
