@@ -173,6 +173,43 @@ class AuditP0BytesTest(unittest.TestCase):
             ):
                 self.audit(rewrite_header(self.good, header))
 
+    def test_duplicate_header_keys_rejected_with_intact_compressed_blocks(self):
+        # json.loads ordinarily accepts duplicates (also escaped aliases),
+        # discarding an earlier value. The byte oracle must fail closed even
+        # when both repeated values agree and block checksums remain intact.
+        header_len = struct.unpack_from("<I", self.good, 8)[0]
+        doc = json.loads(self.good[12:12 + header_len])
+        payload = self.good[12 + header_len:]
+        canonical = json.dumps(
+            doc, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        sections = json.dumps(
+            doc["sections"], sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        section_field = b'"sections":' + sections
+        first = sorted(doc["sections"])[0]
+        member = f'"{first}":{doc["sections"][first]}'.encode("ascii")
+        duplicate_member = sections.replace(
+            b"{" + member, b"{" + member + b"," + member, 1
+        )
+        cases = (
+            ("top-level", canonical[:-1] + b',"format":"VSEPH-P0-EXPERIMENTAL"}'),
+            ("nested", canonical.replace(
+                section_field, b'"sections":' + duplicate_member, 1
+            )),
+            ("escaped alias", canonical[:-1] + b',"\\u0073ections":' + sections + b"}"),
+        )
+        for name, altered_header in cases:
+            with self.subTest(name=name):
+                archive = (
+                    b"VSEPH-P0" + struct.pack("<I", len(altered_header))
+                    + altered_header + payload
+                )
+                with self.assertRaisesRegex(ValueError, "duplicate P0 JSON object key"):
+                    self.audit(archive)
+        # Control: unchanged golden bytes still pass all four block hashes.
+        self.assertEqual(self.audit(self.good)["records"], 8)
+
     def test_compressed_block_corruption_detected(self):
         corrupted = bytearray(self.good)
         corrupted[-6] ^= 0x7f
