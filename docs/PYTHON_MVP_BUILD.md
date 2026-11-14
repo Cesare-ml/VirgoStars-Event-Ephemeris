@@ -1,5 +1,20 @@
 # Windows: build and test the first Python/Rust synod MVP
 
+## Win32 COM/LPT superscript filename safety (2026-11-14, draft PR #5)
+
+Windows treats the ISO-8859-1 superscript digits **¹, ² and ³** as device-number suffixes: `COM¹`, `COM²`, `COM³`, `LPT¹`, `LPT²`, `LPT³` (also when followed by an extension) are reserved in every directory. The existing ZIP wheel policy already rejected ASCII `COM1`/`LPT1`, but its regex did not cover these Unicode device names. Reference: [Microsoft's Win32 naming rules](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file).
+
+`tools/wheel_contents_policy.py` now rejects those six device basenames and extensions, including directory components of ZIP members. The existing `tools/test_wheel_contents_policy.py` tests exercise the regex directly and the full wheel-file name gate with superscript regressions. The baseline pre-Cargo wheel-policy test count is unchanged (**54**); the new cases are subtests of existing methods.
+
+Reproduce on a full branch checkout:
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_wheel_contents_policy.py" -v
+py -3 tools\validate_wheel_preflight.py
+```
+
+**Actually executed here:** 3/3 isolated Python 3.13 tests using the exact updated regex/helper logic (reserved names, allowed lookalikes and ZIP path components), plus 17/17 previously prepared exact GitHub-blob wheel-identity / preflight-runner tests. The full committed wheel-policy module and 54-test checkout gate have **not** been run in this environment. Native Cargo/PyO3 build and original data parity remain unverified.
+
 ## M0 build orchestration now part of mandatory pre-Cargo preflight (2026-11-14, PR #5)
 
 The preflight `tools/validate_wheel_preflight.py` now requires **four** complete test suites: ZIP/path/dataset (16), wheel identity (9), isolated wheel installation (12), and the `test_build_python_mvp.py` builder orchestration suite (**17**). Minimum **54 tests**. This fourth suite verifies the fail-closed build order, interrupted copy, concurrent wheel publication, safe overwrite protection and `dist/` cleanup, using Python mocks rather than invoking Cargo. Future added test methods are automatically included; missing, skipped, failed or interrupted tests stop before the real Rust build.
