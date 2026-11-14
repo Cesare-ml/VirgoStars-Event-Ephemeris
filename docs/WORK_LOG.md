@@ -1,3 +1,10 @@
+## 2026-11-14 — Canonical block SHA-256 metadata in independent P0 audit (draft PR #5)
+
+- **Issue:** Rust `P0Archive::open` already rejects malformed `raw_sha256` strings before block loads, but the independent Python byte auditor compared decoded digests without first validating length, lowercase ASCII hexadecimal syntax or metadata type. Malformed metadata could be processed during decompression, with inconsistent error behavior.
+- **Code:** Added `canonical_lowercase_sha256` to `tools/audit_p0_bytes.py`, requiring a 64-character lowercase ASCII hexadecimal string; every TOC entry must satisfy it before decompression. Block SHA-256 equality is still checked after decompressing. No dataset/format/source-event changes.
+- **Regression:** Extended `test_unsafe_header_size_and_noninteger_json_metadata_rejected` with eight malformed digest values plus a missing digest key, preserving 14 mandatory synthetic auditor methods and one optional owner snapshot. Updated CSV/P0 parity documentation.
+- **Verification:** Local Python 3.13.5 isolated checks exercised the exact canonical string predicate with valid examples and invalid metadata types/lengths/characters. GitHub readback checked the committed source/test/docs. **Not executed:** complete repository P0/CSV test suites, locked Cargo tests/build, native wheel acceptance, authorized owner dataset parity. PR #5 remains draft: no merge, release, GitHub Actions or modifications to PR #6.
+
 ## 2026-11-14 — Route owner data through Rust/Python complete-file P0 audit before wheel creation (draft PR #5)
 
 - **Problem:** `tools/build_python_mvp.py --archive ... --sha256 ...` previously forwarded the authorized archive only to the *installed Python wheel* verifier. The prior `tools/validate_rust.py` invocation never received the owner archive, so a supposedly owner-data-gated build skipped the independent Python/Rust full-file cross-audit that already exists in the Rust validator.
