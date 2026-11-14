@@ -1,3 +1,10 @@
+## 2026-11-14 — Reject invalid native synod phase starts in Python (draft PR #5)
+
+- **Coordination:** Reviewed repository, three open draft PRs (#4/#5/#6), open issues and Rust `SynodStageAssessment` semantics. Used the existing `feat/p0-2-rust-workspace` branch; did not touch scientific data PR #6 or merge any PR.
+- **Code:** `python/virgostars_events/__init__.py` now refuses malformed native stage records whose `phase.started_at_us` is not a real integer between the original cycle anchor and requested X, or whose stage code/start presence disagrees. The guard is transport-only; no phase interpolation or scientific completeness claim.
+- **Tests:** Expanded the existing Python API cycle-boundary test with future/pre-cycle, boolean/float/string, missing-code/start and missing-anchor corruptions, plus an exact-anchor start success. **13/13 standalone guard cases passed in Python 3.13.5** (5 valid + 8 invalid); this checks the predicate but is **not** execution of the complete committed test module. Mandatory source (42), synthetic P0 audit (14), installed native (51), Cargo and owner-data parity **not run**; `Cargo.lock` remains stale.
+- **Handoff:** On a clean Rust-equipped Windows development checkout, regenerate/review tracked `Cargo.lock` and run `py -3 tools\\validate_python_sources.py`, `py -3 tools\\validate_p0_synthetic.py`, `py -3 tools\\build_python_mvp.py`. Keep PR #5 draft until real native gates pass. No GitHub Actions, data publication, production integration, merge or deploy.
+
 ## 2026-11-13 — Enforce Rust/Python u64 source IDs and strict P0 JSON integer metadata (draft PR #5)
 
 - **Coordination:** Inspected latest draft PR #5 HEAD and all open PRs/issues before editing. Worked only on `feat/p0-2-rust-workspace`; left owner-authorized dataset PR #6, independent fixture PR #4 and `main` untouched. This runtime has Python 3.13.5 / Git 2.47.3 but no cargo, rustc or maturin; direct GitHub cloning DNS is unavailable.
