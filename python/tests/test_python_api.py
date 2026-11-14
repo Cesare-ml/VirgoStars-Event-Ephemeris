@@ -662,7 +662,7 @@ class PythonApiTests(unittest.TestCase):
         recorded_moon = fake_response()
         recorded_moon["synods"]["Moon"]["phase_thresholds_us"] = [-1500, -1000, -500]
         recorded_moon["synods"]["Moon"]["phase"] = {
-            "code": "CAL1", "started_at_us": -1000,
+            "code": "CAL2", "started_at_us": -500,
             "status": "derived_from_recorded_thresholds",
         }
         recorded_moon["new_moon"] = recorded_moon["synods"]["Moon"]
@@ -670,7 +670,7 @@ class PythonApiTests(unittest.TestCase):
             VirgoStarsEvents(DummyNative(recorded_moon)).get_synods_at(
                 "1970-01-01T00:00:00Z"
             )["new_moon"]["phase"]["code"],
-            "CAL1",
+            "CAL2",
         )
 
     def test_missing_previous_moon_anchor_returns_none_alias(self):
