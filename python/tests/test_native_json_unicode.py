@@ -30,6 +30,18 @@ class NativeJsonUnicodeTests(unittest.TestCase):
             with self.subTest(payload=payload), self.assertRaises(ValueError):
                 decode_native_json(payload)
 
+    def test_json_integer_bounds_match_rust_i64_u64(self):
+        self.assertEqual(
+            decode_native_json('{"min":-9223372036854775808,"max":18446744073709551615}'),
+            {"min": -(1 << 63), "max": (1 << 64) - 1},
+        )
+        for literal in ("-9223372036854775809", "18446744073709551616",
+                        "999999999999999999999999999999"):
+            with self.subTest(value=literal), self.assertRaisesRegex(
+                ValueError, "outside Rust i64/u64 range"
+            ):
+                decode_native_json('{"id":' + literal + '}')
+
     def test_alias_comparison_is_type_exact_in_nested_containers(self):
         matching = {"Moon": [{"source_id": 11, "extras": [None, 3.0, True]}]}
         self.assertTrue(same_json_value(matching, matching))
