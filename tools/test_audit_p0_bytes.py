@@ -101,8 +101,8 @@ class AuditP0BytesTest(unittest.TestCase):
 
         # A checksum-valid header may still contain body names that the
         # Rust BodyId parser refuses; the independent auditor must agree.
-        for bad_body in ("", " Moon", "Moon ", "Moon\\t", "Moon\\x00",
-                         "Moon\\x7f", "Moon\\u009f", "Moon\\ud800"):
+        for bad_body in ("", " Moon", "Moon ", "Moon\t", "Moon\x00",
+                         "Moon\x7f", "Moon\u009f", "Moon\ud800"):
             with self.subTest(invalid_body=repr(bad_body)):
                 header = dict(original)
                 header["table_of_contents"] = [
