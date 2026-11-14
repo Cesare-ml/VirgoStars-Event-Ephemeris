@@ -1,5 +1,10 @@
 # Validation and quality gates
 
+## P0 independent audit report schema and physical length (2026-11-14, draft PR #5)
+
+The `tools/validate_rust.py` cross-check now validates **each** Python and Rust P0 audit report before comparing them. Both must report canonical lowercase SHA-256, a positive integer file size, nonnegative integer block/event counts with `blocks <= records`, and an integer nonnegative event count per recognized family whose sum equals `records`. Empty archives must have zero records and zero blocks. This rejects Python JSON coercions (`true == 1`, `8.0 == 8`) and identical missing `sections` fields that previously could pass equality. After independent reports agree, their `bytes` must also equal the **actual archive size on disk**, rather than two mutually agreeing false sizes. Existing Rust CLI format/trusted-digest/coverage checks remain mandatory. Two repository regression methods added (16 total in `test_validate_rust.py`). An isolated Python 3.13.5 reproduction of the predicate passed 4/4 local unittest methods; full committed 16-method orchestration, Cargo tests, compiled wheel and owner-data parity **not run** here.
+
+
 ## Strict native Moon alias JSON equality (2026-11-14, draft PR #5)
 
 Rust serializes a value-identical `new_moon` alias for the `synods.Moon` record. Do not compare their parsed Python dictionaries with ordinary `==`: Python treats `True == 1` and `11 == 11.0` as true, but their JSON types differ. The Python wrapper now uses recursive, **type-sensitive** `same_json_value` before replacing the native alias with the canonical Moon object. Test scalar, nested object/list, boolean, integer and floating-point disagreements in the existing API test method. Exact helper isolated tests in Python 3.13.5: **4/4 passed**, Git SHA-1 matched the pushed `_wire.py` blob `f34f8c5ab8bf0b1de0cfe2489010f423eee09398`. Full 42-source Python, 51-wheel, Rust and real-owner-dataset gates **not run** here.
