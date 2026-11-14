@@ -103,8 +103,21 @@ def run_gates(
         )
     if not (root / "Cargo.toml").is_file():
         raise RuntimeError(f"Cargo workspace not found at {root}")
-    if archive is not None and not expected_sha256:
-        raise ValueError("cannot audit a real archive without a trusted --sha256")
+    # run_gates() is public to local tooling and may be called directly,
+    # bypassing main() / validate_archive_options(). Validate its trust
+    # boundary before launching any of the expensive Cargo review gates.
+    if archive is not None:
+        if not expected_sha256:
+            raise ValueError("cannot audit a real archive without a trusted --sha256")
+        if type(expected_sha256) is not str or SHA256.fullmatch(expected_sha256) is None:
+            raise ValueError("--sha256 must be 64 lowercase hexadecimal characters")
+        if not archive.is_file():
+            raise ValueError(f"the archive does not exist: {archive}")
+        auditor = root / "tools" / "audit_p0_bytes.py"
+        if not auditor.is_file():
+            raise RuntimeError(f"independent byte-level auditor missing: {auditor}")
+    elif expected_sha256 is not None:
+        raise ValueError("--sha256 requires an archive")
 
     # The caller-supplied invoke is a test seam. In production, auditors use
     # bounded streaming pipes instead of subprocess.run(capture_output=True).
@@ -115,10 +128,7 @@ def run_gates(
         gate_invoke(cmd, cwd=root, check=True)
 
     if archive is not None:
-        # The independent Python byte-level validator must also pass.
-        auditor = root / "tools" / "audit_p0_bytes.py"
-        if not auditor.is_file():
-            raise RuntimeError(f"independent byte-level auditor missing: {auditor}")
+        # The auditor was checked during preflight, before any Cargo gates.
         python_cmd = [
             sys.executable, str(auditor), str(archive), "--sha256",
             expected_sha256 or "",
