@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 import stat
+import unicodedata
 import zipfile
 
 from wheel_identity import validate_wheel_identity
@@ -85,7 +86,11 @@ def inspect_wheel_contents(wheel: Path) -> None:
                 # may land on a case-insensitive Windows filesystem. Reject a
                 # second name resolving to an already seen destination, even
                 # when both entries contain individually valid source files.
-                portable = name.rstrip("/").casefold()
+                # Filesystems may treat canonically equivalent Unicode
+                # names as the same path (e.g. café vs cafe + combining
+                # acute accent). Case-fold AND canonicalize ZIP member names
+                # before checking exact and implicit-directory collisions.
+                portable = unicodedata.normalize("NFC", name.rstrip("/").casefold())
                 if portable in portable_paths:
                     raise ValueError(
                         f"case-insensitive wheel path collision: {name!r}"
