@@ -112,6 +112,38 @@ class AuditP0BytesTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "invalid TOC family or body"):
                     self.audit(rewrite_header(self.good, header))
 
+        # serde_json requires UTF-8 and rejects NaN/Infinity, including in
+        # otherwise-unused metadata. Keep payloads and block SHA intact so
+        # only the header JSON parser can account for rejection.
+        canonical_header = json.dumps(
+            original, sort_keys=True, separators=(',', ':')
+        ).encode('utf-8')
+        original_length = struct.unpack_from('<I', self.good, 8)[0]
+        original_payload = self.good[12 + original_length:]
+
+        def replace_header(header_bytes):
+            return (
+                b'VSEPH-P0' + struct.pack('<I', len(header_bytes))
+                + header_bytes + original_payload
+            )
+
+        for token in (b'NaN', b'Infinity', b'-Infinity', b'1e400', b'-1e400'):
+            with self.subTest(nonfinite=token):
+                malformed_header = (
+                    canonical_header[:-1] + b',"_unused_number":'
+                    + token + b'}'
+                )
+                with self.assertRaisesRegex(ValueError, 'non-finite P0 JSON'):
+                    self.audit(replace_header(malformed_header))
+
+        for encoding in ('utf-16-le', 'utf-16-be', 'utf-32-le', 'utf-32-be'):
+            with self.subTest(non_utf8=encoding):
+                malformed_header = canonical_header.decode('utf-8').encode(
+                    encoding
+                )
+                with self.assertRaisesRegex(ValueError, 'UTF-8 JSON'):
+                    self.audit(replace_header(malformed_header))
+
     def test_compressed_block_corruption_detected(self):
         corrupted = bytearray(self.good)
         corrupted[-6] ^= 0x7f
