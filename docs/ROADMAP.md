@@ -1,5 +1,8 @@
 # Roadmap and agent task queue
 
+**M0 build-readiness diagnostics (2026-11-14, draft PR #5):** Added `tools/check_m0_build_env.py` and 4 fail-closed unit regressions. The read-only preflight reports missing Cargo/Rust/maturin, unsupported Python, missing manifests, symlinked `Cargo.lock` and absent PyO3/binding lock packages before anyone spends time on a wheel build. A byte-identical local Python 3.13.5 copy passed 4/4 synthetic unit cases, with a copied `missing_packages` helper; **actual Rust compilation and full 42/51 acceptance remain pending**. The tracked lockfile is stale; regenerate/review with real Cargo on a clean checkout.
+
+
 **M0 native wheel owner-data gate improvement (2026-11-14, draft PR #5):** `tools/build_python_mvp.py` now passes any authorized `--archive` and trusted `--sha256` to `validate_rust.py` **before** maturin build, enforcing the independent Python/Rust full-file P0 audit in addition to the installed-wheel/CSV parity gate. Two new build-orchestration regressions pass against byte-identical production builder source using mocked commands (**2/2**); actual Cargo/Rust, 42 source, 51 native, original owner-data and `Cargo.lock` review remain pending. PR stays draft.
 
 **Updated:** 2026-11-11. **Status:** development in draft PRs #4/#5/#6; no changes have been merged to main. Rust/Python experimental code and an owner-authorized dataset exist on separate branches. This is the authoritative work queue. Tasks are intentionally small, ordered and verifiable.
