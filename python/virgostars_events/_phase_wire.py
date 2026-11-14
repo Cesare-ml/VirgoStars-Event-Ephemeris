@@ -137,4 +137,6 @@ def validate_native_stage(
     else:
         # The native classifier may report unknown, but its *reason* must
         # still agree with the same raw source events and next-anchor field.
-        validate_unknown_stage_reason(status, body, thresholds, next_anchor_us)
+        validate_unknown_stage_reason(
+            status, body, thresholds, next_anchor_us, anchor_us, requested_at_us
+        )

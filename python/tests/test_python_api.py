@@ -797,6 +797,74 @@ class PythonApiTests(unittest.TestCase):
                         "1970-01-01T00:00:00Z"
                     )
 
+
+        # A native "unknown" explanation must reflect actual event
+        # boundaries, not merely have a recognized status string.
+        for body, status, extras, next_us in (
+            # Two seconds between recorded Moon anchors is not a missing year.
+            ("Moon", "unknown_discontinuous_moon_anchors", [-1500, -1000, -500], 2_000_000),
+            # No known next anchor, but last phase has not yet started at X.
+            ("Mercury", "unknown_open_ended_cycle", [-200, -100, 100], None),
+            # All three extras fit inside the next anchor, so bounds are valid.
+            ("Mercury", "unknown_invalid_cycle_bounds", [-200, -100, -1], 400),
+            # A planetary body cannot have the lunar discontinuity reason.
+            ("Mercury", "unknown_discontinuous_moon_anchors", [-200, -100, -1], 400),
+        ):
+            with self.subTest(body=body, status=status):
+                invalid = fake_response()
+                record = invalid["synods"][body]
+                record["phase_thresholds_us"] = extras
+                record["next_cycle_start_us"] = next_us
+                record["phase"] = {"code": None, "started_at_us": None, "status": status}
+                with self.assertRaisesRegex(ValueError, "native synod unknown phase reason inconsistent"):
+                    VirgoStarsEvents(DummyNative(invalid)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        # Legitimate unknown outcomes remain valid; this wire check must not
+        # invent a phase or impose a speculative completeness policy.
+        valid_open = fake_response()
+        mercury = valid_open["synods"]["Mercury"]
+        mercury["phase_thresholds_us"] = [-200, -100, -1]
+        mercury["next_cycle_start_us"] = None
+        mercury["phase"] = {
+            "code": None, "started_at_us": None, "status": "unknown_open_ended_cycle"
+        }
+        self.assertIsNone(
+            VirgoStarsEvents(DummyNative(valid_open)).get_synods_at(
+                "1970-01-01T00:00:00Z"
+            )["synods"]["Mercury"]["phase"]["code"]
+        )
+
+        valid_gap = fake_response()
+        moon = valid_gap["synods"]["Moon"]
+        moon["phase_thresholds_us"] = [-1500, -1000, -500]
+        moon["next_cycle_start_us"] = (
+            moon["cycle_start_us"] + 45 * 86_400 * 1_000_000 + 1
+        )
+        moon["phase"] = {
+            "code": None, "started_at_us": None,
+            "status": "unknown_discontinuous_moon_anchors",
+        }
+        result = VirgoStarsEvents(DummyNative(valid_gap)).get_synods_at(
+            "1970-01-01T00:00:00Z"
+        )
+        self.assertIsNone(result["new_moon"]["phase"]["code"])
+
+        valid_bounds = fake_response()
+        mercury = valid_bounds["synods"]["Mercury"]
+        mercury["phase_thresholds_us"] = [-200, -100, 500]
+        mercury["next_cycle_start_us"] = 250
+        mercury["phase"] = {
+            "code": None, "started_at_us": None,
+            "status": "unknown_invalid_cycle_bounds",
+        }
+        self.assertIsNone(
+            VirgoStarsEvents(DummyNative(valid_bounds)).get_synods_at(
+                "1970-01-01T00:00:00Z"
+            )["synods"]["Mercury"]["phase"]["code"]
+        )
+
     def test_missing_previous_moon_anchor_returns_none_alias(self):
         raw = fake_response()
         raw["synods"]["Moon"]["source_id"] = None

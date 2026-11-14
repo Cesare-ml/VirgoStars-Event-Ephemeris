@@ -142,3 +142,6 @@ M0 input preflight (PR #5, 2026-11-11): reject invalid SHA-256 before native imp
 **M0.2 stage-at-X validation (2026-11-14, draft PR #5):** reject native stage codes whose next recorded phase threshold is already reached at X; exact equality starts the next stage. Five stale phase subcases and one exact-boundary acceptance added to existing Python API tests. Rust remains authoritative classifier; full 42/51 suites and Cargo remain pending. See `docs/WORK_LOG.md`.
 
 **M0.2 unknown-stage reason contract (2026-11-14, draft PR #5):** Python now rejects Rust unknown-phase reasons that contradict recorded extras, known next anchor, body support or the public query's temporal invariants. The Rust classifier remains authoritative. Nine focused synthetic Python tests PASS and six in-place API regression mutations authored, while 42/51 complete gates and Cargo/owner parity remain pending.
+
+
+**M0.2 unknown-phase reason time windows (2026-11-14, draft PR #5):** guard Rust/Python response integrity for open-ended phases, the Moon gap threshold (strictly more than 45 days), and invalid third-phase/next-anchor ordering. The focused Python suite expands **9 to 15 methods**, all 15 executed locally; in-place API mock regressions added. Full source-only 42/native 51 acceptance and real dataset parity remain unverified.
