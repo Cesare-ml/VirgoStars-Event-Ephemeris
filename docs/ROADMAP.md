@@ -6,6 +6,8 @@
 
 **M0.2 Python input-integrity regression (2026-11-14, draft PR #5):** Reordered native anchor verification ahead of the newer phase-start comparisons, so malformed current anchors reliably raise a cycle-anchor `ValueError`, never a premature phase error or Python `TypeError`. Fixed the synthetic one-microsecond boundary fixture; added malformed current-anchor subcases. Four isolated Python regression methods passed (22 subcases); **42 source / 51 wheel native acceptance still unexecuted**, and M0.2 remains in progress.
 
+**M0.2 Python JSON transport overflow hardening (2026-11-14, draft PR #5):** `_wire.py` now rejects numeric exponent literals producing non-finite Python floats (e.g. `1e400`), which bypassed the prior `parse_constant` rejection of literal `Infinity`. Existing API regression method extended with malformed exponents, no gate count changes. Exact helper passed a separate 4-method Python 3.13.5 unit harness; complete 42-source / 51-native wheel gates remain pending. PR #5 stays draft.
+
 ## Working conventions
 
 - `[ ]` not done; `[x]` only if merged and verified; `[~]` only if in progress with PR link documented in WORK_LOG.
