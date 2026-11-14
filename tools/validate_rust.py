@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -92,7 +93,7 @@ def validate_archive_options(
 def run_gates(
     *, root: Path = ROOT, archive: Path | None = None,
     expected_sha256: str | None = None, cargo: str | None = None,
-    invoke=None,
+    invoke=None, audit_timeout_seconds: float | None = None,
 ) -> None:
     """Sequential mandatory gates; stop immediately on any failed command."""
     executable = cargo or shutil.which("cargo")
@@ -119,6 +120,18 @@ def run_gates(
     elif expected_sha256 is not None:
         raise ValueError("--sha256 requires an archive")
 
+    # Validate the optional limit before expensive build gates; the bounded
+    # runner still enforces the default 900-second deadline when omitted.
+    if audit_timeout_seconds is not None and (
+        type(audit_timeout_seconds) not in (int, float)
+        or not math.isfinite(audit_timeout_seconds)
+        or audit_timeout_seconds <= 0
+    ):
+        raise ValueError("--audit-timeout-seconds must be positive and finite")
+    audit_kwargs = {"cwd": root}
+    if audit_timeout_seconds is not None:
+        audit_kwargs["timeout_seconds"] = audit_timeout_seconds
+
     # The caller-supplied invoke is a test seam. In production, auditors use
     # bounded streaming pipes instead of subprocess.run(capture_output=True).
     gate_invoke = subprocess.run if invoke is None else invoke
@@ -134,7 +147,7 @@ def run_gates(
             expected_sha256 or "",
         ]
         print("\n[Independent P0 byte audit]", flush=True)
-        py_result = (run_bounded_audit(python_cmd, cwd=root) if invoke is None
+        py_result = (run_bounded_audit(python_cmd, **audit_kwargs) if invoke is None
                      else invoke(python_cmd, cwd=root, check=True, capture_output=True, text=True))
         # Fail fast on a malformed/foreign Python report before starting the
         # independent and potentially costly Rust full-archive audit.
@@ -151,7 +164,7 @@ def run_gates(
             "p0-verify", "--", str(archive), "--sha256", expected_sha256 or "",
         ]
         print("\n[Rust P0 complete archive audit]", flush=True)
-        rust_result = (run_bounded_audit(cli_cmd, cwd=root) if invoke is None
+        rust_result = (run_bounded_audit(cli_cmd, **audit_kwargs) if invoke is None
                        else invoke(cli_cmd, cwd=root, check=True, capture_output=True, text=True))
 
         # Fail before checking audit fields if JSON itself is ambiguous:
@@ -199,10 +212,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--sha256", help="mandatory trusted lowercase SHA-256 when --archive is given"
     )
+    parser.add_argument(
+        "--audit-timeout-seconds", type=float,
+        help="optional positive seconds per P0 auditor (default: 900)",
+    )
     args = parser.parse_args(argv)
     try:
         archive = validate_archive_options(args.archive, args.sha256)
-        run_gates(archive=archive, expected_sha256=args.sha256)
+        run_gates(archive=archive, expected_sha256=args.sha256,
+                  audit_timeout_seconds=args.audit_timeout_seconds)
     except (ValueError, RuntimeError, OSError, subprocess.CalledProcessError) as exc:
         print(f"Validation stopped: {exc}", file=sys.stderr)
         return 1
