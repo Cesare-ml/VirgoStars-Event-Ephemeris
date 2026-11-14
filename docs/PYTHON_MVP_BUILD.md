@@ -13,7 +13,7 @@ The new `tools/check_m0_build_env.py` inspects (without installing tools or invo
 
 After installing the Rust toolchain and `maturin`, with a **clean tracked checkout**, use `py -3 tools\prepare_cargo_lock.py --apply`, review and commit the generated `Cargo.lock`, then rerun `py -3 tools\check_m0_build_env.py` and `py -3 tools\build_python_mvp.py`. A green preliminary check **does not** prove `cargo --locked`, a successful wheel build, 42 Python source tests, 51 compiled-native tests or original astronomical CSV/P0 parity.
 
-**Executed locally:** four Python 3.13.5 isolated unittest cases PASS using a byte-identical copy of the new preflight module and tests (Git blobs `0574ef8905a188abcfb34ae7fee165c72ed00e97` and `8a66dce151cec56df5abbbbe931caed8ac809e95`). The isolated harness used a minimal copy of the existing `prepare_cargo_lock.missing_packages` predicate; the full repository module and Rust/Cargo were **not** executed here. A real on-checkout run remains required.
+**Executed locally:** four Python 3.13.5 isolated unittest cases PASS using a byte-identical copy of the new preflight module and tests (Git blobs `0574ef8905a188abcfb34ae7fee165c72ed00e97` and `cb8ae1beed6f1bd22564a4e12c5838f9d1106ea2`). The isolated harness used a minimal copy of the existing `prepare_cargo_lock.missing_packages` predicate; the full repository module and Rust/Cargo were **not** executed here. A real on-checkout run remains required.
 
 
 ## Owner archive SHA-256 must reach the Rust P0 audit before wheel build (2026-11-14)
