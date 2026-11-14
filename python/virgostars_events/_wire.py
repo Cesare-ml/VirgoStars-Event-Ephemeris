@@ -34,6 +34,19 @@ def _finite_json_float(token: str) -> float:
     return value
 
 
+# serde_json's integer transport is bounded by Rust i64 or u64. Never let
+# Python's arbitrary-precision ints conceal an impossible native JSON value.
+_I64_MIN = -(1 << 63)
+_U64_MAX = (1 << 64) - 1
+
+
+def _bounded_json_int(token: str) -> int:
+    value = int(token)
+    if not _I64_MIN <= value <= _U64_MAX:
+        raise ValueError("native synod response has integer outside Rust i64/u64 range")
+    return value
+
+
 def _require_unicode_scalars(value: Any) -> None:
     """Reject lone UTF-16 surrogates in JSON keys and values, at any depth.
 
@@ -68,6 +81,7 @@ def decode_native_json(payload: str) -> Any:
         object_pairs_hook=_unique_object,
         parse_constant=_reject_nonfinite,
         parse_float=_finite_json_float,
+        parse_int=_bounded_json_int,
     )
     _require_unicode_scalars(result)
     return result
