@@ -107,6 +107,22 @@ class WheelContentsPolicyTests(unittest.TestCase):
             ])
             self.assertIsNone(inspect_wheel_contents(wheel))
 
+    def test_windows_device_name_regex_directly_matches_with_extensions(self):
+        # Keep the regex itself under test: a doubly escaped \Z or \.
+        # would silently accept Windows device basenames even though the
+        # surrounding invalid-character checks continue to pass.
+        for name in ("CON", "con.txt", "NUL.TXT", "AUX", "PRN.csv",
+                     "com1.pyd", "COM9.dll", "lPt9.log", "lpt1"):
+            with self.subTest(reserved=name):
+                self.assertIsNotNone(policy._WINDOWS_DEVICE.fullmatch(name))
+                self.assertTrue(policy.unsafe_windows_component(name))
+
+        for name in ("console.py", "com0.pyd", "com10.py",
+                     "lpt0.dll", "lpt10.dll", "file.con", "printer.txt"):
+            with self.subTest(allowed=name):
+                self.assertIsNone(policy._WINDOWS_DEVICE.fullmatch(name))
+                self.assertFalse(policy.unsafe_windows_component(name))
+
     def test_windows_reserved_names_and_ntfs_stream_paths_rejected(self):
         # These names are legal ZIP member strings but are unsafe or
         # non-portable when pip installs a wheel on Windows.
