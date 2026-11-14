@@ -112,6 +112,10 @@ def validate_native_stage(
             or type(started_at_us) is not int
             or thresholds is None
             or len(thresholds) != 3
+            # Rust's derived stage starts at the recorded anchor or exactly
+            # one of its stored phase boundaries, never an arbitrary instant.
+            # This tests source identity, not the choice of stage code.
+            or started_at_us not in (anchor_us, *thresholds)
         ):
             raise ValueError(f"native synod phase status invalid for {body}")
         start_index = _STAGE_START_EXTRA_INDEX[code]
