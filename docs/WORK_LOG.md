@@ -1,3 +1,10 @@
+## 2026-11-14 — Strict UTF-8 and finite JSON P0 header parsing (draft PR #5)
+
+- **Issue:** Python `json.loads(bytes)` auto-detects UTF-16/32 P0 headers and accepts `NaN`/`Infinity` or exponents overflowing to infinity, which Rust serde_json rejects even inside unused metadata.
+- **Code:** Added shared `parse_header_json` in `tools/audit_p0_bytes.py`; `tools/verify_csv_p0.py` uses the same parser after independent audit. Only input validation changed, not astronomy, binary format, dataset PR #6 or main.
+- **Tests:** Existing auditor metadata method gained 5 nonfinite-token/exponent and 4 UTF-16/32 encoding attacks with checksummed unchanged compressed blocks. Test method totals unchanged (14 mandatory P0 audit + 1 optional owner snapshot). Updated CSV/P0 documentation and roadmap.
+- **Executed:** Python 3.13.5 standalone 4/4 parser cases PASS (good JSON, nonfinite tokens, four UTF-16/32 encodings, bad UTF-8/JSON); GitHub source/test file readback. **Not executed:** full repo Python audit/CSV suites, Rust/Cargo, native wheel, owner real dataset parity. No release, merge or GitHub Actions; PR stays draft.
+
 ## 2026-11-14 — Reject type-coerced Moon JSON aliases in Python (draft PR #5)
 
 - **Scope:** Continued [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5) on `feat/p0-2-rust-workspace` after checking PRs #4/#5/#6 and current Rust/Python tests. No database change, astronomical interpolation, format mutation, GitHub Actions, release or merge.
