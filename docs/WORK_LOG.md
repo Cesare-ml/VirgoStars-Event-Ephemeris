@@ -1,3 +1,11 @@
+## 2026-11-14 — Route owner data through Rust/Python complete-file P0 audit before wheel creation (draft PR #5)
+
+- **Problem:** `tools/build_python_mvp.py --archive ... --sha256 ...` previously forwarded the authorized archive only to the *installed Python wheel* verifier. The prior `tools/validate_rust.py` invocation never received the owner archive, so a supposedly owner-data-gated build skipped the independent Python/Rust full-file cross-audit that already exists in the Rust validator.
+- **Fix:** In `tools/build_python_mvp.py`, pass the canonical lowercase digest and resolved original archive path to `validate_rust.py` **before** invoking maturin. The optional CSV remains forwarded to the installed Python parity verifier. The no-owner-data build path is preserved. Any Rust audit failure stops before wheel creation and `dist/` publication.
+- **Regression:** Added `test_authorized_archive_runs_rust_and_wheel_audits_with_same_digest` and `test_failed_owner_rust_audit_prevents_wheel_build` in `tools/test_build_python_mvp.py`, raising builder-only orchestrator test methods from 14 to **16** (not changing mandatory 42 source / 51 installed-native / 14 synthetic audit counts).
+- **Actually executed:** Python 3.13.5 **2/2 PASS** for the new real orchestration test methods using mocked external commands, against a byte-identical copy of the committed `tools/build_python_mvp.py` (Git SHA-1 blob `3dc240b1d1cf579d5cc02100414e4854f20056c4`). Actual Rust auditing, Cargo compilation, 42 Python source tests, 51 installed-wheel cases, owner CSV/P0 parity and the complete committed 16-method build test suite **remain unexecuted** in this runtime (GitHub clone/DNS and Cargo unavailable).
+- **Coordination:** Continued existing draft PR #5; inspected open PRs #4/#5/#6. No edits to authorized owner data or PR #6, no GitHub Actions, merge, build release or deployment. Run a real Cargo-equipped clean checkout and review regenerated `Cargo.lock` for M0 acceptance.
+
 ## 2026-11-14 — Reject incomplete or type-coerced independent P0 audit reports (draft PR #5)
 
 - **Scope:** Reused `feat/p0-2-rust-workspace` / [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), after checking PRs #4/#5/#6, the native validation script and tests. No action on `main`, data PR #6, deployment, GitHub Actions or licensed data.
