@@ -21,7 +21,7 @@ import tempfile
 import zlib
 from pathlib import Path
 
-from audit_p0_bytes import audit_file, valid_body_id
+from audit_p0_bytes import audit_file, parse_header_json, valid_body_id
 
 EPOCH = dt.date(1970, 1, 1).toordinal()
 DAY_US = 86_400_000_000
@@ -207,7 +207,7 @@ def verify(csv_dir: Path, archive_path: Path, expected_sha256: str | None = None
                             counts[family] += 1
             content = archive_path.read_bytes()   # prototype max-file guard already enforced by audit_file
             length = struct.unpack_from("<I", content, 8)[0]
-            header = json.loads(content[12:12 + length])
+            header = parse_header_json(content[12:12 + length])
             base = 12 + length
             compared = 0
             with connection:
