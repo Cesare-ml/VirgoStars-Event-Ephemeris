@@ -448,6 +448,55 @@ fn motion_preserves_sign_direction_and_source_id() {
 }
 
 #[test]
+fn header_rejects_duplicate_and_unicode_escaped_json_keys() {
+    let golden = fixture();
+    let header_len = u32::from_le_bytes(golden[8..12].try_into().unwrap()) as usize;
+    let header = String::from_utf8(golden[12..12 + header_len].to_vec()).unwrap();
+    let payload = &golden[12 + header_len..];
+
+    // Preserve every compressed block and its checksum: only the JSON header
+    // differs. Ordinary serde_json::Value silently overwrites these keys.
+    let top_level = {
+        let mut bytes = header.as_bytes()[..header_len - 1].to_vec();
+        bytes.extend_from_slice(br#","format":"VSEPH-P0-EXPERIMENTAL"}"#);
+        bytes
+    };
+    let nested = header.replacen(
+        r#""sections":{"#,
+        r#""sections":{"synod":0,"#,
+        1,
+    );
+    assert_ne!(nested, header, "golden fixture must contain a sections map");
+    let escaped_alias = {
+        let mut bytes = header.as_bytes()[..header_len - 1].to_vec();
+        bytes.extend_from_slice(br#","\u0073ections":{}}"#);
+        bytes
+    };
+
+    for (case, changed_header) in [
+        ("top-level", top_level),
+        ("nested section", nested.into_bytes()),
+        ("escaped alias", escaped_alias),
+    ] {
+        let mut bytes = b"VSEPH-P0".to_vec();
+        bytes.extend_from_slice(&(changed_header.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&changed_header);
+        bytes.extend_from_slice(payload);
+        let file = TempFile::new(&bytes);
+        let error = P0Archive::open(&file.0)
+            .err()
+            .expect("duplicate JSON keys must be rejected before block access");
+        assert!(
+            error.to_string().contains("duplicate JSON object key"),
+            "{case}: {error}"
+        );
+    }
+
+    let clean = TempFile::new(&golden);
+    assert_eq!(P0Archive::open(&clean.0).unwrap().record_count(), 8);
+}
+
+#[test]
 fn header_rejects_bad_magic_header_length_and_trailing_bytes() {
     let original = fixture();
     let mut bad_magic = original.clone();
