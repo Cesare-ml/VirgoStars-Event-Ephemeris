@@ -64,13 +64,43 @@ class WheelGateTests(unittest.TestCase):
             self.assertEqual(len(commands), 5)
             self.assertIn("--no-index", commands[0])
             self.assertIn("--no-deps", commands[0])
-            self.assertEqual(str(commands[0][-1]), str(wheel.resolve()))
+            self.assertEqual(Path(commands[0][-1]).name, wheel.name)
+            self.assertNotEqual(Path(commands[0][-1]), wheel.resolve())
             self.assertIn("from virgostars_events._native import NativeReader", commands[1][-1])
             self.assertIn("--version", commands[2])
             self.assertTrue(str(commands[3][0]).endswith("virgostars-events.exe" if wheel_check.os.name == "nt" else "virgostars-events"))
             self.assertEqual(commands[3][1], "--version")
             self.assertTrue(str(commands[4][2]).endswith("tools/validate_python_mvp.py"))
             self.assertTrue(all("-I" in c for c in (commands[1], commands[2], commands[4])))
+
+    def test_source_wheel_swap_after_preflight_cannot_change_installed_bytes(self):
+        # Simulate a replacement of the original wheel path between the
+        # pre-install ZIP checks and pip's install subprocess.
+        with tempfile.TemporaryDirectory() as folder:
+            wheel = self.make_wheel(Path(folder))
+            initial = wheel.read_bytes()
+            copied = []
+
+            def swap_original_during_venv_creation(_directory):
+                wheel.write_bytes(b"tampered-after-preflight")
+
+            def observe_install(command, *, cwd):
+                args = list(map(str, command))
+                if "pip" in args and "install" in args:
+                    staged = Path(args[-1])
+                    self.assertTrue(staged.is_file())
+                    self.assertNotEqual(staged, wheel.resolve())
+                    self.assertEqual(staged.read_bytes(), initial)
+                    self.assertEqual(wheel.read_bytes(), b"tampered-after-preflight")
+                    copied.append(staged)
+
+            with patch.object(wheel_check.venv, "EnvBuilder") as builder, patch.object(
+                wheel_check, "run_checked", side_effect=observe_install
+            ):
+                builder.return_value.create.side_effect = swap_original_during_venv_creation
+                self.assertEqual(wheel_check.main(["--wheel", str(wheel)]), 0)
+            self.assertEqual(len(copied), 1)
+            self.assertFalse(copied[0].exists())  # private temp dir cleaned up
 
     def test_native_probe_requires_compiled_extension_within_venv(self):
         probe = wheel_check.INSTALLED_PROBE
