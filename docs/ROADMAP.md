@@ -2,6 +2,8 @@
 
 **Updated:** 2026-11-11. **Status:** development in draft PRs #4/#5/#6; no changes have been merged to main. Rust/Python experimental code and an owner-authorized dataset exist on separate branches. This is the authoritative work queue. Tasks are intentionally small, ordered and verifiable.
 
+**M0.2 native phase timestamp invariant (2026-11-14, draft PR #5):** Python's JSON transport now refuses a phase-start instant earlier than its recorded anchor or later than X, as well as non-integer timestamps and code/start null mismatches. The current `test_native_cycle_boundaries_must_enclose_the_requested_instant` method includes malformed transport cases and inclusive start acceptance; no gate count change (42 source-only / 51 installed-native). Only 13 standalone predicate cases ran here; the real 42-case source gate, Rust toolchain, wheel install and source-data parity remain unverified. This remains [~] within M0.2; **do not mark M0 complete or merge based on this check**.
+
 ## Working conventions
 
 - `[ ]` not done; `[x]` only if merged and verified; `[~]` only if in progress with PR link documented in WORK_LOG.
