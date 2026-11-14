@@ -152,8 +152,28 @@ class VirgoStarsEvents:
                 or "no_reviewed_coverage_policy" not in coverage["warnings"]
             ):
                 raise ValueError(f"native synod coverage claim invalid for {body}")
-            if not isinstance(record.get("phase"), dict):
+            phase = record.get("phase")
+            if not isinstance(phase, dict):
                 raise ValueError(f"native synod phase must be an object for {body}")
+            # A stage can only begin within its recorded cycle and no later
+            # than X. Unknown stages have neither a code nor a start instant.
+            # Reject malformed native transport rather than presenting a
+            # future/pre-cycle stage as the current astronomical state.
+            phase_code = phase.get("code")
+            phase_started_us = phase.get("started_at_us")
+            if (
+                (phase_code is None) != (phase_started_us is None)
+                or (
+                    phase_started_us is not None
+                    and (
+                        type(phase_started_us) is not int
+                        or current_us is None
+                        or phase_started_us < current_us
+                        or phase_started_us > requested_us
+                    )
+                )
+            ):
+                raise ValueError(f"native synod phase start invalid for {body}")
             # The Rust index promises a latest anchor <= X and a strictly
             # later next anchor. Never display a future start as recorded
             # current state, or a stale end boundary, if transport regresses.
