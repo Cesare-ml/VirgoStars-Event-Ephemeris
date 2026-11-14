@@ -1,5 +1,17 @@
 # Windows: build and test the first Python/Rust synod MVP
 
+## M0 build orchestration now part of mandatory pre-Cargo preflight (2026-11-14, PR #5)
+
+The preflight `tools/validate_wheel_preflight.py` now requires **four** complete test suites: ZIP/path/dataset (16), wheel identity (9), isolated wheel installation (12), and the `test_build_python_mvp.py` builder orchestration suite (**17**). Minimum **54 tests**. This fourth suite verifies the fail-closed build order, interrupted copy, concurrent wheel publication, safe overwrite protection and `dist/` cleanup, using Python mocks rather than invoking Cargo. Future added test methods are automatically included; missing, skipped, failed or interrupted tests stop before the real Rust build.
+
+```powershell
+py -3 tools\validate_wheel_preflight.py
+py -3 -m unittest discover -s tools -p "test_validate_wheel_preflight.py" -v
+```
+
+**Executed here:** exact GitHub source files copied to isolated CPython 3.13.5 and verified with `git hash-object`: wheel identity suite **9/9 PASS** and preflight runner regression **8/8 PASS**, total **17/17**. Readback confirmed 16+9+12+17 authored mandatory tests; **the full 54-test preflight has not been run in one checkout**. This is neither a PyO3 native wheel nor scientific-data parity validation. `Cargo.lock` still needs genuine Cargo regeneration.
+
+
 ## Mandatory pre-Cargo wheel-policy regression gate (2026-11-14, draft PR #5)
 
 The M0 builder now runs `tools/validate_wheel_preflight.py` **after the 42 source tests and 15 P0 synthetic byte audits but before any Cargo command, maturin build or wheel publication**. It runs the real existing unit test modules without Rust or a dataset:
