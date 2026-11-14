@@ -1,5 +1,8 @@
 # Python-first MVP — latest synods, previous new moon and cycle phases
 
+**Moon alias integrity (2026-11-14, draft PR #5):** Python now checks `new_moon` against the original `synods.Moon` using recursive JSON-type-sensitive comparison. Native `source_id: 11.0` must not silently compare equal to integer `11`, nor `true` to integer `1`, even though normal Python dictionary equality would permit both. The public alias is still the **same projected Moon dictionary** after successful validation. The existing 18-method Python API test suite gained malformed-alias subcases (source gate counts unchanged). An exact-GitHub-helper isolated 4-test suite passed locally; the full native-wheel and Rust gates are still unexecuted.
+
+
 **Strict Rust stage identity (2026-11-14, PR #5 draft):** The Python facade now checks `phase.status` and `phase.code` against the current Rust enum values: known `derived_from_recorded_thresholds` stages require a supported Moon/planet code and precisely three stored phase timestamps; unknown statuses must carry neither a stage code nor a stage start, and a body without a preceding anchor must return `no_preceding_recorded_cycle`. This is a transport invariant, **not a second stage classifier or independent completeness audit**. The existing 18 API test methods now exercise malformed and legitimate Moon/planet states. Four isolated exact-helper tests passed on Python 3.13.5; **42 source / 51 wheel and Rust build still unexecuted**.
 
 
