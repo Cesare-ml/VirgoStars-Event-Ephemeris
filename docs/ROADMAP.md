@@ -4,6 +4,8 @@
 
 **M0.2 native phase timestamp invariant (2026-11-14, draft PR #5):** Python's JSON transport now refuses a phase-start instant earlier than its recorded anchor or later than X, as well as non-integer timestamps and code/start null mismatches. The current `test_native_cycle_boundaries_must_enclose_the_requested_instant` method includes malformed transport cases and inclusive start acceptance; no gate count change (42 source-only / 51 installed-native). Only 13 standalone predicate cases ran here; the real 42-case source gate, Rust toolchain, wheel install and source-data parity remain unverified. This remains [~] within M0.2; **do not mark M0 complete or merge based on this check**.
 
+**M0.2 Python input-integrity regression (2026-11-14, draft PR #5):** Reordered native anchor verification ahead of the newer phase-start comparisons, so malformed current anchors reliably raise a cycle-anchor `ValueError`, never a premature phase error or Python `TypeError`. Fixed the synthetic one-microsecond boundary fixture; added malformed current-anchor subcases. Four isolated Python regression methods passed (22 subcases); **42 source / 51 wheel native acceptance still unexecuted**, and M0.2 remains in progress.
+
 ## Working conventions
 
 - `[ ]` not done; `[x]` only if merged and verified; `[~]` only if in progress with PR link documented in WORK_LOG.
