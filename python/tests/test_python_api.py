@@ -348,6 +348,65 @@ class PythonApiTests(unittest.TestCase):
         self.assertFalse(data["dataset"]["coverage_certified"])
         json.dumps(data)
 
+        # Native Rust emits standards-compliant JSON. Reject ambiguous wire
+        # payloads instead of letting Python choose the last duplicate key or
+        # accepting its permissive NaN/Infinity JSON extensions.
+        class RawWireNative:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def get_synods_at_us(self, requested_us):
+                return self.payload
+
+        canonical = json.dumps(fake_response())
+        malformed_wire = (
+            (
+                canonical.replace(
+                    '"requested_at_us": 0',
+                    '"requested_at_us": 0, "requested_at_us": 0',
+                    1,
+                ),
+                "duplicate JSON key",
+            ),
+            (
+                canonical.replace(
+                    '"source_id": 27',
+                    '"source_id": 27, "source_id": 27',
+                    1,
+                ),
+                "duplicate JSON key",
+            ),
+            (
+                canonical.replace(
+                    '"synods": {',
+                    '"synods": {}, "\\u0073ynods": {',
+                    1,
+                ),
+                "duplicate JSON key",
+            ),
+            *(
+                (
+                    canonical.replace('"source_id": 27', f'"source_id": {token}', 1),
+                    "non-finite JSON value",
+                )
+                for token in ("NaN", "Infinity", "-Infinity")
+            ),
+        )
+        for payload, error in malformed_wire:
+            with self.subTest(error=error, payload=payload), self.assertRaisesRegex(
+                ValueError, error
+            ):
+                VirgoStarsEvents(RawWireNative(payload)).get_synods_at(
+                    "1970-01-01T00:00:00Z"
+                )
+        for invalid_wire in (None, b"{}", 42):
+            with self.subTest(wire=invalid_wire), self.assertRaisesRegex(
+                ValueError, "JSON text"
+            ):
+                VirgoStarsEvents(RawWireNative(invalid_wire)).get_synods_at(
+                    "1970-01-01T00:00:00Z"
+                )
+
         # The wrapper must not quietly repair a contradictory native Moon
         # alias. Both omitted and value-divergent native fields are invalid.
         for corruption in ("missing", "null", "wrong-id", "unrelated"):
