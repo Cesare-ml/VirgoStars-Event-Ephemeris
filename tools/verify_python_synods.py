@@ -293,7 +293,10 @@ def assert_parity(
                 # Missing required JSON keys are not equivalent to explicit
                 # null. dict.get() would otherwise silently accept omitted
                 # source IDs, anchors or thresholds before the first event.
-                if key not in row or row[key] != expected:
+                # Python considers 11 == 11.0 and 1 == True; the native JSON
+                # contract does not. Match the exact JSON scalar/container type.
+                if (key not in row or type(row[key]) is not type(expected)
+                        or row[key] != expected):
                     raise ValueError(
                         f"parity mismatch {body} at {iso_utc(instant)}: "
                         f"{key}={row.get(key)!r} expected={expected!r}"
@@ -302,7 +305,8 @@ def assert_parity(
             for key, expected in (
                 ("code", code), ("started_at_utc", started), ("status", status)
             ):
-                if key not in phase or phase[key] != expected:
+                if (key not in phase or type(phase[key]) is not type(expected)
+                        or phase[key] != expected):
                     raise ValueError(
                         f"parity mismatch {body} at {iso_utc(instant)}: "
                         f"phase.{key}={phase.get(key)!r} expected={expected!r}"
