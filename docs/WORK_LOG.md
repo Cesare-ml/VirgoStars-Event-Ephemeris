@@ -1,3 +1,10 @@
+## 2026-11-14 — Bounded/Unicode-safe P0 audit report transport (draft PR #5)
+
+- **Scope:** Hardened `tools/audit_report_json.py` before JSON schema/digest/count comparison, without changing original event records, CSV, VSEPH-P0 bytes, archive identity, Rust core, or public API.
+- **Behavior:** Reject audit subprocess reports larger than **65,536 UTF-8 bytes**, nested more than **32 levels**, or containing unpaired Unicode surrogate code points in keys/values. Preserve valid escaped surrogate pairs and exact-boundary 65,536-byte reports; normalize malformed/deep JSON into a consistent `RuntimeError`. Existing duplicate-key, nonfinite-number and required-object checks remain.
+- **Tests:** New isolated `tools/test_audit_report_limits.py` (3 methods) alongside existing `tools/test_audit_report_json.py` (5 methods). Executed on Python **3.13.5**: `python -m unittest -v test_audit_report_json test_audit_report_limits` from a local isolated `tools` copy: **8/8 PASS**; `python -m py_compile audit_report_json.py test_audit_report_json.py test_audit_report_limits.py` **PASS**. GitHub readback hashes match the exact locally executed helper **`beaf5800acc173c6da951bdfad01aab4ec4df749`** and new tests **`e1c0991cc4e9f2acfe4f6c369a516b7be8d7bfcf`**.
+- **Limits:** This guards parsing after subprocess output has been captured; it is **not** a hard subprocess pipe/memory limit. Full `tools/test_validate_rust.py`, 42-source/51-wheel acceptance, Cargo fmt/Clippy/tests/release and owner CSV/P0 audit were **not run**. `Cargo.lock` review/build and science coverage certification remain blocked. Existing draft PR #5; no merge, release, publication, deployment or GitHub Actions.
+
 ## 2026-11-14 — Read-only M0 wheel prerequisites preflight (draft PR #5)
 
 - **Need:** The first wheel build remains blocked by a tracked `Cargo.lock` lacking `pyo3`, `tempfile` and `virgostars-events-python`, and this authoring runtime has no Rust/Cargo/maturin toolchain or network-reachable Git checkout. Do not hand-author a lockfile or claim native acceptance.
