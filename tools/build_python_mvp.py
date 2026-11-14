@@ -4,7 +4,7 @@
 """Build, verify and retain one local Python M0 wheel (never publish it).
 
 Run on a machine with Rust/Cargo and maturin installed. Fail closed: run
-the 42-case source suite, then 14 synthetic P0 byte-audit cases without
+the 42-case source suite, then 15 synthetic P0 byte-audit cases without
 skips, then validate Rust, build in isolation and install/exercise the real
 wheel. Only a wheel that passes all gates is copied to dist/.
 """
