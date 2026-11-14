@@ -15,6 +15,7 @@
 //! All results are only RECORDED events. No claim of astronomical coverage.
 
 pub mod coverage;
+mod strict_json;
 pub use coverage::{CoverageAwareP0, CoveredState};
 
 use flate2::bufread::ZlibDecoder;
@@ -248,7 +249,7 @@ impl P0Archive {
         }
         let mut header = vec![0u8; header_len];
         file.read_exact(&mut header)?;
-        let doc: Value = serde_json::from_slice(&header)
+        let doc: Value = strict_json::parse_header(&header)
             .map_err(|error| invalid(format!("malformed JSON header: {error}")))?;
         if string(&doc, "format")? != "VSEPH-P0-EXPERIMENTAL"
             || doc.get("format_version") != Some(&serde_json::json!([0, 0, 1]))
