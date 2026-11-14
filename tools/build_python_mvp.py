@@ -4,7 +4,8 @@
 """Build, verify and retain one local Python M0 wheel (never publish it).
 
 Run on a machine with Rust/Cargo and maturin installed. Fail closed: run
-the 42-case source suite, then 15 synthetic P0 byte-audit cases without
+the 42-case source suite, then 15 synthetic P0 byte-audit cases and the
+wheel packaging policy regressions without
 skips, then validate Rust, build in isolation and install/exercise the real
 wheel. Only a wheel that passes all gates is copied to dist/.
 """
@@ -125,6 +126,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         # The independent binary P0 integrity tests must also pass without
         # skips; their optional owner archive test is a separate gate.
         run([sys.executable, ROOT / "tools" / "validate_p0_synthetic.py"])
+        # The actual offline wheel packaging, distribution identity and
+        # isolated-install test modules must pass before any Cargo build.
+        # This prevents silent Windows ZIP regressions from shipping wheels;
+        # mock-only orchestration checks are not native acceptance.
+        run([sys.executable, ROOT / "tools" / "validate_wheel_preflight.py"])
         # If an authorized owner archive is provided, require the independent
         # Python byte auditor AND Rust p0-verify to agree on that exact
         # SHA-256-bound file before building any Python wheel. Previously
