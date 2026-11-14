@@ -1,3 +1,10 @@
+## 2026-11-14 — Rust BodyId parity for independent P0/CSV auditors (draft PR #5)
+
+- **Issue:** Rust `BodyId::try_from` rejects empty, whitespace-trimmed, or control-containing names, while `tools/audit_p0_bytes.py` used to accept any nonempty TOC body and `tools/verify_csv_p0.py` did not reject embedded control characters. The independent byte/parity tools could therefore accept malformed input rejected by the real Rust reader.
+- **Fix:** Shared `valid_body_id` in the stdlib auditor enforces nonempty/trimmed Unicode body names, rejects Unicode Cc controls and Cs surrogate codepoints (not valid in Rust String). CSV source-row verification now calls the same helper before building the comparison index.
+- **Tests:** Extended existing `test_unsafe_header_size_and_noninteger_json_metadata_rejected` with 8 rejected-body header subcases (audit gate remains 14 mandatory synthetic methods + 1 optional owner test). Added `test_body_names_follow_rust_body_id_contract` to the independent CSV/P0 suite (now 16 methods), covering 4 valid and 8 invalid names.
+- **Executed:** Python 3.13.5 isolated two-method contract tests PASS (actual shared predicate for valid/invalid names). GitHub connector readback verified source and tests. **Not executed:** whole 14-case audit suite, 16-case CSV/P0 suite, Cargo fmt/Clippy/test/build, wheel/native smoke, original owner dataset parity. The container lacks Cargo and cannot resolve github.com for cloning. Keep PR #5 draft; no merge, dataset changes, GitHub Actions or release.
+
 ## 2026-11-14 — Check native Rust synod phase status/code compatibility (draft PR #5)
 
 - **Coordination:** Reviewed current [PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), other open draft PRs #4/#6, and Rust `SynodStage`/`SynodStageStatus` enum variants. Used existing `feat/p0-2-rust-workspace`; no changes to owner dataset, `main` or deployment.
