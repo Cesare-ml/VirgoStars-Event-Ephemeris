@@ -403,6 +403,15 @@ class PythonApiTests(unittest.TestCase):
                 )
                 for token in ("NaN", "Infinity", "-Infinity")
             ),
+            # Python's default JSON decoder silently converts valid JSON
+            # exponents beyond binary64 into infinity. Reject at parse time.
+            *(
+                (
+                    canonical.replace('"source_id": 27', f'"source_id": {token}', 1),
+                    "non-finite JSON value",
+                )
+                for token in ("1e400", "-9.9e999")
+            ),
         )
         for payload, error in malformed_wire:
             with self.subTest(error=error, payload=payload), self.assertRaisesRegex(
