@@ -7,6 +7,9 @@ from pathlib import Path
 import stat
 import tempfile
 import unittest
+from unittest.mock import patch
+
+import wheel_contents_policy as policy
 import zipfile
 
 from wheel_contents_policy import inspect_wheel_contents
@@ -40,6 +43,37 @@ class WheelContentsPolicyTests(unittest.TestCase):
             with self.subTest(path=path), tempfile.TemporaryDirectory() as folder:
                 with self.assertRaisesRegex(ValueError, "scientific data"):
                     inspect_wheel_contents(self.wheel(Path(folder), [(path, "owner-data")]))
+
+    def test_known_compressed_owner_archive_suffixes_are_rejected(self):
+        for name in ("owner.csv.gz", "owner.csv.zst", "owner.p0.gz",
+                     "owner.p0.zst", "owner.vseph-p0.zst", "owner.sqlite3.zst"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as folder:
+                wheel = self.wheel(Path(folder), [(f"virgostars_events/{name}", b"example")])
+                with self.assertRaisesRegex(ValueError, "scientific data"):
+                    inspect_wheel_contents(wheel)
+
+    def test_renamed_raw_p0_magic_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            wheel = self.wheel(Path(folder), [
+                ("virgostars_events/snapshot.bin", b"VSEPH-P0" + b"\x00" * 32)
+            ])
+            with self.assertRaisesRegex(ValueError, "renamed VSEPH-P0"):
+                inspect_wheel_contents(wheel)
+
+    def test_excessive_member_count_fails_before_reading_zip_members(self):
+        with tempfile.TemporaryDirectory() as folder:
+            wheel = self.wheel(Path(folder), [("virgostars_events/extra.txt", b"x")])
+            with patch.object(policy, "MAX_MEMBERS", 3):
+                with self.assertRaisesRegex(ValueError, "too many ZIP members"):
+                    inspect_wheel_contents(wheel)
+
+    def test_extreme_zip_expansion_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            wheel = self.wheel(Path(folder))
+            with zipfile.ZipFile(wheel, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("virgostars_events/repetitive.txt", b"x" * (2 * 1024 * 1024))
+            with self.assertRaisesRegex(ValueError, "excessive ZIP expansion"):
+                inspect_wheel_contents(wheel)
 
     def test_zip_path_traversal_and_windows_separators_rejected(self):
         for path in ("../outside.txt", "dir/../escape.txt", "/absolute.txt", "C:/windows/file.txt", "dir\\escape.txt"):

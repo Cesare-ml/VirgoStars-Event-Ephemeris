@@ -16,7 +16,14 @@ import zipfile
 # These are all source/archive formats used by the project's owner dataset.
 # A compressed archive with an unrelated extension cannot be classified by
 # filename alone; a packaging review is still mandatory before any release.
-DATA_SUFFIXES = (".csv", ".vseph", ".vseph-p0", ".p0", ".sqlite", ".sqlite3", ".db")
+DATA_SUFFIXES = (
+    ".csv", ".vseph", ".vseph-p0", ".p0", ".sqlite", ".sqlite3", ".db",
+    ".csv.gz", ".csv.zst", ".p0.gz", ".p0.zst", ".vseph-p0.gz",
+    ".vseph-p0.zst", ".sqlite.gz", ".sqlite3.zst", ".db.gz",
+)
+P0_MAGIC = b"VSEPH-P0"
+MAX_MEMBERS = 4096
+MAX_EXPANSION_RATIO = 1000
 MAX_UNCOMPRESSED_MEMBER = 64 * 1024 * 1024
 MAX_UNCOMPRESSED_TOTAL = 128 * 1024 * 1024
 
@@ -30,7 +37,10 @@ def inspect_wheel_contents(wheel: Path) -> None:
         with zipfile.ZipFile(wheel) as archive:
             names: set[str] = set()
             total = 0
-            for info in archive.infolist():
+            infos = archive.infolist()
+            if len(infos) > MAX_MEMBERS:
+                raise ValueError("wheel contains too many ZIP members")
+            for info in infos:
                 name = info.filename
                 parts = name.split("/")
                 if (
@@ -46,6 +56,12 @@ def inspect_wheel_contents(wheel: Path) -> None:
                     raise ValueError(f"wheel contains a symbolic link: {name!r}")
                 if info.file_size > MAX_UNCOMPRESSED_MEMBER:
                     raise ValueError(f"wheel member exceeds the safe size limit: {name!r}")
+                # A small compressed ZIP payload that expands thousands of
+                # times can consume large amounts of CPU/memory during pip
+                # installation even when under the absolute size ceilings.
+                if (info.file_size > 1024 * 1024 and
+                        info.file_size > max(info.compress_size, 1) * MAX_EXPANSION_RATIO):
+                    raise ValueError(f"wheel member has excessive ZIP expansion: {name!r}")
                 total += info.file_size
                 if total > MAX_UNCOMPRESSED_TOTAL:
                     raise ValueError("wheel uncompressed size exceeds the safe limit")
@@ -55,6 +71,12 @@ def inspect_wheel_contents(wheel: Path) -> None:
                     if (any(part.lower() in {"dataset", "datasets"} for part in parts[:-1])
                             or lower.endswith(DATA_SUFFIXES)):
                         raise ValueError(f"wheel must not bundle scientific data: {name!r}")
+                    # A renamed raw VSEPH-P0 archive is still owner data.
+                    # Sniff the exact eight-byte framing magic, never unzip
+                    # arbitrary nested archives or infer legal permission.
+                    with archive.open(info) as member:
+                        if member.read(len(P0_MAGIC)) == P0_MAGIC:
+                            raise ValueError(f"wheel contains renamed VSEPH-P0 data: {name!r}")
 
             dist_info = {name.split("/", 1)[0] for name in names if ".dist-info/" in name}
             if len(dist_info) != 1:
