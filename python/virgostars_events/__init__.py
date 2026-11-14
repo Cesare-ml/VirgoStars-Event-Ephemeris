@@ -141,6 +141,24 @@ class VirgoStarsEvents:
                 )
             ):
                 raise ValueError(f"native synod source ID inconsistent with cycle for {body}")
+            # Validate native anchor types and bounds BEFORE comparing a
+            # phase start against them: a malformed non-integer anchor must
+            # fail as a ValueError, never as an incidental Python TypeError.
+            # The Rust index promises a latest anchor <= X and a strictly
+            # later next anchor. Never display a future start as recorded
+            # current state, or a stale end boundary, if transport regresses.
+            current_us = record["cycle_start_us"]
+            next_us = record["next_cycle_start_us"]
+            if current_us is not None and (
+                type(current_us) is not int or current_us > requested_us
+            ):
+                raise ValueError(f"native synod current anchor invalid for {body}")
+            if next_us is not None and (
+                type(next_us) is not int
+                or next_us <= requested_us
+            ):
+                raise ValueError(f"native synod next anchor invalid for {body}")
+
             # The P0 archive has no reviewed coverage policy. Reject any
             # transport payload that omits the mandatory warning or falsely
             # claims a scientifically certified body-specific event history.
@@ -174,20 +192,6 @@ class VirgoStarsEvents:
                 )
             ):
                 raise ValueError(f"native synod phase start invalid for {body}")
-            # The Rust index promises a latest anchor <= X and a strictly
-            # later next anchor. Never display a future start as recorded
-            # current state, or a stale end boundary, if transport regresses.
-            current_us = record["cycle_start_us"]
-            next_us = record["next_cycle_start_us"]
-            if current_us is not None and (
-                type(current_us) is not int or current_us > requested_us
-            ):
-                raise ValueError(f"native synod current anchor invalid for {body}")
-            if next_us is not None and (
-                type(next_us) is not int
-                or next_us <= requested_us
-            ):
-                raise ValueError(f"native synod next anchor invalid for {body}")
 
             record["status"] = (
                 "recorded" if record["cycle_start_us"] is not None
