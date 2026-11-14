@@ -219,6 +219,9 @@ class PythonApiTests(unittest.TestCase):
             ("Mercury", "cycle_start_us", 1),
             ("Mercury", "cycle_start_us", True),
             ("Mercury", "cycle_start_us", "-300"),
+            ("Mercury", "cycle_start_us", -300.0),
+            ("Mercury", "cycle_start_us", []),
+            ("Mercury", "cycle_start_us", {}),
             ("Moon", "next_cycle_start_us", 0),
             ("Moon", "next_cycle_start_us", -1),
             ("Moon", "next_cycle_start_us", False),
@@ -281,6 +284,14 @@ class PythonApiTests(unittest.TestCase):
         at_boundary = fake_response()
         at_boundary["synods"]["Mercury"]["cycle_start_us"] = 0
         at_boundary["synods"]["Mercury"]["next_cycle_start_us"] = 1
+        # With a one-microsecond cycle, do not keep thresholds from the
+        # original -300us fixture: they predate this new synthetic anchor.
+        at_boundary["synods"]["Mercury"]["phase_thresholds_us"] = None
+        at_boundary["synods"]["Mercury"]["phase"] = {
+            "code": None,
+            "started_at_us": None,
+            "status": "unknown_missing_phase_thresholds",
+        }
         result = VirgoStarsEvents(DummyNative(at_boundary)).get_synods_at(
             "1970-01-01T00:00:00Z"
         )
