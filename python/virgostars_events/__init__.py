@@ -14,7 +14,7 @@ from typing import Any
 
 from ._time import iso_utc_from_microseconds, to_utc_microseconds
 from ._phase_wire import validate_native_stage, validate_recorded_thresholds
-from ._wire import decode_native_json
+from ._wire import decode_native_json, same_json_value
 
 __all__ = ["VirgoStarsEvents"]
 __version__ = "0.1.0"
@@ -120,7 +120,12 @@ class VirgoStarsEvents:
             moon_raw if moon_raw is not None and moon_raw.get("cycle_start_us") is not None
             else None
         )
-        if "new_moon" not in result or result["new_moon"] != expected_native_moon:
+        # JSON equality must preserve scalar types: in Python True == 1
+        # and 11 == 11.0, while Rust serializes distinct JSON types.
+        # Never hide a mismatched native Moon alias by replacing it silently.
+        if "new_moon" not in result or not same_json_value(
+            result["new_moon"], expected_native_moon
+        ):
             raise ValueError("native synod response new_moon disagrees with Moon record")
 
         result.pop("requested_at_us")
