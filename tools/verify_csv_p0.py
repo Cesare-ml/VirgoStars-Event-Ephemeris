@@ -76,7 +76,14 @@ def normalized_row(family: str, row: dict) -> tuple[str, int, list]:
         raw = row["dataora_extra_utc_json"]
         # PostgreSQL NULL is an empty field in the public scientific CSV;
         # JSON [] is distinct and is retained as an explicitly empty array.
-        extras = None if raw == "" else json.loads(raw)
+        # Only an empty normalized CSV field represents source SQL NULL.
+        # Explicit JSON null must not be interpreted as the missing phase array.
+        if raw == "":
+            extras = None
+        else:
+            extras = json.loads(raw)
+            if extras is None:
+                raise ValueError("synod phase JSON null is not SQL NULL; use an empty CSV field")
         if extras is not None:
             if not isinstance(extras, list) or any(not isinstance(x, str) for x in extras):
                 raise ValueError("invalid synod phase JSON")
