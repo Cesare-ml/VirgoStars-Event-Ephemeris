@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone, tzinfo
 from unittest.mock import patch
 
 from virgostars_events import VirgoStarsEvents
+from virgostars_events._wire import decode_native_json
 from virgostars_events._time import (
     iso_utc_from_microseconds,
     to_utc_microseconds,
@@ -373,6 +374,13 @@ class PythonApiTests(unittest.TestCase):
                 return self.payload
 
         canonical = json.dumps(fake_response())
+        # Rust JSON should retain valid supplementary code points represented
+        # by a paired UTF-16 escape; rejecting lone surrogates must not
+        # reject a valid character.
+        self.assertEqual(
+            decode_native_json('{"message":"\\ud83d\\ude00"}'),
+            {"message": "😀"},
+        )
         malformed_wire = (
             (
                 canonical.replace(
@@ -397,6 +405,20 @@ class PythonApiTests(unittest.TestCase):
                     1,
                 ),
                 "duplicate JSON key",
+            ),
+            # Python json.loads tolerates isolated surrogates (both escapes
+            # and literal code points), which Rust cannot emit as UTF-8.
+            (
+                canonical.replace('"source_id": 27', '"source_id": "\\ud800"', 1),
+                "unpaired Unicode surrogate",
+            ),
+            (
+                canonical.replace('"source_id": 27', '"\\udfff": 0, "source_id": 27', 1),
+                "unpaired Unicode surrogate",
+            ),
+            (
+                canonical.replace('"source_id": 27', '"source_id": "' + chr(0xD800) + '"', 1),
+                "unpaired Unicode surrogate",
             ),
             *(
                 (
