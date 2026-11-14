@@ -1,5 +1,12 @@
 # Validation and quality gates
 
+## Mandatory independent P0 audit: 15 synthetic tests (2026-11-14, draft PR #5)
+
+**Current acceptance count:** `tools/test_audit_p0_bytes.py` declares **16** unittest methods, including one explicitly optional real owner-data test. The independent no-dataset gate must therefore execute **15/15**, not 14/14; the stale 14-test requirement made `tools/validate_p0_synthetic.py` fail before the Cargo/PyO3 build despite valid fixture data. Updated the gate and its five test methods, including an assertion that the new duplicate-JSON-header regression cannot silently drop out of the mandatory set.
+
+Use `python tools/validate_p0_synthetic.py` and `python -m unittest discover -s tools -p "test_validate_p0_synthetic.py" -v` on a full checkout. Older 14-case run logs below are historical, **not** current validation instructions. The native wheel and owner 380,844-record archive remain unverified; do not merge/release based on synthetic tests.
+
+
 ## Fail-fast independent Python P0 report preflight (2026-11-14, draft PR #5)
 
 `tools/validate_rust.py` now **parses and validates the Python independent audit report before launching** the potentially expensive Rust `p0-verify` audit. The Python report must already have strict JSON, canonical digest, correctly typed/coherent section counts, SHA-256 matching `--sha256`, and a byte count equal to the actual archive size. Any failure stops the pipeline before the Rust auditor. Rust is still run when these preliminary checks pass, and all previously required Rust/Python parity, full-file SHA, format and `coverage_certified=false` checks remain mandatory. Early agreement with a Python report **does not prove** archive content or astronomical completeness.
