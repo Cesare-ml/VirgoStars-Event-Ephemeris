@@ -49,11 +49,13 @@ It also reports the SHA-256 for each normalized CSV file and the complete binary
 python -m unittest discover -s tools -p test_verify_csv_p0.py -v
 ```
 
-The 14 synthetic tests deliberately exercise exact parity, negative and year-0002 timestamps, modified ingress sign, changed station direction, loss of the NULL/empty phase distinction, changed synod phase time, missing and duplicate rows, a damaged archive, mismatched expected hash and an invalid CSV header.
+The 15 synthetic tests deliberately exercise exact parity, negative and year-0002 timestamps, modified ingress sign, changed station direction, loss of the NULL/empty phase distinction, changed synod phase time, missing and duplicate rows, a damaged archive, mismatched expected hash and an invalid CSV header.
 
 The CSV/P0 parity decoder now rejects **non-canonical unsigned LEB128** (redundant zero groups), matching the Rust `take_varint()` decoder; its boundary regression checks valid 0, 127, 128 and `u64::MAX`, plus overlong/truncated/overflow encodings. This is byte-level transport safety, not astronomical coverage certification.
 
 **Additional strictness (2026-11-14):** UTC timestamp fields must use ASCII digits (Python's Unicode `\\d` / `int()` are intentionally not accepted in normalized scientific timestamps). The independent P0 block decoder also rejects original source ID `0` or duplicate IDs inside one block, matching the Rust reader. Two synthetic test methods cover the early-year valid case, four Unicode timestamp corruptions, zero ID, duplicate ID and a valid two-record block. These are transport-integrity checks; they do **not** certify astronomical completeness. Full suite/owner dataset and native Cargo gates must still be executed independently.
+
+**SQL NULL preservation (2026-11-14):** in normalized `sinodi.csv`, only an empty `dataora_extra_utc_json` field represents original SQL `NULL`. A literal JSON `null` is rejected rather than silently comparing equal to a missing phase array. The new synthetic regression mutates the original blank CSV field to `null` and requires a fail-closed parity error. Valid `[]` remains a distinct empty array. This check does not infer astronomical completeness. Full checked-out 15-case suite, Rust compilation and native owner-snapshot parity remain pending.
 
 ### Verified in the authoring environment
 
