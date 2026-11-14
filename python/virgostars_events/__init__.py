@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from ._time import iso_utc_from_microseconds, to_utc_microseconds
+from ._phase_wire import validate_recorded_thresholds
 from ._wire import decode_native_json
 
 __all__ = ["VirgoStarsEvents"]
@@ -193,6 +194,10 @@ class VirgoStarsEvents:
             ):
                 raise ValueError(f"native synod phase start invalid for {body}")
 
+            # Verify the recorded model without inferring a scientifically
+            # complete cycle: preserve NULL vs [] and future source phases.
+            extras = validate_recorded_thresholds(record, current_us, body)
+
             record["status"] = (
                 "recorded" if record["cycle_start_us"] is not None
                 else "no_preceding_recorded_cycle"
@@ -203,7 +208,7 @@ class VirgoStarsEvents:
             record["next_cycle_start_utc"] = iso_utc_from_microseconds(
                 record.pop("next_cycle_start_us")
             )
-            extras = record.pop("phase_thresholds_us")
+            record.pop("phase_thresholds_us")
             record["phase_thresholds_utc"] = (
                 None if extras is None
                 else [iso_utc_from_microseconds(value) for value in extras]
