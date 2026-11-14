@@ -813,3 +813,7 @@ This is the shared state for agents. Add a dated brief entry **in each working d
 - **Commands run and results (or not run):**
 - **Unresolved risks / blockers:**
 - **Next smallest safe task:**
+
+### 2026-11-14 — Pre-install Python wheel data-exclusion gate (draft PR #5)
+
+Introduced `tools/wheel_contents_policy.py` and 8 standalone unit methods. Before creating a venv or calling pip, the offline prebuilt-wheel verifier checks ZIP integrity/path safety, a single dist-info envelope, per-member and total size limits, symbolic links and known owner-dataset filenames/directories. The wheel verifier's mocked-test fixtures are now real minimal ZIP wheels and include fail-before-venv regression. **Local Python 3.13.5 standalone guard tests: 8/8 PASS**; full repository source/native test suites, real Cargo build, installed-wheel 51 tests, owner CSV/P0 parity and release were **not executed**. This does not authorize redistribution or certify absence of disguised data.

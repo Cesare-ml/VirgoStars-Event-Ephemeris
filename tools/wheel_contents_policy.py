@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: CPAL-1.0
+# Powered by VirgoStars — https://www.virgostars.it/
+"""Fail-closed offline check of prebuilt M0 wheel ZIP contents.
+
+The event dataset is deliberately NOT distributed inside the Python wheel.
+This is a packaging safety check, not scientific or legal certification.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+import re
+import stat
+import zipfile
+
+# These are all source/archive formats used by the project's owner dataset.
+# A compressed archive with an unrelated extension cannot be classified by
+# filename alone; a packaging review is still mandatory before any release.
+DATA_SUFFIXES = (".csv", ".vseph", ".vseph-p0", ".p0", ".sqlite", ".sqlite3", ".db")
+MAX_UNCOMPRESSED_MEMBER = 64 * 1024 * 1024
+MAX_UNCOMPRESSED_TOTAL = 128 * 1024 * 1024
+
+
+def inspect_wheel_contents(wheel: Path) -> None:
+    """Reject malformed/unsafe ZIP members and accidental scientific datasets.
+
+    Do this before running pip, and never extract an untrusted wheel directly.
+    """
+    try:
+        with zipfile.ZipFile(wheel) as archive:
+            names: set[str] = set()
+            total = 0
+            for info in archive.infolist():
+                name = info.filename
+                parts = name.split("/")
+                if (
+                    not name or name.startswith("/") or "\\" in name
+                    or re.match(r"^[A-Za-z]:", name)
+                    or any(part in ("", ".", "..") for part in parts[:-1])
+                    or (not info.is_dir() and parts[-1] in ("", ".", ".."))
+                ):
+                    raise ValueError(f"unsafe wheel member path: {name!r}")
+                if not info.is_dir() and (not parts[-1] or name in names):
+                    raise ValueError(f"empty or duplicate wheel member: {name!r}")
+                if (info.external_attr >> 16) & 0o170000 == stat.S_IFLNK:
+                    raise ValueError(f"wheel contains a symbolic link: {name!r}")
+                if info.file_size > MAX_UNCOMPRESSED_MEMBER:
+                    raise ValueError(f"wheel member exceeds the safe size limit: {name!r}")
+                total += info.file_size
+                if total > MAX_UNCOMPRESSED_TOTAL:
+                    raise ValueError("wheel uncompressed size exceeds the safe limit")
+                if not info.is_dir():
+                    names.add(name)
+                    lower = name.lower()
+                    if (any(part.lower() in {"dataset", "datasets"} for part in parts[:-1])
+                            or lower.endswith(DATA_SUFFIXES)):
+                        raise ValueError(f"wheel must not bundle scientific data: {name!r}")
+
+            dist_info = {name.split("/", 1)[0] for name in names if ".dist-info/" in name}
+            if len(dist_info) != 1:
+                raise ValueError("wheel must contain exactly one .dist-info directory")
+            metadata = next(iter(dist_info))
+            if not {f"{metadata}/WHEEL", f"{metadata}/METADATA"}.issubset(names):
+                raise ValueError("wheel lacks mandatory WHEEL or METADATA")
+            bad_member = archive.testzip()
+            if bad_member is not None:
+                raise ValueError(f"wheel has a corrupt ZIP member: {bad_member!r}")
+    except (zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
+        raise ValueError(f"invalid Python wheel ZIP: {exc}") from exc

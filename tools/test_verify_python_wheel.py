@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 import verify_python_wheel as wheel_check
@@ -17,7 +18,11 @@ import verify_python_wheel as wheel_check
 class WheelGateTests(unittest.TestCase):
     def make_wheel(self, directory: Path) -> Path:
         result = directory / "virgostars_event_ephemeris-0.1.0-py3-none-any.whl"
-        result.write_bytes(b"placeholder; never actually installed during unit tests")
+        with zipfile.ZipFile(result, "w") as package:
+            metadata = "virgostars_event_ephemeris-0.1.0.dist-info"
+            package.writestr(f"{metadata}/WHEEL", "Wheel-Version: 1.0\n")
+            package.writestr(f"{metadata}/METADATA", "Name: virgostars-event-ephemeris\n")
+            package.writestr("virgostars_events/__init__.py", "__version__ = '0.1.0'\n")
         return result
 
     def assert_rejected(self, args: list[str]) -> None:
@@ -118,6 +123,16 @@ class WheelGateTests(unittest.TestCase):
                 with redirect_stderr(StringIO()) as stderr:
                     self.assertEqual(wheel_check.main(["--wheel", str(wheel)]), 1)
                 self.assertIn("native failure", stderr.getvalue())
+
+    def test_malformed_prebuilt_wheel_is_rejected_before_creating_venv(self):
+        with tempfile.TemporaryDirectory() as temp:
+            wheel = self.make_wheel(Path(temp))
+            wheel.write_bytes(b"bad ZIP")
+            with patch.object(wheel_check.venv, "EnvBuilder") as builder:
+                with redirect_stderr(StringIO()) as errors:
+                    self.assertEqual(wheel_check.main(["--wheel", str(wheel)]), 1)
+                builder.assert_not_called()
+            self.assertIn("pre-install wheel content check", errors.getvalue())
 
     def test_venv_bootstrap_failure_returns_nonzero_not_success(self):
         with tempfile.TemporaryDirectory() as temp:

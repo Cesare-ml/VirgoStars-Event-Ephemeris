@@ -20,6 +20,8 @@ import tempfile
 import venv
 from typing import Sequence
 
+from wheel_contents_policy import inspect_wheel_contents
+
 ROOT = Path(__file__).resolve().parents[1]
 
 # Execute in a DIFFERENT working directory so source imports cannot mask a
@@ -97,6 +99,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--synods-csv requires an archive and an existing source CSV")
 
     wheel = args.wheel.resolve()
+    # Enforce dataset exclusion and ZIP safety before pip touches the wheel.
+    try:
+        inspect_wheel_contents(wheel)
+    except (ValueError, OSError, RuntimeError) as exc:
+        print(f"FAIL: pre-install wheel content check: {exc}", file=sys.stderr)
+        return 1
     validator = ROOT / "tools" / "validate_python_mvp.py"
     with tempfile.TemporaryDirectory(prefix="virgostars-wheel-verify-") as tmp:
         temp = Path(tmp)
