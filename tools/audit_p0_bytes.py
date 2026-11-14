@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import struct
+import unicodedata
 import zlib
 from collections import Counter
 from pathlib import Path
@@ -25,6 +26,20 @@ MAX_BLOCK = 5_000_000
 MAX_RAW = 25_000_000
 MAX_COUNT = 512
 FAMILIES = ("ingress", "motion", "synod")
+
+
+def valid_body_id(value: object) -> bool:
+    """Check the Rust BodyId contract for an untrusted P0/CSV body name.
+
+    Rust String rejects lone UTF-16 surrogates; BodyId also rejects trim
+    whitespace and Unicode control characters (category Cc).
+    """
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and value.strip() == value
+        and not any(unicodedata.category(ch) in ("Cc", "Cs") for ch in value)
+    )
 
 
 def _varint(data: bytes, pos: int) -> tuple[int, int]:
@@ -137,7 +152,7 @@ def audit_file(path: str | Path, expected_sha256: str | None = None) -> dict:
     base = 12 + header_len
     for entry in toc:
         family, body = entry["family"], entry["body"]
-        if family not in FAMILIES or not isinstance(body, str) or not body:
+        if family not in FAMILIES or not valid_body_id(body):
             raise ValueError("invalid TOC family or body")
         key = (family, body)
         if previous_key is not None and key < previous_key:
