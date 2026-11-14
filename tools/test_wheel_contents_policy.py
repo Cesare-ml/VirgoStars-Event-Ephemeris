@@ -107,6 +107,35 @@ class WheelContentsPolicyTests(unittest.TestCase):
             ])
             self.assertIsNone(inspect_wheel_contents(wheel))
 
+        # ZIP names may differ byte-for-byte but normalize to the same
+        # filesystem path. Casefold alone does not detect NFC/NFD aliases.
+        for first, second in (
+            ("virgostars_events/café.py", "virgostars_events/cafe\u0301.py"),
+            ("virgostars_events/Å.txt", "virgostars_events/A\u030a.txt"),
+        ):
+            with self.subTest(first=first, second=second), tempfile.TemporaryDirectory() as folder:
+                wheel = self.wheel(Path(folder), [(first, b"first"), (second, b"second")])
+                with self.assertRaisesRegex(ValueError, "case-insensitive wheel path collision"):
+                    inspect_wheel_contents(wheel)
+
+        # The same collision rule must also apply to implicit directories,
+        # even when the file is listed before its canonically equal parent.
+        for first, second in (
+            ("virgostars_events/Café", "virgostars_events/Cafe\u0301/child.py"),
+            ("virgostars_events/Cafe\u0301/child.py", "virgostars_events/Café"),
+        ):
+            with self.subTest(file=first, nested=second), tempfile.TemporaryDirectory() as folder:
+                wheel = self.wheel(Path(folder), [(first, b"one"), (second, b"two")])
+                with self.assertRaisesRegex(ValueError, "file/directory path collision"):
+                    inspect_wheel_contents(wheel)
+
+        with tempfile.TemporaryDirectory() as folder:
+            wheel = self.wheel(Path(folder), [
+                ("virgostars_events/resume.py", b"one"),
+                ("virgostars_events/résumé.py", b"two"),
+            ])
+            self.assertIsNone(inspect_wheel_contents(wheel))
+
     def test_windows_device_name_regex_directly_matches_with_extensions(self):
         # Keep the regex itself under test: a doubly escaped \Z or \.
         # would silently accept Windows device basenames even though the
