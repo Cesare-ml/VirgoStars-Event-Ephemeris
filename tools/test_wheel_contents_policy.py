@@ -112,7 +112,9 @@ class WheelContentsPolicyTests(unittest.TestCase):
         # would silently accept Windows device basenames even though the
         # surrounding invalid-character checks continue to pass.
         for name in ("CON", "con.txt", "NUL.TXT", "AUX", "PRN.csv",
-                     "com1.pyd", "COM9.dll", "lPt9.log", "lpt1"):
+                     "com1.pyd", "COM9.dll", "lPt9.log", "lpt1",
+                     "COM¹", "com².py", "cOm³.DLL",
+                     "LPT¹", "lpt².txt", "LpT³.pyd"):
             with self.subTest(reserved=name):
                 self.assertIsNotNone(policy._WINDOWS_DEVICE.fullmatch(name))
                 self.assertTrue(policy.unsafe_windows_component(name))
@@ -131,6 +133,12 @@ class WheelContentsPolicyTests(unittest.TestCase):
             "virgostars_events/nul.txt",
             "virgostars_events/COM1.pyd",
             "virgostars_events/lPt9.dll",
+            "virgostars_events/COM¹",
+            "virgostars_events/com².dll",
+            "virgostars_events/CoM³.py",
+            "virgostars_events/LPT¹",
+            "virgostars_events/lpt².txt",
+            "virgostars_events/LpT³/child.py",
             "virgostars_events/aux",
             "virgostars_events/PRN/child.py",
             "virgostars_events/data.txt:alternate",
