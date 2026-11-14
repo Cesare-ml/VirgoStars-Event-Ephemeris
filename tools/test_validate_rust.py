@@ -302,6 +302,50 @@ class ValidateRustToolTest(unittest.TestCase):
                 cargo="mock-cargo", invoke=fake,
             )
 
+    def test_rejects_ambiguous_json_before_comparing_independent_audits(self):
+        archive = validate_archive_options("fixture.p0", DIGEST, self.root)
+        base = {
+            "sha256": DIGEST, "bytes": 20, "blocks": 4, "records": 8,
+            "sections": {"synod": 3, "motion": 2, "ingress": 3},
+        }
+        for corrupt_side, corruption in (
+            ("python", "duplicate top-level key"),
+            ("rust", "duplicate nested key"),
+            ("rust", "nonfinite number"),
+            ("python", "overflowing float"),
+        ):
+            with self.subTest(side=corrupt_side, corruption=corruption):
+                def fake(command, **kwargs):
+                    if not kwargs.get("capture_output"):
+                        return subprocess.CompletedProcess(command, 0)
+                    is_rust = command[0] == "mock-cargo"
+                    report = dict(base)
+                    if is_rust:
+                        report.update(
+                            format="VSEPH-P0-EXPERIMENTAL",
+                            sha256_checked_against_expected=True,
+                            coverage_certified=False,
+                        )
+                    payload = json.dumps(report)
+                    if (is_rust and corrupt_side == "rust") or (
+                        not is_rust and corrupt_side == "python"
+                    ):
+                        if corruption == "duplicate top-level key":
+                            payload = payload.replace('"records": 8', '"records": 8, "records": 8', 1)
+                        elif corruption == "duplicate nested key":
+                            payload = payload.replace('"synod": 3', '"synod": 3, "synod": 3', 1)
+                        elif corruption == "nonfinite number":
+                            payload = payload[:-1] + ', "extra": NaN}'
+                        elif corruption == "overflowing float":
+                            payload = payload[:-1] + ', "extra": 1e400}'
+                    return subprocess.CompletedProcess(command, 0, stdout=payload)
+
+                with self.assertRaisesRegex(RuntimeError, "invalid or ambiguous JSON"):
+                    run_gates(
+                        root=self.root, archive=archive,
+                        expected_sha256=DIGEST, cargo="mock-cargo", invoke=fake,
+                    )
+
     def test_archive_without_trusted_hash_stops_before_validation(self):
         with self.assertRaisesRegex(ValueError, "trusted"):
             run_gates(
