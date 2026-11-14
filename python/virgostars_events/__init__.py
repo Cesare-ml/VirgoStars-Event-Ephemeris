@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any
 
 from ._time import iso_utc_from_microseconds, to_utc_microseconds
+from ._wire import decode_native_json
 
 __all__ = ["VirgoStarsEvents"]
 __version__ = "0.1.0"
@@ -79,7 +80,7 @@ class VirgoStarsEvents:
         if reader is None:
             raise RuntimeError("VirgoStarsEvents reader is closed")
         requested_us = to_utc_microseconds(instant)
-        result = json.loads(reader.get_synods_at_us(requested_us))
+        result = decode_native_json(reader.get_synods_at_us(requested_us))
         if not isinstance(result, dict):
             raise ValueError("native synod response must be a JSON object")
         # Do not silently replace a mismatched timestamp from the native
