@@ -1,5 +1,20 @@
 # Windows: build and test the first Python/Rust synod MVP
 
+## Verified private wheel snapshot for offline installation (2026-11-14, PR #5)
+
+`tools/verify_python_wheel.py` now copies the user-supplied `.whl` into its temporary verification directory **before** reading its ZIP metadata, and gives pip this **exact inspected copy**, not the original input path. This closes the time-of-check/time-of-use gap in which an external process could replace the original wheel after its dataset/ZIP policy check but before `pip install --no-index --no-deps`.
+
+Existing isolation and native-module checks still execute in the fresh venv; no artifacts are published, owner datasets are never downloaded/bundled, and the temporary wheel is removed with the venv. Source wheel replacements after staging cannot affect the private pip input. This protects the *inspection-to-installation boundary*; it does not authenticate the source wheel or replace native Rust and scientific parity gates.
+
+To exercise the committed regression on a full checkout:
+
+```powershell
+py -3 -m unittest discover -s tools -p "test_verify_python_wheel.py" -v
+```
+
+The new regression deliberately overwrites the original wheel during venv setup, then confirms pip's input is the original inspected private copy. Two local stdlib smoke tests executed successfully on CPython 3.13.5, covering source replacement and malformed ZIP copy. **Not run here:** complete committed 10-method wheel-gate suite, actual pip installation, Cargo and PyO3 build, source/native acceptance or real owner-data parity.
+
+
 ## Windows reserved ZIP member names and NTFS ADS preflight (2026-11-14, draft PR #5)
 
 `tools/wheel_contents_policy.py` now also rejects wheel paths containing Windows device names (`CON`, `NUL`, `AUX`, `PRN`, `COM1`–`COM9`, `LPT1`–`LPT9`, including file extensions), reserved punctuation such as colon/`?`/`*`, control characters and segments ending in a space or dot. This prevents an offline wheel check from accepting ZIP paths that could be interpreted differently by a Windows installer; it remains a pre-install packaging check, not proof of a compiled native module.
