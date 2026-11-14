@@ -24,12 +24,13 @@ class WheelPreflightGateTests(unittest.TestCase):
             with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
                 return gate.run_suite("synthetic.py", minimum)
 
-    def test_three_required_wheel_suites_have_nonzero_baselines(self):
+    def test_four_required_wheel_suites_have_nonzero_baselines(self):
         self.assertEqual(
             gate.REQUIRED_SUITES,
             (("test_wheel_contents_policy.py", 16),
              ("test_wheel_identity.py", 9),
-             ("test_verify_python_wheel.py", 12)),
+             ("test_verify_python_wheel.py", 12),
+             ("test_build_python_mvp.py", 17)),
         )
 
     def test_missing_suite_source_fails_before_discovery(self):
@@ -86,7 +87,21 @@ class WheelPreflightGateTests(unittest.TestCase):
 
         self.assertFalse(self.check(Aborted, minimum=2))
 
-    def test_main_checks_all_three_and_stops_on_first_failure(self):
+    def test_fourth_orchestration_suite_failure_fails_closed(self):
+        # The builder's 17 independent orchestration tests are mandatory,
+        # not merely discoverable by a developer running tests manually.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for name, _ in gate.REQUIRED_SUITES:
+                (root / name).touch()
+            with patch.object(gate, "TOOLS", root), patch.object(
+                gate, "run_suite", side_effect=[True, True, True, False]
+            ) as runner, redirect_stdout(StringIO()):
+                self.assertEqual(gate.main(), 1)
+            self.assertEqual(runner.call_count, 4)
+            self.assertEqual(runner.call_args.args, ("test_build_python_mvp.py", 17))
+
+    def test_main_checks_all_four_and_stops_on_first_failure(self):
         # Use dummy source paths because run_suite is deliberately mocked;
         # this orchestration check must not depend on a populated checkout.
         with tempfile.TemporaryDirectory() as folder:
@@ -94,7 +109,7 @@ class WheelPreflightGateTests(unittest.TestCase):
             for name, _ in gate.REQUIRED_SUITES:
                 (root / name).touch()
             with patch.object(gate, "TOOLS", root):
-                with patch.object(gate, "run_suite", side_effect=[True, True, True]) as runner:
+                with patch.object(gate, "run_suite", side_effect=[True, True, True, True]) as runner:
                     with redirect_stdout(StringIO()):
                         self.assertEqual(gate.main(), 0)
                 self.assertEqual(
