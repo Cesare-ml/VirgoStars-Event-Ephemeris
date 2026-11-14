@@ -144,6 +144,35 @@ class AuditP0BytesTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'UTF-8 JSON'):
                     self.audit(replace_header(malformed_header))
 
+        # Rust rejects noncanonical SHA-256 TOC fields before reading blocks.
+        # The compressed bytes and their actual uncompressed digests are
+        # untouched, so malformed metadata must fail even if payloads match.
+        for bad_digest in (
+            "A" * 64, "g" * 64, "0" * 63, "0" * 65,
+            "0" * 63 + " ", None, 0, True,
+        ):
+            with self.subTest(invalid_sha256=repr(bad_digest)):
+                header = dict(original)
+                header["table_of_contents"] = [
+                    dict(item) for item in original["table_of_contents"]
+                ]
+                header["table_of_contents"][0]["raw_sha256"] = bad_digest
+                with self.assertRaisesRegex(
+                    ValueError, "invalid P0 block SHA-256 digest"
+                ):
+                    self.audit(rewrite_header(self.good, header))
+
+        with self.subTest(missing_sha256=True):
+            header = dict(original)
+            header["table_of_contents"] = [
+                dict(item) for item in original["table_of_contents"]
+            ]
+            del header["table_of_contents"][0]["raw_sha256"]
+            with self.assertRaisesRegex(
+                ValueError, "invalid P0 block SHA-256 digest"
+            ):
+                self.audit(rewrite_header(self.good, header))
+
     def test_compressed_block_corruption_detected(self):
         corrupted = bytearray(self.good)
         corrupted[-6] ^= 0x7f
