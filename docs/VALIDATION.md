@@ -1,5 +1,27 @@
 # Validation and quality gates
 
+## User-configurable P0 auditor deadline (2026-11-14, draft PR #5)
+
+The large original archive's independent **Python** and **Rust** full-file checks use bounded subprocess execution with a **900-second default** per auditor. Hosts with slower disks or CPUs can now set a longer **positive, finite** per-auditor deadline through `tools/validate_rust.py --audit-timeout-seconds N`:
+
+```sh
+python tools/validate_rust.py --archive path/to/owner.vseph-p0 --sha256 <trusted-lowercase-64-hex> --audit-timeout-seconds 3600
+```
+
+The existing five locked Cargo review gates still run first and are **not** timed by this argument. `run_gates(audit_timeout_seconds=N)` supports direct Python callers; values such as 0, negatives, booleans, `NaN`, `Infinity` and text are rejected **before Cargo**. Omission retains the previous 900-second fail-closed behavior on each P0 auditor. Output-byte caps (65,536 stdout / 8,192 stderr), JSON shape/identity validation and scientific-coverage disclaimers are unchanged. This option cannot bypass digest checks and does not grant scientific completeness certification.
+
+Validation commands (pure Python, no Rust toolchain or owner archive needed):
+
+```sh
+python -m unittest discover -s tools -p test_validate_audit_timeout.py -v
+python -m unittest discover -s tools -p test_validate_preflight.py -v
+python -m unittest discover -s tools -p test_p0_u64_report.py -v
+python -m unittest discover -s tools -p test_validate_bounded_integration.py -v
+python -m unittest discover -s tools -p test_bounded_audit.py -v
+```
+
+**Actually executed:** Python 3.13.5 five-module suite **31/31 PASS** from exact GitHub-blob-matching files; `python -m py_compile validate_rust.py test_validate_audit_timeout.py` PASS. Blob SHA-1 `8a04a9594e6762d9a480b58d8e1debd4ab96ae70` (validator), `82c8b0781abd2aef4fce564c866541d3fac9cf38` (new five-test module). **Not run:** the separate original 17-method `tools/test_validate_rust.py` module, Cargo fmt/Clippy/tests/build, 42 source / 51 compiled wheel acceptance, owner 380,844-event archive parity or native Windows verification. No release, merge, Actions or production deployment.
+
 ## Fail-fast direct-call archive trust preflight (2026-11-14, draft PR #5)
 
 `tools/validate_rust.py` now validates the inputs to `run_gates()` **before starting any Cargo command**, including when the Python API is called directly rather than through `main()` / `validate_archive_options()`. With an archive, the trusted digest must be a lowercase 64-character SHA-256, the archive must exist as a file and the independent byte auditor must be present. A digest without an archive is rejected as well. Missing trusted digest keeps its previous clear error. The normal Cargo command order, strictly bounded Python/Rust auditors, report parity checks and astronomical data remain unchanged.
