@@ -36,6 +36,9 @@ def inspect_wheel_contents(wheel: Path) -> None:
     try:
         with zipfile.ZipFile(wheel) as archive:
             names: set[str] = set()
+            # Windows wheels must also be safe on case-insensitive filesystems:
+            # distinct ZIP names can otherwise extract over the same path.
+            portable_paths: set[str] = set()
             total = 0
             infos = archive.infolist()
             if len(infos) > MAX_MEMBERS:
@@ -52,6 +55,16 @@ def inspect_wheel_contents(wheel: Path) -> None:
                     raise ValueError(f"unsafe wheel member path: {name!r}")
                 if not info.is_dir() and (not parts[-1] or name in names):
                     raise ValueError(f"empty or duplicate wheel member: {name!r}")
+                # ZIP entry names are case-sensitive, but the installed wheel
+                # may land on a case-insensitive Windows filesystem. Reject a
+                # second name resolving to an already seen destination, even
+                # when both entries contain individually valid source files.
+                portable = name.rstrip("/").casefold()
+                if portable in portable_paths:
+                    raise ValueError(
+                        f"case-insensitive wheel path collision: {name!r}"
+                    )
+                portable_paths.add(portable)
                 if (info.external_attr >> 16) & 0o170000 == stat.S_IFLNK:
                     raise ValueError(f"wheel contains a symbolic link: {name!r}")
                 if info.file_size > MAX_UNCOMPRESSED_MEMBER:
