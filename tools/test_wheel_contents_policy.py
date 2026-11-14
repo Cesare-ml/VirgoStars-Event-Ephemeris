@@ -88,6 +88,25 @@ class WheelContentsPolicyTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "duplicate wheel member"):
                 inspect_wheel_contents(wheel)
 
+    def test_case_insensitive_windows_wheel_paths_must_not_collide(self):
+        # The archive is valid ZIP and names are unique in the central
+        # directory, but installation to Windows could overwrite a file.
+        for member in (
+            "VirgoStars_Events/__INIT__.PY",
+            "virgostars_events/__INIT__.py",
+        ):
+            with self.subTest(member=member), tempfile.TemporaryDirectory() as folder:
+                wheel = self.wheel(Path(folder), [(member, "untrusted-shadow")])
+                with self.assertRaisesRegex(ValueError, "case-insensitive wheel path collision"):
+                    inspect_wheel_contents(wheel)
+
+        # Different basenames in the same package remain valid.
+        with tempfile.TemporaryDirectory() as folder:
+            wheel = self.wheel(Path(folder), [
+                ("virgostars_events/README.txt", "documentation"),
+            ])
+            self.assertIsNone(inspect_wheel_contents(wheel))
+
     def test_symlink_member_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             result = self.wheel(Path(folder))
