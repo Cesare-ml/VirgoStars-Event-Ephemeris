@@ -8,25 +8,38 @@ terminate the subprocess once either fixed output allowance is exceeded.
 """
 from __future__ import annotations
 
+import math
 import os
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Sequence
 
 from audit_report_json import MAX_AUDIT_REPORT_BYTES
 
 MAX_AUDIT_STDERR_BYTES = 8 * 1024
+DEFAULT_AUDIT_TIMEOUT_SECONDS = 15 * 60
 _READ_SIZE = 4096
 
 
-def run_bounded_audit(command: Sequence[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+def run_bounded_audit(
+    command: Sequence[str], *, cwd: Path, timeout_seconds: float = DEFAULT_AUDIT_TIMEOUT_SECONDS
+) -> subprocess.CompletedProcess[str]:
     """Return UTF-8 stdout from a successful bounded subprocess.
 
     Neither stdout nor stderr can grow past their budget in memory. Any
     overrun kills the child and fails closed, rather than silently accepting
-    a truncated JSON audit. Actual process execution is not mocked here.
+    a truncated JSON audit. A deadline also guards silent child processes or
+    inherited pipes that never reach EOF. The helper does not kill process trees.
     """
+    if (
+        type(timeout_seconds) not in (int, float)
+        or not math.isfinite(timeout_seconds)
+        or timeout_seconds <= 0
+    ):
+        raise ValueError("audit timeout_seconds must be positive and finite")
+    deadline = time.monotonic() + timeout_seconds
     stdout = bytearray()
     stderr = bytearray()
     violations: list[str] = []
@@ -65,11 +78,20 @@ def run_bounded_audit(command: Sequence[str], *, cwd: Path) -> subprocess.Comple
         ]
         for worker in workers:
             worker.start()
-        process.wait()
+        timed_out = False
+        try:
+            process.wait(timeout=max(0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            process.kill()
+            process.wait()
         for worker in workers:
-            worker.join()
+            worker.join(timeout=max(0, deadline - time.monotonic()))
+        pipe_timed_out = any(worker.is_alive() for worker in workers)
         returncode = process.returncode
 
+    if timed_out or pipe_timed_out:
+        raise RuntimeError(f"P0 audit subprocess exceeded {timeout_seconds:g} seconds")
     if violations:
         raise RuntimeError("P0 audit subprocess output " + violations[0])
     if errors:
