@@ -1,3 +1,9 @@
+## 2026-11-14 — Canonical unsigned varints in CSV/P0 parity oracle (draft PR #5)
+
+- **Code:** `tools/verify_csv_p0.py::uvar` now rejects redundant terminal zero groups in unsigned LEB128, consistent with the Rust `take_varint` decoder and the existing independent P0 byte auditor. It does not change any archive or scientific record.
+- **Regression:** one new `test_varint_canonical_encoding_matches_rust` method in `tools/test_verify_csv_p0.py`; test cases accept canonical 0/1/127/128/u64-max and reject overlong, truncated and overflowing encodings. Synthetic CSV/P0 test methods become **12**. Updated the associated CSV/P0 parity documentation.
+- **Executed:** 2/2 local standalone Python 3.13.5 varint regression methods PASS, including the same 5 valid and 7 invalid byte strings. **Not executed:** full 12-method repository test suite, Rust fmt/Clippy/tests/build, PyO3 wheel, owner-authorized dataset parity. No merge, publishing, GitHub Actions or changes to PR #6.
+
 ## 2026-11-14 — Reject ambiguous native Python synod JSON (draft PR #5)
 
 - **Issue/PR/branch:** Python-first M0 transport integrity, [draft PR #5](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/5), `feat/p0-2-rust-workspace`. Inspected open PRs #4/#5/#6, issues and the current Python facade/tests before editing. No data, release, main or other PR modifications.
