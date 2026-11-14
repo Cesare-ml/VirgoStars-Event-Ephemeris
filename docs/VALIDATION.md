@@ -1,5 +1,19 @@
 # Validation and quality gates
 
+## Validate real bounded-audit routing from the Rust gate orchestrator (2026-11-14, draft PR #5)
+
+Run after cloning the complete branch:
+
+```sh
+python -m unittest discover -s tools -p test_bounded_audit.py -v
+python -m unittest discover -s tools -p test_validate_bounded_integration.py -v
+python -m unittest discover -s tools -p test_validate_rust.py -v
+```
+
+The **new six-method integration suite** tests `validate_rust.run_gates` in its default mode without injecting the legacy `invoke` test seam. Five Cargo commands are mocked; both auditor routes are inspected, and two synthetic Python auditor processes are genuinely spawned to prove oversized stdout and a silent timeout stop before Rust can run. Python audit output is never interpreted as an astronomical record. This suite is additional to `test_bounded_audit.py` (eight helper methods) and existing `test_validate_rust.py` (17 orchestrator methods).
+
+**Executed in this agent session:** Python 3.13.5 eight original helper tests **8/8 PASS** against the exact tracked helper; six new integration tests **6/6 PASS**, but **only against an isolated local reconstruction of the relevant `run_gates` path**, not an unmodified full-repository checkout. New test file Git blob `b7e3f9202adf8fdae05f19a763f1220a763b8322` matches executed source byte-for-byte. Therefore full-repo integration, native Cargo/PyO3/wheel and owner-dataset parity are **not yet validated**. Do not treat this test pass as release acceptance.
+
 ## Fail-closed deadline for silent P0 auditors (2026-11-14, draft PR #5)
 
 The memory-bounded `tools/bounded_audit.py` runner now also limits **wall-clock time**: a silent Python or Rust audit subprocess is terminated after **900 seconds (15 minutes)** by default. The same deadline limits pipe-drain joins, avoiding an indefinite wait if inherited streams never reach EOF. Invalid `timeout_seconds` values (zero, negative, nonfinite, boolean or nonnumeric) are rejected before starting a child. These timeouts are integrity/availability protections, **not a guarantee that a subprocess process tree is killed**.
