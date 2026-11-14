@@ -1,5 +1,16 @@
 # Windows: build and test the first Python/Rust synod MVP
 
+## Owner archive SHA-256 must reach the Rust P0 audit before wheel build (2026-11-14)
+
+The local builder now forwards its optional `--archive` and `--sha256` arguments to **`tools/validate_rust.py` before `maturin build`**, not only to the installed-wheel verifier. With an authorized owner archive, the Rust validation gate therefore runs the independent Python complete-file auditor and the Rust `p0-verify` against the same trusted archive, comparing SHA-256, physical bytes, section counts, blocks and records. A failed audit blocks wheel creation and cannot leave a distributable wheel in `dist/`. With no owner archive, the normal Rust format/Clippy/test/release gates remain unchanged.
+
+```powershell
+# After Cargo.lock was regenerated/reviewed on a clean Cargo-equipped checkout:
+py -3 tools\build_python_mvp.py --archive C:\owner\events.p0 --sha256 <trusted-64-character-sha256> --synods-csv C:\owner\sinodi.csv
+```
+
+**Verified locally (2026-11-14):** 2/2 actual Python 3.13.5 regression tests against the byte-identical committed `tools/build_python_mvp.py` (Git blob `3dc240b1d1cf579d5cc02100414e4854f20056c4`), with mocked external commands: (1) both Rust and wheel validators receive the same canonical trusted digest and the CSV is passed only to the installed-wheel parity gate, and (2) an unsuccessful Rust owner-archive audit prevents wheel build and publication. Equivalent tests are committed in `tools/test_build_python_mvp.py` (16 build orchestration test methods total). **The 42 Python source cases, native Rust compilation and 51 installed-wheel tests have not been executed here**; the archive test uses a placeholder local file, not original scientific data. Do not merge or publish based only on mocked builder tests.
+
 **Status 2026-11-11: scaffold implemented on draft PR #5; not yet compiled, pip-installed or tested end-to-end with Rust.** Do not call this a released package. No GitHub Actions, dataset redistribution or production replacement.
 
 ## Native unittest acceptance cannot silently stop early (2026-11-12)
