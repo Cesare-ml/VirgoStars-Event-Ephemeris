@@ -202,7 +202,7 @@ class VirgoStarsEvents:
             # Verify the recorded model without inferring a scientifically
             # complete cycle: preserve NULL vs [] and future source phases.
             extras = validate_recorded_thresholds(record, current_us, body)
-            validate_native_stage(phase, body, current_us, extras)
+            validate_native_stage(phase, body, current_us, extras, requested_us)
 
             record["status"] = (
                 "recorded" if record["cycle_start_us"] is not None

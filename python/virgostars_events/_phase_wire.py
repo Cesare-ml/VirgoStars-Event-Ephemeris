@@ -75,6 +75,7 @@ def validate_native_stage(
     body: str,
     anchor_us: int | None,
     thresholds: list[int] | None,
+    requested_at_us: int,
 ) -> None:
     """Reject inconsistent Rust phase status/code pairs, without classifying.
 
@@ -118,5 +119,15 @@ def validate_native_stage(
         recorded_start = anchor_us if start_index == -1 else thresholds[start_index]
         if started_at_us != recorded_start:
             raise ValueError(f"native synod phase start disagrees with thresholds for {body}")
+        # A native stage may only be current inside its own source-recorded
+        # [start, next_threshold) interval. Merely matching its start is
+        # insufficient: a stale D1/R2/R3 or CRESC1/CRESC2/CAL1 label could
+        # otherwise be accepted after the next recorded boundary. The
+        # *classification* remains in Rust; this is a fail-closed wire check.
+        if (
+            start_index < 2
+            and requested_at_us >= thresholds[start_index + 1]
+        ):
+            raise ValueError(f"native synod phase code expired at a source threshold for {body}")
     elif status not in _UNKNOWN_STAGE_STATUSES or code is not None or started_at_us is not None:
         raise ValueError(f"native synod phase status invalid for {body}")

@@ -271,6 +271,8 @@ class PythonApiTests(unittest.TestCase):
         at_stage_start = fake_response()
         at_stage_start["synods"]["Mercury"]["phase"]["code"] = "D1"
         at_stage_start["synods"]["Mercury"]["phase"]["started_at_us"] = -300
+        # D1 is current only when the first recorded extra is still ahead.
+        at_stage_start["synods"]["Mercury"]["phase_thresholds_us"] = [100, 200, 300]
         accepted = VirgoStarsEvents(DummyNative(at_stage_start)).get_synods_at(
             "1970-01-01T00:00:00Z"
         )
@@ -727,6 +729,47 @@ class PythonApiTests(unittest.TestCase):
                     VirgoStarsEvents(DummyNative(broken)).get_synods_at(
                         "1970-01-01T00:00:00Z"
                     )
+
+
+        # A stage whose starting timestamp matches its source boundary can
+        # nevertheless be stale once the next threshold has passed.
+        # Reject these mismatched native labels rather than reporting them
+        # as the requested instant's active recorded phase.
+        for body, code, begin in (
+            ("Mercury", "D1", -300),
+            ("Mercury", "R2", -200),
+            ("Moon", "CRESC1", -2000),
+            ("Moon", "CRESC2", -1500),
+            ("Moon", "CAL1", -1000),
+        ):
+            with self.subTest(stale_body=body, stale_code=code):
+                stale = fake_response()
+                record = stale["synods"][body]
+                if body == "Moon":
+                    record["phase_thresholds_us"] = [-1500, -1000, -500]
+                    stale["new_moon"] = record
+                record["phase"] = {
+                    "code": code,
+                    "started_at_us": begin,
+                    "status": "derived_from_recorded_thresholds",
+                }
+                with self.assertRaisesRegex(ValueError, "native synod phase code expired"):
+                    VirgoStarsEvents(DummyNative(stale)).get_synods_at(
+                        "1970-01-01T00:00:00Z"
+                    )
+
+        # A phase transition is inclusive at its recorded boundary:
+        # Mercury R2 begins at -200 microseconds, and is current there.
+        at_recorded_transition = fake_response()
+        at_recorded_transition["requested_at_us"] = -200
+        at_recorded_transition["synods"]["Mercury"]["phase"] = {
+            "code": "R2", "started_at_us": -200,
+            "status": "derived_from_recorded_thresholds",
+        }
+        equal_boundary = VirgoStarsEvents(DummyNative(at_recorded_transition)).get_synods_at(
+            "1969-12-31T23:59:59.999800Z"
+        )
+        self.assertEqual(equal_boundary["synods"]["Mercury"]["phase"]["code"], "R2")
 
     def test_missing_previous_moon_anchor_returns_none_alias(self):
         raw = fake_response()
