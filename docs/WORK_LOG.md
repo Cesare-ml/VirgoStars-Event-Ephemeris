@@ -1,3 +1,11 @@
+## 2026-11-14 — Silent auditor deadline and pipe-read deadline (draft PR #5)
+
+- **Issue:** Memory budgets alone do not stop an auditor that hangs silently, and inherited stdout/stderr handles could keep pipe-reader threads waiting after the direct subprocess exits.
+- **Small patch:** `tools/bounded_audit.py` now enforces a shared monotonic wall-time deadline of **900 seconds by default** on subprocess wait and pipe-reader joins; a timed-out direct child is killed and the integrity gate fails closed. Reject invalid/nonfinite/boolean deadlines before execution. Limits on stdout (65,536 bytes), stderr (8,192 bytes), JSON parsing, SHA-256, P0 format and source-data remain unchanged. The caller `validate_rust.py` already uses this helper for its real Python/Rust auditors; no Rust or dataset edits.
+- **Tests actually executed:** exact locally edited GitHub-equivalent files under Python **3.13.5**: `python -m unittest -v test_bounded_audit` **8/8 PASS** (six retained real-process regressions plus two synthetic timeout/invalid-timeout methods); `python -m py_compile bounded_audit.py test_bounded_audit.py` **PASS**. GitHub returned expected identical Git object hashes: runner `7835ade64f2e30d17fabf50a976bc82136d531a7`, tests `9b6363a7f8993d22154d8a54d6079e3f5067006e`.
+- **Not run:** full committed `tools/test_validate_rust.py`, Cargo fmt/Clippy/tests/release, source-only 42 / installed-wheel 51 gates, real 380,844-event owner archive CSV/P0 parity and native Windows run. A parent process timeout does not promise descendant process-tree cleanup; no merge, new PR, release, production change or GitHub Actions.
+- **Next:** execute complete independent Python/Rust audit on a clean Rust-equipped checkout, then native Python wheel gate and original event parity.
+
 ## 2026-11-14 — Bound independent P0 auditor subprocess memory BEFORE JSON parsing (draft PR #5)
 
 - **Defect:** the prior fail-closed JSON parser enforced 65,536 UTF-8 bytes only after `subprocess.run(capture_output=True)` accumulated the child stdout and stderr without limits; a malfunctioning auditor could consume excessive memory before the integrity comparison.
