@@ -1,5 +1,15 @@
 # Validation and quality gates
 
+## Fail-closed deadline for silent P0 auditors (2026-11-14, draft PR #5)
+
+The memory-bounded `tools/bounded_audit.py` runner now also limits **wall-clock time**: a silent Python or Rust audit subprocess is terminated after **900 seconds (15 minutes)** by default. The same deadline limits pipe-drain joins, avoiding an indefinite wait if inherited streams never reach EOF. Invalid `timeout_seconds` values (zero, negative, nonfinite, boolean or nonnumeric) are rejected before starting a child. These timeouts are integrity/availability protections, **not a guarantee that a subprocess process tree is killed**.
+
+Synthetic test gate:
+```sh
+python -m unittest discover -s tools -p test_bounded_audit.py -v
+```
+**Executed locally:** Python 3.13.5, **8/8 PASS** (previous six real child-process cases plus two additional deadline/invalid-argument methods). `python -m py_compile bounded_audit.py test_bounded_audit.py` PASS. Readback Git blob SHA-1 matches the byte-identical executed files: `7835ade64f2e30d17fabf50a976bc82136d531a7` and `9b6363a7f8993d22154d8a54d6079e3f5067006e`. The full mock `test_validate_rust.py`, Cargo, 42 source/51 native Python tests, original owner-data parity and Windows validation **were not executed**; do not infer MVP acceptance.
+
 ## Bounded stdout/stderr for independent P0 audit subprocesses (2026-11-14, draft PR #5)
 
 The previous 64-KiB audit JSON parser ceiling ran **after** `subprocess.run(capture_output=True)`, which could first accumulate unlimited stdout/stderr. The default real subprocess path in `tools/validate_rust.py` now calls `tools/bounded_audit.py` for **both** independent Python and Rust archive auditors. It concurrently reads raw bytes from both pipes, retains at most **65,536 stdout bytes and 8,192 stderr bytes**, terminates the child on overrun, rejects non-UTF-8 stdout and preserves nonzero exit codes with bounded diagnostics. Mocked command-injection behavior for existing orchestrator tests remains available; the five Cargo checks and audit JSON schema/identity/parity checks are unchanged.
