@@ -193,6 +193,18 @@ class CsvP0ParityTest(unittest.TestCase):
         with path.open('w',encoding='utf-8',newline='') as f:csv.writer(f).writerows(data)
         with self.assertRaisesRegex(ValueError,'scientific field mismatch'):verify(self.folder,self.archive)
 
+    def test_literal_json_null_cannot_alias_sql_null(self):
+        # SQL NULL is the blank source CSV field. JSON null is not its alias.
+        path = self.folder / 'sinodi.csv'
+        with path.open(encoding='utf-8', newline='') as source:
+            data = list(csv.reader(source))
+        self.assertEqual(data[1][3], '')
+        data[1][3] = 'null'
+        with path.open('w', encoding='utf-8', newline='') as destination:
+            csv.writer(destination).writerows(data)
+        with self.assertRaisesRegex(ValueError, 'JSON null is not SQL NULL'):
+            verify(self.folder, self.archive)
+
     def test_missing_csv_row_is_rejected(self):
         path=self.folder/'sinodi.csv'
         with path.open(encoding='utf-8',newline='') as source:
