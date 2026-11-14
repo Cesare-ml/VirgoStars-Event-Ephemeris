@@ -74,21 +74,25 @@ def decode_native_json(payload: str) -> Any:
 
 
 def same_json_value(left: Any, right: Any) -> bool:
-    """Compare native JSON structures without Python's bool/int/float coercion.
+    """Compare native JSON values exactly, without recursive Python calls.
 
-    In particular, True == 1 and 1 == 1.0 in Python, although Rust JSON
-    emits those as distinct values. Used to audit the Moon alias before it
-    is replaced by the canonical Moon record in the public Python response.
+    Python's equality treats True == 1 and 1 == 1.0 as equal, although Rust
+    emits different JSON scalar types. A stack avoids RecursionError on
+    valid deeply nested native responses before the Moon alias is checked.
     """
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        return (
-            left.keys() == right.keys()
-            and all(same_json_value(value, right[key]) for key, value in left.items())
-        )
-    if isinstance(left, list):
-        return len(left) == len(right) and all(
-            same_json_value(item, other) for item, other in zip(left, right)
-        )
-    return left == right
+    pending = [(left, right)]
+    while pending:
+        current, expected = pending.pop()
+        if type(current) is not type(expected):
+            return False
+        if isinstance(current, dict):
+            if current.keys() != expected.keys():
+                return False
+            pending.extend((value, expected[key]) for key, value in current.items())
+        elif isinstance(current, list):
+            if len(current) != len(expected):
+                return False
+            pending.extend(zip(current, expected))
+        elif current != expected:
+            return False
+    return True
