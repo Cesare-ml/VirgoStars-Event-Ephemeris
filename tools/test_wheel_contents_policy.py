@@ -152,6 +152,28 @@ class WheelContentsPolicyTests(unittest.TestCase):
                     self.wheel(Path(folder), [(member, b"valid")])
                 ))
 
+    def test_regular_file_cannot_double_as_implicit_directory(self):
+        # An archive can contain file 'notes' and nested 'notes/details.py'
+        # in either order; unique ZIP member names do not make that safe.
+        for left, right in (
+            ("virgostars_events/notes", "virgostars_events/notes/details.py"),
+            ("virgostars_events/notes/details.py", "virgostars_events/notes"),
+            ("virgostars_events/Notes", "virgostars_events/notes/details.py"),
+            ("virgostars_events/notes/details.py", "virgostars_events/NOTES"),
+        ):
+            with self.subTest(first=left, second=right), tempfile.TemporaryDirectory() as folder:
+                wheel = self.wheel(Path(folder), [(left, b"one"), (right, b"two")])
+                with self.assertRaisesRegex(ValueError, "file/directory path collision"):
+                    inspect_wheel_contents(wheel)
+
+        # Explicit directories and their own contained files are valid.
+        with tempfile.TemporaryDirectory() as folder:
+            wheel = self.wheel(Path(folder), [
+                ("virgostars_events/docs/", b""),
+                ("virgostars_events/docs/guide.txt", b"guide"),
+            ])
+            self.assertIsNone(inspect_wheel_contents(wheel))
+
     def test_symlink_member_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             result = self.wheel(Path(folder))

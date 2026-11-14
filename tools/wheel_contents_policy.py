@@ -58,6 +58,11 @@ def inspect_wheel_contents(wheel: Path) -> None:
             # Windows wheels must also be safe on case-insensitive filesystems:
             # distinct ZIP names can otherwise extract over the same path.
             portable_paths: set[str] = set()
+            # Track both explicit and implicit directories. A ZIP may contain
+            # a regular file used as a parent directory of a later member,
+            # which cannot be extracted consistently on any target OS.
+            portable_files: set[str] = set()
+            portable_directories: set[str] = set()
             total = 0
             infos = archive.infolist()
             if len(infos) > MAX_MEMBERS:
@@ -84,7 +89,21 @@ def inspect_wheel_contents(wheel: Path) -> None:
                     raise ValueError(
                         f"case-insensitive wheel path collision: {name!r}"
                     )
+                # A filename can be unique yet conflict with an implicit
+                # directory created for another member. Check both orders
+                # and use the same Windows case-folding as duplicate names.
+                components = portable.split("/")
+                parents = {"/".join(components[:i]) for i in range(1, len(components))}
+                if parents & portable_files or (
+                    not info.is_dir() and portable in portable_directories
+                ):
+                    raise ValueError(f"wheel file/directory path collision: {name!r}")
                 portable_paths.add(portable)
+                portable_directories.update(parents)
+                if info.is_dir():
+                    portable_directories.add(portable)
+                else:
+                    portable_files.add(portable)
                 if (info.external_attr >> 16) & 0o170000 == stat.S_IFLNK:
                     raise ValueError(f"wheel contains a symbolic link: {name!r}")
                 if info.file_size > MAX_UNCOMPRESSED_MEMBER:

@@ -153,3 +153,6 @@ M0 input preflight (PR #5, 2026-11-11): reject invalid SHA-256 before native imp
 
 
 **M0.2 prebuilt wheel identity preflight (2026-11-14, draft PR #5):** match distribution/version across wheel filename, `.dist-info` and unique METADATA headers before pip; enforce Wheel-Version 1.0 and a bounded metadata read. 9 standalone synthetic Python tests actually passed, existing verifier fixture updated. Not a Rust build, installed native wheel test, or owner-data license release approval.
+
+
+**M0.2 wheel file-vs-directory collision preflight (2026-11-14, draft PR #5):** detect case-insensitive, order-independent ZIP member conflicts between regular files and explicit/implicit directories prior to pip. 25/25 exact local ZIP policy + wheel identity test methods PASS; Cargo/native wheel gates and owner-data parity pending.
