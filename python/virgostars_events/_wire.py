@@ -25,7 +25,6 @@ def _reject_nonfinite(token: str) -> None:
     raise ValueError(f"native synod response has non-finite JSON value: {token}")
 
 
-
 def _finite_json_float(token: str) -> float:
     # A valid JSON numeric literal such as 1e400 also overflows to inf under
     # Python's float parser; parse_constant never sees these tokens.
