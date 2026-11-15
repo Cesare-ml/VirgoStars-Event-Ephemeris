@@ -41,6 +41,12 @@ As of 2026-11-10, the count baseline is 70,554 + 266,516 + 43,774 = 380,844 repo
 
 For a shared synthetic golden fixture, compare exact serialized results and error categories from Rust, JS/TS WASM and Python PyO3. Include UTC and Europe/Rome on both DST transitions, out-of-coverage dates, month containing multiple new moons, negative timestamps, missing phases and invalid input. Test browser and Node loading separately, and Python wheels on supported target platforms.
 
+### Calendar-date failure gate — entire skipped IANA day
+
+Future Rust `onDate(localDate, timeZone)` and thin bindings must be compared against [`test/fixtures/skipped-local-day.json`](../test/fixtures/skipped-local-day.json) using `node --test test/skipped-local-day.test.mjs` as an **offline golden/schema test**. The fixture covers `Pacific/Apia` 2011-12-29 and 2011-12-31 as adjacent continuous UTC half-open intervals, with the completely nonexistent 2011-12-30 yielding the proposed **typed `NonexistentLocalDate` error**, never an empty result or a query shifted into the next date. The Node test checks the contract only; a later independent Rust engine + timezone-provider integration test must prove actual conversion, failure propagation and cross-language parity against a recorded IANA tzdb version.
+
+Goldens checked independently on 2026-11-15 with Python 3 `zoneinfo` and system IANA tzdb **2025b**. This evidence does **not** establish a shipped timezone service or shipped event reader. Other DST boundaries are covered by a separate proposed Europe/Rome fixture in PR #22; reconciliation of both independent test fixtures is required once that PR lands.
+
 ## Gate E: backend behavior parity
 
 Use the [compatibility matrix](BACKEND_COMPATIBILITY.md), comparing at least:
