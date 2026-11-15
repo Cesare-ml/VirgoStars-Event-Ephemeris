@@ -1,5 +1,14 @@
 # Agent work log and handoffs
 
+## 2026-11-15 — Entirely skipped local calendar day: proposed API error contract
+
+- **Issue / branch:** [#21](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/21); `agent/chat-45a0e580/21-skipped-local-day-contract`, agent `chat-45a0e580`. Draft PR will remain unmerged.
+- **Observed fact:** Python 3 stdlib `zoneinfo` with system IANA tzdb **2025b** independently confirms that `Pacific/Apia` skipped `2011-12-30` entirely when its UTC offset shifted from −10 to +14 hours. Normal neighboring days have UTC ranges `[2011-12-29T10:00Z, 2011-12-30T10:00Z)` and `[2011-12-30T10:00Z, 2011-12-31T10:00Z)`; they join without overlap.
+- **Changes:** Explicit proposed `NonexistentLocalDate { localDate, timeZone }` error in `docs/API_CONTRACTS.md`, synthetic hand-reviewed JSON fixture `test/fixtures/skipped-local-day.json`, eight standard-library-only Node contract regressions `test/skipped-local-day.test.mjs`, validation gate in `docs/VALIDATION.md`. No timezone converter or event reader was implemented.
+- **Verification:** System Python `zoneinfo` conversion and round trips executed; system tzdb identified from `/usr/share/zoneinfo/tzdata.zi`. Node v22.16.0 is available; committed Node test status is recorded accurately in the PR, and a full-checkout integration/real timezone engine test remains pending.
+- **Risks / next:** Keep project implementation status *proposed*; reconcile with separate Europe/Rome contract PR #22 after it lands, run actual standard-library fixture tests and then cross-language Rust/WASM/Python boundary parity when implementations exist. No proprietary astronomical data, production integration, publication, release or merge.
+
+
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
 ## 2026-11-10 — repository initialization
