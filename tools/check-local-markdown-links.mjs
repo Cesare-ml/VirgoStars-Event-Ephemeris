@@ -78,20 +78,38 @@ function destinations(line) {
   return found;
 }
 
+// Strip CommonMark blockquote containers before recognizing code blocks.
+// Keep depth so a fenced block cannot swallow text after the quote ends.
+function stripBlockquoteMarkers(line) {
+  let content = line;
+  let depth = 0;
+  while (true) {
+    const marker = content.match(/^ {0,3}> ?/);
+    if (!marker) return {content, depth};
+    content = content.slice(marker[0].length);
+    depth++;
+  }
+}
+
 function targetsFromMarkdown(source) {
   const result = [];
   let fence = null;
   const lines = source.split(/\r?\n/);
   for (let index = 0; index < lines.length; index++) {
-    const line = lines[index];
-    const marker = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    const {content, depth} = stripBlockquoteMarkers(lines[index]);
+    // A quote's fenced block ends when its container depth changes.
+    if (fence && fence.depth !== depth) fence = null;
+    const marker = content.match(/^ {0,3}(`{3,}|~{3,})/);
     if (fence) {
-      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length &&
-          line.slice(marker[0].length).trim() === '') fence = null;
+      if (marker && marker[1][0] === fence.marker[0] &&
+          marker[1].length >= fence.marker.length &&
+          content.slice(marker[0].length).trim() === '') fence = null;
       continue;
     }
-    if (marker) { fence = marker[1]; continue; }
-    const withoutInlineCode = line.replace(/(`+)(.*?)\1/g, '');
+    // Indented code blocks are examples, not link-bearing prose.
+    if (/^(?: {4,}|\t)/.test(content)) continue;
+    if (marker) { fence = {marker: marker[1], depth}; continue; }
+    const withoutInlineCode = content.replace(/(`+)(.*?)\1/g, '');
     for (const target of destinations(withoutInlineCode))
       result.push({line: index + 1, target});
   }
