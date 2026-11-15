@@ -15,7 +15,7 @@ This is the shared state for agents. Add a dated brief entry **in each working d
 
 ## 2026-11-15 — P1 local-day UTC/DST golden fixtures (issue #20)
 
-- **Issue/branch:** [#20](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/20), `agent/chat-8f2d9c4a/20-dst-local-day-goldens`, base `main`; agent session `chat-8f2d9c4a`.
+- **Issue/PR/branch:** [#20](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/20), [PR #22](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/22), `agent/chat-8f2d9c4a/20-dst-local-day-goldens`, base `main`; agent session `chat-8f2d9c4a`.
 - **Scope:** `test/fixtures/local-day-utc-boundaries.json` (seven independently sourced UTC intervals), `test/local-day-utc-boundaries.test.mjs` (eight offline deterministic tests), and concise updates to the proposed API/validation contracts.
 - **Evidence:** Independently calculated each bound with Python 3 `zoneinfo` and the environment's system IANA timezone database: Europe/Rome spring-forward 2026-03-29 is 82,800 seconds; fall-back 2026-10-25 is 90,000 seconds. Source data are *calendar-time fixtures only*, not released astronomical events or a new timezone algorithm.
 - **Executed:** Node.js v22.16.0 local mirror: `node --check test/local-day-utc-boundaries.test.mjs` **PASS**; `node --test test/local-day-utc-boundaries.test.mjs` **8 passed, 0 failed**. Test logic and seven fixture records were copied into the GitHub branch via the GitHub connector. A full checkout command was **not** run; independent review remains required.
