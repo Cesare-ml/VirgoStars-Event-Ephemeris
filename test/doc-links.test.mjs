@@ -12,7 +12,7 @@ SPDX-License-Identifier: CPAL-1.0
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, mkdir, rm, writeFile} from 'node:fs/promises';
+import {mkdtemp, mkdir, rm, symlink, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -139,4 +139,83 @@ test('fenced quote does not swallow unquoted content when its container ends', a
   ].join('\n')}, async root => assert.deepEqual(await checkLocalMarkdownLinks(root), [
     {file: 'README.md', line: 3, target: 'missing.md', reason: 'target does not exist'},
   ]));
+});
+
+// Windows may require Developer Mode or a privilege for creating symlinks.
+async function supportedSymlink(t, target, path, type) {
+  try { await symlink(target, path, type); return true; }
+  catch (error) {
+    if (process.platform === 'win32' && ['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) {
+      t.skip(`symbolic links unavailable on this Windows host: ${error.code}`);
+      return false;
+    }
+    throw error;
+  }
+}
+
+test('rejects file symlink to existing outside target and CLI fails closed', async t => {
+  await fixture({'README.md': '[outside](docs/external.md)'}, async root => {
+    const external = await mkdtemp(join(tmpdir(), 'vseph-outside-'));
+    try {
+      await writeFile(join(external, 'secret.md'), 'outside');
+      await mkdir(join(root, 'docs'));
+      if (!await supportedSymlink(t, join(external, 'secret.md'), join(root, 'docs/external.md'), 'file')) return;
+      assert.deepEqual(await checkLocalMarkdownLinks(root), [
+        {file: 'README.md', line: 1, target: 'docs/external.md', reason: 'target outside repository'},
+      ]);
+      const cliResult = spawnSync(process.execPath, [cli], {cwd: root, encoding: 'utf8'});
+      assert.equal(cliResult.status, 1);
+      assert.match(cliResult.stderr, /target outside repository/);
+    } finally { await rm(external, {recursive: true, force: true}); }
+  });
+});
+
+test('rejects directory symlink escaping checkout, without walking it', async t => {
+  await fixture({'README.md': '[external](docs/escape/secret.md)', 'docs/inside.md': '# Inside'}, async root => {
+    const external = await mkdtemp(join(tmpdir(), 'vseph-outside-dir-'));
+    try {
+      await writeFile(join(external, 'secret.md'), 'outside');
+      if (!await supportedSymlink(t, external, join(root, 'docs/escape'), 'dir')) return;
+      assert.deepEqual(await checkLocalMarkdownLinks(root), [
+        {file: 'README.md', line: 1, target: 'docs/escape/secret.md', reason: 'target outside repository'},
+      ]);
+    } finally { await rm(external, {recursive: true, force: true}); }
+  });
+});
+
+test('allows file and directory symlinks resolving within checkout', async t => {
+  await fixture({
+    'README.md': '[file](docs/link.md) [dir](docs/alias/item.md)',
+    'docs/real.md': '# Valid',
+    'docs/sub/item.md': '# Nested valid',
+  }, async root => {
+    if (!await supportedSymlink(t, join(root, 'docs/real.md'), join(root, 'docs/link.md'), 'file')) return;
+    if (!await supportedSymlink(t, join(root, 'docs/sub'), join(root, 'docs/alias'), 'dir')) return;
+    assert.deepEqual(await checkLocalMarkdownLinks(root), []);
+  });
+});
+
+test('dangling and circular symlinks fail closed with deterministic reasons', async t => {
+  await fixture({'README.md': '[dangling](docs/missing-link.md)\n[loop](docs/cycle.md)', 'docs/actual.md': 'ok'}, async root => {
+    if (!await supportedSymlink(t, 'no-such-file.md', join(root, 'docs/missing-link.md'), 'file')) return;
+    if (!await supportedSymlink(t, 'cycle.md', join(root, 'docs/cycle.md'), 'file')) return;
+    assert.deepEqual(await checkLocalMarkdownLinks(root), [
+      {file: 'README.md', line: 1, target: 'docs/missing-link.md', reason: 'target does not exist'},
+      {file: 'README.md', line: 2, target: 'docs/cycle.md', reason: 'target cannot be resolved'},
+    ]);
+  });
+});
+
+test('rejects docs root directory symlink pointing outside checkout', async t => {
+  await fixture({'README.md': '# Root'}, async root => {
+    const external = await mkdtemp(join(tmpdir(), 'vseph-external-docs-'));
+    try {
+      await writeFile(join(external, 'untrusted.md'), '[bad](elsewhere.md)');
+      if (!await supportedSymlink(t, external, join(root, 'docs'), 'dir')) return;
+      await assert.rejects(checkLocalMarkdownLinks(root), /docs directory resolves outside repository/);
+      const result = spawnSync(process.execPath, [cli], {cwd: root, encoding: 'utf8'});
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /docs directory resolves outside repository/);
+    } finally { await rm(external, {recursive: true, force: true}); }
+  });
 });
