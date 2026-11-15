@@ -41,6 +41,8 @@ As of 2026-11-10, the count baseline is 70,554 + 266,516 + 43,774 = 380,844 repo
 
 For a shared synthetic golden fixture, compare exact serialized results and error categories from Rust, JS/TS WASM and Python PyO3. Include UTC and Europe/Rome on both DST transitions, out-of-coverage dates, month containing multiple new moons, negative timestamps, missing phases and invalid input. Test browser and Node loading separately, and Python wheels on supported target platforms.
 
+**Pre-implementation local-day acceptance oracle:** `node --test test/local-day-utc-boundaries.test.mjs` validates the independent UTC interval fixture for UTC and Europe/Rome on both 2026 DST transition days and adjacent days. Golden boundaries are hard-coded separately from fixture entries and checked for exact equality, half-open adjacency, positive durations and invalid fixture mutations. This validates **fixture integrity only**; after an IANA-zone `onDate` wrapper exists, add an integration test that compares **its actual output** to the oracle without reusing the algorithm under test. 2026 timezone law/tzdb data may change; keep provenance explicit.
+
 ## Gate E: backend behavior parity
 
 Use the [compatibility matrix](BACKEND_COMPATIBILITY.md), comparing at least:
