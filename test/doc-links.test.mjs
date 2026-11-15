@@ -98,3 +98,45 @@ test('success CLI output is deterministic and exits zero', async () => {
     assert.match(result.stdout, /Repository-local Markdown links: OK/);
   });
 });
+
+test('nested quoted fences ignore example links and preserve following source lines', async () => {
+  await fixture({
+    'README.md': [
+      '> ```md',
+      '> [ignored](missing-in-code.md)',
+      '> ```',
+      '> > ~~~markdown',
+      '> > [also ignored](another-missing.md)',
+      '> > ~~~',
+      '> [exists](docs/real.md)',
+      '[broken](after-quote.md)',
+    ].join('\n'),
+    'docs/real.md': 'Present.',
+  }, async root => assert.deepEqual(await checkLocalMarkdownLinks(root), [
+    {file: 'README.md', line: 8, target: 'after-quote.md', reason: 'target does not exist'},
+  ]));
+});
+
+test('ignores space- and tab-indented code including inside blockquotes', async () => {
+  await fixture({'README.md': [
+    '    [ignored](missing-spaces.md)',
+    '\t[ignored](missing-tab.md)',
+    '>     [ignored](missing-quoted-code.md)',
+    '> [real reference]: docs/actual.md',
+    '> [broken](missing-real.md)',
+  ].join('\n'), 'docs/actual.md': 'Present.'}, async root => {
+    assert.deepEqual(await checkLocalMarkdownLinks(root), [
+      {file: 'README.md', line: 5, target: 'missing-real.md', reason: 'target does not exist'},
+    ]);
+  });
+});
+
+test('fenced quote does not swallow unquoted content when its container ends', async () => {
+  await fixture({'README.md': [
+    '> ```md',
+    '> [example](never-check.md)',
+    '[outside](missing.md)',
+  ].join('\n')}, async root => assert.deepEqual(await checkLocalMarkdownLinks(root), [
+    {file: 'README.md', line: 3, target: 'missing.md', reason: 'target does not exist'},
+  ]));
+});
