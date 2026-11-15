@@ -23,6 +23,14 @@ This is the shared state for agents. Add a dated brief entry **in each working d
 - **Not run:** CLI across the complete repository checkout (outbound GitHub host unavailable in local container); no Rust, GitHub Actions or cross-language checks.
 - **Risks and next:** This is not a CommonMark AST/fragment validator. In a full checkout of draft PR #18, rerun both Node commands and fix any reported links before final review. No merge or deploy.
 
+### 2026-11-15 — reviewer-requested quoted/indented code regression fix
+
+- **Reviewer finding:** Independent PR #18 review at head `2718d0527e6e803fc63ffeb1445a6d8e8f25ea2d` reported `AGENT-REVIEW ... verdict=changes`: the existing scanner treats Markdown links in blockquoted fenced code and 4-space-indented code as real references.
+- **Change on the same agent-owned branch:** `stripBlockquoteMarkers` now normalizes `> ` containers before fence parsing, tracks fence-container depth, and skips 4+-space or tab-indented code lines while preserving real links and original file line numbers. No new dependencies or astronomical behavior. Three focused regressions added to `test/doc-links.test.mjs` (now **10 authored test cases**).
+- **Actually executed:** Node v22.16.0: `node --check /mnt/data/vseph_agent17/test/parser-regression-isolated.test.mjs` exited 0; `node --test /mnt/data/vseph_agent17/test/parser-regression-isolated.test.mjs` **6 passed / 0 failed**. This harness contains the updated core parser and destination-extraction functions copied from this branch, **not** the full repository tool, file traversal or committed test suite.
+- **Still not run for the revised head:** `node --test test/doc-links.test.mjs`, `node --check` on both entire committed files, and `node tools/check-local-markdown-links.mjs` over a complete checkout. Earlier 7/7 fixture test success predates this parser revision. Keep this distinction explicit and seek fresh independent review/verification; original reviewer verdict applies to the previous head only.
+- **Separate follow-up:** [issue #19](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/19) tracks symlink-escape hardening, which is intentionally not bundled in this small quoted-code regression fix. No data, production, workflow, release or merge changes.
+
 ## Template for future entries
 
 ### YYYY-MM-DD — <short task>
