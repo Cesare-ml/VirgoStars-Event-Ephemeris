@@ -1,6 +1,6 @@
 # Dataset authorship, provenance and publication gate
 
-**Status: no dataset has been exported or distributed by this repository.**
+**Status (2026-11-10):** the owner has explicitly requested publication of the three event families and the experimental compressed snapshot. See `../datasets/2026-11-10/README.md` and `DATASET_UPLOAD.md`. Public reuse licensing is still undecided. The branch and PR must actually contain the large data objects before claiming upload is completed.
 
 ## Author's statement
 
@@ -39,7 +39,7 @@ Do not log secrets, DB URLs, source subject identities, Telegram text or message
 
 ## Export and storage
 
-Export is development tooling, never part of the published runtime. Do not commit production data dumps or generated VSEPH files before explicit owner approval. Prefer separate release assets with signed checksums, plus small **synthetic** fixture datasets committed to the source tree.
+Export is development tooling, never part of the published runtime. The owner explicitly approved publishing the **scientific 2026-11-10 snapshot** (VSEPH-P0 and normalized CSV tables) on 2026-11-10. Do not commit raw exports with private/application fields, unpublished future snapshots, or unapproved third-party data. Prefer separate release assets with signed checksums, plus small **synthetic** fixture datasets committed to the source tree.
 
 Never claim “all astronomical history” or “full precision” without verified per-body temporal coverage, error estimates and known-gap manifest. Manifest must show **reported vs audited** metadata and clearly label pending fields.
 
@@ -52,4 +52,4 @@ Never claim “all astronomical history” or “full precision” without verif
 
 ## Release clearance
 
-A dataset may be released **only after** rights/license decision, source snapshot audit, coverage/gap manifest, parity tests, checksum validation, and maintainer approval. Until then published documentation must say **no dataset available**.
+A dataset may be released **only after** rights/license decision, source snapshot audit, coverage/gap manifest, parity tests, checksum validation, and maintainer approval. Until explicit data-license selection, published documentation must distinguish **repository availability** from broad reuse/redistribution rights. Publication of the owner-authorized 2026-11-10 snapshot does not remove the need for coverage validation or a versioned license decision.

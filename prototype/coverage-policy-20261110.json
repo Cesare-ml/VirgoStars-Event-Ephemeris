@@ -1,0 +1,29 @@
+{
+  "schema": "virgostars-reviewed-coverage/v0",
+  "verification": "human-reviewed-only",
+  "archive_sha256": "c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e",
+  "reviewed_windows": [],
+  "warnings": [
+    {
+      "family": "ingress",
+      "body": "Moon",
+      "start_utc": "2099-12-31 11:17:04+00",
+      "end_utc": "4836-11-22 09:01:42+00",
+      "reason": "observed long gap; review needed"
+    },
+    {
+      "family": "synod",
+      "body": "Moon",
+      "start_utc": "1918-12-03 15:18:52+00",
+      "end_utc": "1920-01-21 05:26:29+00",
+      "reason": "candidate unusually long interval"
+    },
+    {
+      "family": "synod",
+      "body": "Moon",
+      "start_utc": "2017-12-18 06:30:25+00",
+      "end_utc": "2019-01-06 01:28:11+00",
+      "reason": "candidate unusually long interval"
+    }
+  ]
+}

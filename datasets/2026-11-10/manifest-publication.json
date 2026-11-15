@@ -1,0 +1,69 @@
+{
+  "dataset_id": "virgostars-events-2026-11-10",
+  "dataset_license": "NOT_SELECTED",
+  "code_license": "CPAL-1.0",
+  "status": "GIT_OBJECTS_PRESENT_IN_DRAFT_PR_6; NOT_MERGED_TO_MAIN",
+  "owner_statement": "Dataset created from the owner's original algorithms (self-declared)",
+  "format": "VSEPH-P0 experimental; not VSEPH v1",
+  "record_counts": {
+    "sinodi": 70554,
+    "moto_pianeti": 266516,
+    "ingresso_segni": 43774
+  },
+  "files": {
+    "sinodi.csv": {
+      "rows": 70554,
+      "size": 7985997,
+      "sha256": "ff0f2b5ea64b8d3028b87d2eec3e136e7bf2b6e1ae08939c8ca1aa30707fa670"
+    },
+    "moto_pianeti.csv": {
+      "rows": 266516,
+      "size": 11663091,
+      "sha256": "6a6cb6caf4099c3bc9dc1f28f23058e25c0c5b1253f7253b139d187fbec530fd"
+    },
+    "ingresso_segni.csv": {
+      "rows": 43774,
+      "size": 1585011,
+      "sha256": "47a8ba35c82ad97a3da00eae698344d57938662e624067dfee3b432bd38a6569"
+    },
+    "yearly_counts.csv": {
+      "rows": 66839,
+      "size": 1398667,
+      "sha256": "9e4158573b9d4ece48da9e5e7f927697dc07bcbf60affaf31a7aa04f8b545f53"
+    },
+    "candidate_large_intervals.csv": {
+      "rows": 3,
+      "size": 466,
+      "sha256": "979fe95beb453498adb3d988b3dcd6c338c156df08e55a2c911d3ec6fd37bc1f"
+    },
+    "virgostars-events-20261110.vseph-p0": {
+      "rows": 380844,
+      "size": 4143385,
+      "sha256": "c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e"
+    }
+  },
+  "canonical_scientific_digests_sha256": {
+    "synod": "ace44a691ca2e485aa2e99a3d76a77ce1ff27459534e40e3b130c7353ddf19f5",
+    "motion": "d9d4c2b282017621b63dd804b707e4499ccaa1f815d743c81bb847eb4de03cd5",
+    "ingress": "445cb92e470b762cd9a3ee14342ff3b20b1593e631f4fdb05b3ccf8f9c9dde31"
+  },
+  "utc_policy": "sinodi TIMESTAMPTZ; ingress/motion naive timestamp assumed UTC pending confirmation",
+  "known_problem": "2099-4836 discontinuity of lunar sign ingress and Aries-only tail; do not infer continuous state",
+  "excluded_app_fields": {
+    "interpretazione_nonempty": 9,
+    "messaggio_id_nonempty": 332
+  },
+  "storage": {
+    "sinodi.csv": "3 raw Git blob chunks under sinodi.csv.parts/part-NNN",
+    "moto_pianeti.csv": "5 raw Git blob chunks under moto_pianeti.csv.parts/part-NNN",
+    "ingresso_segni.csv": "direct file",
+    "yearly_counts.csv": "direct file",
+    "candidate_large_intervals.csv": "direct file",
+    "virgostars-events-20261110.vseph-p0": "3 raw Git blob chunks under <filename>.parts/part-NNN"
+  },
+  "known_issues": [
+    "#7 lunar synod 1918-1920 and 2017-2019 large intervals",
+    "#8 lunar ingress 2099-4836 discontinuity",
+    "#9 separate dataset license pending maintainer decision"
+  ]
+}
