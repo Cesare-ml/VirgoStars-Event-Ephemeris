@@ -10,13 +10,20 @@ SPDX-License-Identifier: CPAL-1.0
 */
 // Modification record (2026-11-15): offline repository-local Markdown link checks.
 
-import {readdir, readFile, stat} from 'node:fs/promises';
+import {readdir, readFile, realpath, stat} from 'node:fs/promises';
 import {dirname, extname, relative, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 
-async function markdownFiles(root) {
+// Use the same containment rule for lexical paths and resolved symlink paths.
+function insideRoot(root, pathname) {
+  const candidate = relative(root, pathname);
+  return candidate !== '..' && !candidate.startsWith('..' + sep) &&
+    (!candidate || resolve(root, candidate) === pathname);
+}
+
+async function markdownFiles(root, canonicalRoot) {
   const result = [];
   const entries = await readdir(root, {withFileTypes: true});
   for (const entry of entries.sort((a, b) => compare(a.name, b.name))) {
@@ -24,7 +31,11 @@ async function markdownFiles(root) {
       result.push(resolve(root, entry.name));
   }
   const docs = resolve(root, 'docs');
+  // A root docs/ symlink must not make the walker leave the checkout.
   try {
+    const realDocs = await realpath(docs);
+    if (!insideRoot(canonicalRoot, realDocs))
+      throw new Error('docs directory resolves outside repository');
     if (!(await stat(docs)).isDirectory()) return result;
   } catch (error) {
     if (error.code === 'ENOENT') return result;
@@ -126,9 +137,7 @@ function localPath(root, sourceFile, destination) {
   try { decoded = decodeURIComponent(withoutSuffix); }
   catch { return {error: 'invalid percent encoding'}; }
   const full = resolve(dirname(sourceFile), decoded);
-  const relativePath = relative(root, full);
-  if (relativePath === '..' || relativePath.startsWith('..' + sep) ||
-      (relativePath && resolve(root, relativePath) !== full))
+  if (!insideRoot(root, full))
     return {error: 'target outside repository'};
   return {path: full};
 }
@@ -136,18 +145,24 @@ function localPath(root, sourceFile, destination) {
 /** Deterministic, network-free result; caller decides how to report failures. */
 export async function checkLocalMarkdownLinks(repoRoot) {
   const root = resolve(repoRoot);
+  const canonicalRoot = await realpath(root);
   const errors = [];
-  for (const file of await markdownFiles(root)) {
+  for (const file of await markdownFiles(root, canonicalRoot)) {
     const text = await readFile(file, 'utf8');
     for (const {line, target} of targetsFromMarkdown(text)) {
       const local = localPath(root, file, target);
       if (!local) continue;
       let reason = local.error;
       if (!reason) {
-        try { await stat(local.path); }
-        catch (error) {
-          if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
-          reason = 'target does not exist';
+        try {
+          const resolvedTarget = await realpath(local.path);
+          if (!insideRoot(canonicalRoot, resolvedTarget))
+            reason = 'target outside repository';
+        } catch (error) {
+          if (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+            reason = 'target does not exist';
+          else if (error.code === 'ELOOP') reason = 'target cannot be resolved';
+          else throw error;
         }
       }
       if (reason) errors.push({file: relative(root, file).split(sep).join('/'), line, target, reason});
