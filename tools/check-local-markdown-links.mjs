@@ -31,6 +31,9 @@ async function markdownFiles(root, canonicalRoot) {
       result.push(resolve(root, entry.name));
   }
   const docs = resolve(root, 'docs');
+  // A missing docs/ directory is optional; a dangling symlink is not.
+  const docsEntry = entries.find(entry => entry.name === 'docs');
+  if (!docsEntry || (!docsEntry.isDirectory() && !docsEntry.isSymbolicLink())) return result;
   // A root docs/ symlink must not make the walker leave the checkout.
   try {
     const realDocs = await realpath(docs);
@@ -38,7 +41,8 @@ async function markdownFiles(root, canonicalRoot) {
       throw new Error('docs directory resolves outside repository');
     if (!(await stat(docs)).isDirectory()) return result;
   } catch (error) {
-    if (error.code === 'ENOENT') return result;
+    if (['ENOENT', 'ENOTDIR', 'ELOOP'].includes(error.code))
+      throw new Error('docs directory cannot be resolved');
     throw error;
   }
   async function walk(directory) {
