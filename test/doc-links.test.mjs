@@ -219,3 +219,13 @@ test('rejects docs root directory symlink pointing outside checkout', async t =>
     } finally { await rm(external, {recursive: true, force: true}); }
   });
 });
+
+test('fails closed on a dangling docs root rather than silently skipping it', async t => {
+  await fixture({'README.md': '# No target'}, async root => {
+    if (!await supportedSymlink(t, 'missing-docs', join(root, 'docs'), 'dir')) return;
+    await assert.rejects(checkLocalMarkdownLinks(root), /docs directory cannot be resolved/);
+    const result = spawnSync(process.execPath, [cli], {cwd: root, encoding: 'utf8'});
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /docs directory cannot be resolved/);
+  });
+});
