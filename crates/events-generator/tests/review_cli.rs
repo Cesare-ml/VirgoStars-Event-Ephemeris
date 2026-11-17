@@ -178,6 +178,51 @@ fn generate_motion_stations(archive: &Path, provider: &Path) -> serde_json::Valu
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+fn generate_hidden_pair(archive: &Path, provider: &Path, family: &str) -> serde_json::Value {
+    let flag = if family == "motions" {
+        "MOCK_DOUBLE_STATION"
+    } else {
+        "MOCK_DOUBLE_INGRESS"
+    };
+    let output = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args([
+            "--mode",
+            "calculate",
+            "--archive",
+            archive.to_str().unwrap(),
+            "--sha256",
+            SHA,
+            "--family",
+            family,
+            "--body",
+            "Mars",
+            "--start-us",
+            "0",
+            "--end-us",
+            &DAY.to_string(),
+            "--threshold-us",
+            "1000000000",
+            "--step-us",
+            &DAY.to_string(),
+            "--precision-us",
+            "1000000",
+            "--provider-program",
+            provider.to_str().unwrap(),
+        ])
+        .env(flag, "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stage: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(stage["candidates"].as_array().unwrap().is_empty());
+    assert!(!stage["sparse_spans"].as_array().unwrap().is_empty());
+    stage
+}
+
 fn review(archive: &Path, stage: &serde_json::Value, digest: &str) -> Output {
     review_with_reference(archive, stage, digest, None, None, None)
 }
@@ -189,6 +234,20 @@ fn review_with_reference(
     provider: Option<&Path>,
     name: Option<&str>,
     offset: Option<&str>,
+) -> Output {
+    review_with_rescan(archive, stage, digest, provider, name, offset, None, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn review_with_rescan(
+    archive: &Path,
+    stage: &serde_json::Value,
+    digest: &str,
+    provider: Option<&Path>,
+    name: Option<&str>,
+    offset: Option<&str>,
+    rescan_step: Option<&str>,
+    hidden_pair_flag: Option<&str>,
 ) -> Output {
     let staging = tempfile::NamedTempFile::new().unwrap();
     fs::write(staging.path(), serde_json::to_vec(stage).unwrap()).unwrap();
@@ -204,11 +263,17 @@ fn review_with_reference(
     if let Some(provider) = provider {
         command.args(["--reference-provider-program", provider.to_str().unwrap()]);
     }
+    if let Some(rescan_step) = rescan_step {
+        command.args(["--reference-rescan-step-us", rescan_step]);
+    }
     if let Some(name) = name {
         command.env("MOCK_PROVIDER_NAME", name);
     }
     if let Some(offset) = offset {
         command.env("MOCK_LONGITUDE_OFFSET", offset);
+    }
+    if let Some(hidden_pair_flag) = hidden_pair_flag {
+        command.env(hidden_pair_flag, "1");
     }
     command.output().unwrap()
 }
@@ -556,6 +621,164 @@ fn independent_numeric_crossing_check_accepts_matching_synthetic_ingress() {
         false
     );
     assert_eq!(report["safe_to_import"], false);
+}
+
+#[test]
+fn second_provider_full_span_rescan_matches_ingresses_and_lunar_phases() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    for (stage, step, expected) in [
+        (generate(&archive, Some(&mock)), DAY / 2, 1),
+        (generate_lunar(&archive, &mock), DAY / 8, 5),
+    ] {
+        let reviewed = review_with_rescan(
+            &archive,
+            &stage,
+            SHA,
+            Some(&mock),
+            Some("synthetic-reference"),
+            None,
+            Some(&step.to_string()),
+            None,
+        );
+        assert!(
+            reviewed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&reviewed.stderr)
+        );
+        let report: serde_json::Value = serde_json::from_slice(&reviewed.stdout).unwrap();
+        assert_eq!(report["reference_rescan_performed"], true);
+        assert_eq!(report["reference_rescan_correspondence_consistent"], true);
+        assert_eq!(report["reference_rescan_step_us"], step);
+        assert_eq!(report["reference_rescan_candidates_matched"], expected);
+        assert!(report["reference_rescan_grid_steps"].as_i64().unwrap() > 0);
+        assert_eq!(report["safe_to_import"], false);
+        assert_eq!(report["coverage_certified"], false);
+        assert_eq!(report["astronomical_accuracy_verified"], false);
+    }
+}
+
+#[test]
+fn full_span_rescan_finds_hidden_station_and_ingress_pairs_in_empty_staging() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    for (family, flag) in [
+        ("motions", "MOCK_DOUBLE_STATION"),
+        ("ingresses", "MOCK_DOUBLE_INGRESS"),
+    ] {
+        let stage = generate_hidden_pair(&archive, &mock, family);
+        let failed = review_with_rescan(
+            &archive,
+            &stage,
+            SHA,
+            Some(&mock),
+            Some("synthetic-reference"),
+            None,
+            Some(&(DAY / 8).to_string()),
+            Some(flag),
+        );
+        assert!(!failed.status.success());
+        assert!(failed.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&failed.stderr)
+            .contains("reference full-span rescan found 2 candidates, staging has 0"));
+    }
+}
+
+#[test]
+fn full_span_rescan_detects_omitted_brackets_in_otherwise_valid_staging() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let mut stage = generate(&archive, Some(&mock));
+    stage["candidates"] = serde_json::json!([]);
+    // An empty candidate list is structurally allowed: only the independent
+    // per-span rescan can detect the missing event.
+    assert!(review(&archive, &stage, SHA).status.success());
+    let failed = review_with_rescan(
+        &archive,
+        &stage,
+        SHA,
+        Some(&mock),
+        Some("synthetic-reference"),
+        None,
+        Some(&(DAY / 2).to_string()),
+        None,
+    );
+    assert!(!failed.status.success());
+    assert!(failed.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&failed.stderr)
+        .contains("reference full-span rescan found 1 candidates, staging has 0"));
+}
+
+#[test]
+fn full_span_rescan_can_check_empty_intervals_without_inventing_events() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let stage = generate_hidden_pair(&archive, &mock, "motions");
+    let checked = review_with_rescan(
+        &archive,
+        &stage,
+        SHA,
+        Some(&mock),
+        Some("synthetic-reference"),
+        None,
+        Some(&(DAY / 8).to_string()),
+        None,
+    );
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&checked.stdout).unwrap();
+    assert_eq!(report["reference_rescan_candidates_matched"], 0);
+    assert_eq!(report["reference_rescan_performed"], true);
+    assert_eq!(report["coverage_certified"], false);
+}
+
+#[test]
+fn full_span_rescan_limits_budget_and_rejects_unsupported_arguments() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let stage = generate(&archive, Some(&mock));
+    for step in ["1", "0", "-1", "invalid", &DAY.to_string()] {
+        let failed = review_with_rescan(
+            &archive,
+            &stage,
+            SHA,
+            Some(&mock),
+            Some("synthetic-reference"),
+            None,
+            Some(step),
+            None,
+        );
+        assert!(!failed.status.success());
+        assert!(failed.stdout.is_empty());
+    }
+    let no_provider = review_with_rescan(
+        &archive,
+        &stage,
+        SHA,
+        None,
+        None,
+        None,
+        Some(&(DAY / 2).to_string()),
+        None,
+    );
+    assert!(!no_provider.status.success());
+    assert!(no_provider.stdout.is_empty());
+    let planned = generate(&archive, None);
+    let plan_rescan = review_with_rescan(
+        &archive,
+        &planned,
+        SHA,
+        Some(&mock),
+        Some("synthetic-reference"),
+        None,
+        Some(&(DAY / 2).to_string()),
+        None,
+    );
+    assert!(!plan_rescan.status.success());
+    assert!(plan_rescan.stdout.is_empty());
 }
 
 #[test]

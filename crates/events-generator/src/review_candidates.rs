@@ -17,14 +17,18 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use virgostars_event_ephemeris::{BodyId, EventFamily, TimestampMicros, VirgoStarsEventEphemeris};
 use virgostars_events_generator::gaps::detect_sparse_spans;
+use virgostars_events_generator::lunar::lunar_phase_candidates;
 use virgostars_events_generator::provider_process::{ProcessLongitudeProvider, ProviderIdentity};
-use virgostars_events_generator::{LongitudeProvider, LongitudeSample};
+use virgostars_events_generator::{
+    ingress_candidates, station_candidates, LongitudeProvider, LongitudeSample, SearchWindow,
+};
 
 const MAX_STAGING_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_CANDIDATES: usize = 100_000;
 const MAX_REFERENCE_CANDIDATES: usize = 10_000;
+const MAX_REFERENCE_RESCAN_STEPS: i128 = 100_000;
 const MAX_REFERENCE_BYTES: u64 = 16 * 1024 * 1024;
-const USAGE: &str = "Usage: vseph-review-candidates --archive P0 --sha256 INDEPENDENT_TRUSTED_DIGEST --staging GENERATED_JSON [--reference-provider-program EXEC] [--reference-events JSON --reference-events-sha256 TRUSTED_DIGEST --reference-tolerance-us I64]\nRead-only: authenticates source/structural provenance. Optional reference provider or SHA-bound event timestamps check candidate crossings; neither mode certifies astronomical accuracy or coverage.";
+const USAGE: &str = "Usage: vseph-review-candidates --archive P0 --sha256 INDEPENDENT_TRUSTED_DIGEST --staging GENERATED_JSON [--reference-provider-program EXEC --reference-rescan-step-us POSITIVE_I64] [--reference-events JSON --reference-events-sha256 TRUSTED_DIGEST --reference-tolerance-us I64]\nRead-only: authenticates source/structural provenance. Optional second-provider full-span finer rescan and SHA-bound reference timestamps check candidates; none certifies astronomical accuracy or coverage.";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -174,6 +178,7 @@ struct ReviewOptions {
     digest: String,
     staging: PathBuf,
     reference_provider: Option<PathBuf>,
+    reference_rescan_step_us: Option<i64>,
     reference_events: Option<PathBuf>,
     reference_events_sha256: Option<String>,
     reference_tolerance_us: Option<i64>,
@@ -184,6 +189,7 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<ReviewOptions, Stri
     let mut sha256 = None;
     let mut staging = None;
     let mut reference_provider = None;
+    let mut reference_rescan_step_us = None;
     let mut reference_events = None;
     let mut reference_events_sha256 = None;
     let mut reference_tolerance_us = None;
@@ -195,6 +201,7 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<ReviewOptions, Stri
             "--sha256" => &mut sha256,
             "--staging" => &mut staging,
             "--reference-provider-program" => &mut reference_provider,
+            "--reference-rescan-step-us" => &mut reference_rescan_step_us,
             "--reference-events" => &mut reference_events,
             "--reference-events-sha256" => &mut reference_events_sha256,
             "--reference-tolerance-us" => &mut reference_tolerance_us,
@@ -219,11 +226,26 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<ReviewOptions, Stri
     if reference_tolerance_us.is_some_and(|value| value < 0) {
         return Err("reference tolerance must be nonnegative".into());
     }
+    let reference_rescan_step_us = reference_rescan_step_us
+        .map(|value| {
+            value
+                .parse::<i64>()
+                .map_err(|_| "invalid reference rescan step".to_string())
+        })
+        .transpose()?;
+    if reference_rescan_step_us.is_some_and(|value| value <= 0)
+        || (reference_rescan_step_us.is_some() && reference_provider.is_none())
+    {
+        return Err(
+            "reference rescan needs a positive step and --reference-provider-program".into(),
+        );
+    }
     Ok(ReviewOptions {
         archive: PathBuf::from(archive.ok_or("missing --archive")?),
         digest: sha256.ok_or("missing --sha256")?,
         staging: PathBuf::from(staging.ok_or("missing --staging")?),
         reference_provider: reference_provider.map(PathBuf::from),
+        reference_rescan_step_us,
         reference_events: reference_events.map(PathBuf::from),
         reference_events_sha256,
         reference_tolerance_us,
@@ -568,11 +590,171 @@ fn check_numerical_bracket<P: LongitudeProvider>(
     }
 }
 
+struct ReferenceReview {
+    identity: ProviderIdentity,
+    rescan: Option<ReferenceRescan>,
+}
+
+struct ReferenceRescan {
+    steps: i128,
+    matched: usize,
+}
+
+/// Bound every sparse span before launching an external process. This is a
+/// sample-grid budget, not a limit on bisection/refinement provider requests.
+fn reference_rescan_budget(stage: &Staging, step_us: i64) -> Result<i128, String> {
+    let settings = stage
+        .calculation_settings
+        .as_ref()
+        .ok_or("reference rescan requires calculated staging")?;
+    if stage.mode != "calculate"
+        || stage.sparse_spans.is_empty()
+        || step_us < settings.precision_us
+        || step_us >= settings.step_us
+    {
+        return Err("reference rescan requires nonempty calculated spans and a finer step >= bracket precision".into());
+    }
+    let mut total = 0_i128;
+    for span in &stage.sparse_spans {
+        let length = span.end_us as i128 - span.start_us as i128;
+        if length <= 0 {
+            return Err("reference rescan requires nonempty source spans".into());
+        }
+        total += (length + step_us as i128 - 1) / step_us as i128;
+        if total > MAX_REFERENCE_RESCAN_STEPS {
+            return Err(format!(
+                "reference rescan exceeds {MAX_REFERENCE_RESCAN_STEPS} total grid steps; split the window or increase the step"
+            ));
+        }
+    }
+    Ok(total)
+}
+
+/// A separate provider searches every authenticated sparse interval, even
+/// when the original calculation reported zero candidates. Sampled grids may
+/// still miss arbitrarily close pairs; this cannot certify completeness.
+fn rescan_reference_spans<P: LongitudeProvider>(
+    stage: &Staging,
+    provider: &P,
+    body: &BodyId,
+    family: EventFamily,
+    step_us: i64,
+    steps: i128,
+) -> Result<ReferenceRescan, String> {
+    let precision_us = stage
+        .calculation_settings
+        .as_ref()
+        .ok_or("missing calculated precision")?
+        .precision_us;
+    let mut found = Vec::new();
+    for (gap_index, span) in stage.sparse_spans.iter().enumerate() {
+        let window = SearchWindow {
+            start_us: span.start_us,
+            end_us: span.end_us,
+            step_us,
+            precision_us,
+        };
+        let candidates = match family {
+            EventFamily::Motion => station_candidates(provider, body, window)
+                .map(|list| {
+                    list.into_iter()
+                        .map(|candidate| StagedCandidate {
+                            gap_index,
+                            family: stage.family.clone(),
+                            body: stage.body.clone(),
+                            bracket_start_us: candidate.bracket_start_us,
+                            bracket_end_us: candidate.bracket_end_us,
+                            direction_after: Some(
+                                match candidate.direction_after {
+                                    virgostars_event_ephemeris::MotionDirection::Direct => "direct",
+                                    virgostars_event_ephemeris::MotionDirection::Retrograde => {
+                                        "retrograde"
+                                    }
+                                }
+                                .into(),
+                            ),
+                            sign_after_index: None,
+                            retrograde: None,
+                            phase: None,
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .map_err(|error| error.to_string())?,
+            EventFamily::Ingress => ingress_candidates(provider, body, window)
+                .map(|list| {
+                    list.into_iter()
+                        .map(|candidate| StagedCandidate {
+                            gap_index,
+                            family: stage.family.clone(),
+                            body: stage.body.clone(),
+                            bracket_start_us: candidate.bracket_start_us,
+                            bracket_end_us: candidate.bracket_end_us,
+                            direction_after: None,
+                            sign_after_index: Some(candidate.sign_after.index()),
+                            retrograde: Some(candidate.retrograde),
+                            phase: None,
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .map_err(|error| error.to_string())?,
+            EventFamily::Synod => lunar_phase_candidates(provider, window)
+                .map(|list| {
+                    list.into_iter()
+                        .map(|candidate| StagedCandidate {
+                            gap_index,
+                            family: stage.family.clone(),
+                            body: stage.body.clone(),
+                            bracket_start_us: candidate.bracket_start_us,
+                            bracket_end_us: candidate.bracket_end_us,
+                            direction_after: None,
+                            sign_after_index: None,
+                            retrograde: None,
+                            phase: Some(candidate.phase.code().into()),
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .map_err(|error| error.to_string())?,
+        };
+        found.extend(candidates);
+        if found.len() > MAX_REFERENCE_CANDIDATES {
+            return Err("reference rescan exceeds 10000 discovered candidates".into());
+        }
+    }
+    if found.len() != stage.candidates.len() {
+        return Err(format!(
+            "reference full-span rescan found {} candidates, staging has {}; possible missing or extra events",
+            found.len(),
+            stage.candidates.len()
+        ));
+    }
+    for (index, (source, reference)) in stage.candidates.iter().zip(&found).enumerate() {
+        let staged_mid = (source.bracket_start_us as i128 + source.bracket_end_us as i128) / 2;
+        let reference_mid =
+            (reference.bracket_start_us as i128 + reference.bracket_end_us as i128) / 2;
+        if source.gap_index != reference.gap_index
+            || source.direction_after != reference.direction_after
+            || source.sign_after_index != reference.sign_after_index
+            || source.retrograde != reference.retrograde
+            || source.phase != reference.phase
+            || (staged_mid - reference_mid).abs() > precision_us as i128
+        {
+            return Err(format!(
+                "reference full-span rescan disagrees with candidate #{index} label, span or bracket time"
+            ));
+        }
+    }
+    Ok(ReferenceRescan {
+        steps,
+        matched: found.len(),
+    })
+}
+
 fn check_reference_provider(
     stage: &Staging,
     program: &std::path::Path,
-) -> Result<ProviderIdentity, String> {
-    if stage.mode != "calculate" || stage.candidates.is_empty() {
+    rescan_step_us: Option<i64>,
+) -> Result<ReferenceReview, String> {
+    if stage.mode != "calculate" || (stage.candidates.is_empty() && rescan_step_us.is_none()) {
         return Err("reference checks require a calculated staging file with candidates".into());
     }
     if stage.candidates.len() > MAX_REFERENCE_CANDIDATES {
@@ -580,6 +762,9 @@ fn check_reference_provider(
             "reference checks limited to {MAX_REFERENCE_CANDIDATES} candidates; split the generation window"
         ));
     }
+    let budget = rescan_step_us
+        .map(|step| reference_rescan_budget(stage, step))
+        .transpose()?;
     let provider = ProcessLongitudeProvider::spawn(program)?;
     let identity = provider.identity().clone();
     if stage.provider.as_ref() == Some(&identity) {
@@ -599,7 +784,11 @@ fn check_reference_provider(
             format!("reference numerical check failed for candidate #{index}: {error}")
         })?;
     }
-    Ok(identity)
+    let rescan = rescan_step_us
+        .zip(budget)
+        .map(|(step, steps)| rescan_reference_spans(stage, &provider, &body, family, step, steps))
+        .transpose()?;
+    Ok(ReferenceReview { identity, rescan })
 }
 
 /// Compare a complete per-span reference event list against all staged brackets.
@@ -774,7 +963,7 @@ fn run() -> Result<(), String> {
     let reference = opts
         .reference_provider
         .as_deref()
-        .map(|program| check_reference_provider(&staging, program))
+        .map(|program| check_reference_provider(&staging, program, opts.reference_rescan_step_us))
         .transpose()?;
     let crosschecked = reference.is_some();
     println!(
@@ -787,9 +976,14 @@ fn run() -> Result<(), String> {
             "original_sparse_spans_recomputed": staging.sparse_spans.len(),
             "candidate_brackets_checked": count,
             "brackets_touching_recorded_anchors": touching,
-            "reference_provider": reference,
+            "reference_provider": reference.as_ref().map(|result| &result.identity),
             "numerical_crossings_checked": if crosschecked { count } else { 0 },
             "reference_crossings_consistent": crosschecked,
+            "reference_rescan_performed": reference.as_ref().is_some_and(|result| result.rescan.is_some()),
+            "reference_rescan_step_us": opts.reference_rescan_step_us,
+            "reference_rescan_grid_steps": reference.as_ref().and_then(|result| result.rescan.as_ref().map(|rescan| rescan.steps)),
+            "reference_rescan_candidates_matched": reference.as_ref().and_then(|result| result.rescan.as_ref().map(|rescan| rescan.matched)),
+            "reference_rescan_correspondence_consistent": reference.as_ref().is_some_and(|result| result.rescan.is_some()),
             "reference_independence_scientifically_established": false,
             "reference_event_digest_authenticated": golden_checked.is_some(),
             "reference_event_timestamps_matched": golden_checked.as_ref().map_or(0, |result| result.matched),

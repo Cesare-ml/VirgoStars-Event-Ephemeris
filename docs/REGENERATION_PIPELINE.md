@@ -134,6 +134,22 @@ cargo run --locked -p virgostars-events-generator --bin vseph-review-candidates 
 
 The reference must announce a **different** provider identity/settings from the source-stage metadata; an exact match aborts. The calculation is limited to **10,000 brackets per invocation**. Any inconsistent crossing aborts with no JSON stdout. A successful report adds `numerical_crossings_checked`, `reference_crossings_consistent: true` and the declared `reference_provider` identity, while retaining `reference_independence_scientifically_established: false`, `astronomical_accuracy_verified: false` and `safe_to_import: false`. **Crucial:** distinct self-declared identities do not prove actual independence, reference-provider authenticity, sub-second accuracy, missed events between samples, or historical source parity. A real independent implementation, signed/pinned software and golden source comparisons remain prerequisites for scientific release. In particular, the legacy Swiss adapter rounds positions to whole UTC seconds; a one-second candidate bracket may fail against a differently rounded reference even when both calculations are reasonable, requiring a documented tolerance/precision policy before promotion.
 
+### Optional second-provider full-span rescan
+
+The endpoint-only check above cannot discover additional events outside the staged brackets. To *also* search **all independently authenticated P0 sparse spans**, supply a positive, strictly **finer** scan interval using `--reference-rescan-step-us`. The rescan is valid only in `calculate` mode, requires `--reference-provider-program` and at least one sparse span, and allows an originally **empty candidate list**. The selected step must be between the producer's bracket precision and its original step (exclusive upper bound). Example with a **synthetic** 12-hour rescan:
+
+```bash
+cargo run --locked -p virgostars-events-generator --bin vseph-review-candidates -- \
+  --archive /path/to/authorized.p0 --sha256 YOUR_TRUSTED_64_HEX_DIGEST \
+  --staging /path/to/calculated-staging.json \
+  --reference-provider-program /path/to/separate-reference-provider \
+  --reference-rescan-step-us 43200000000
+```
+
+Before the reference process is launched, the reviewer preflights a maximum **100,000 aggregate grid steps across all source spans**, in addition to the existing 10,000-candidate limit; samples required for numerical bisection are not included in the grid-step cap. It searches the same three implemented families (motion stations, tropical sign ingress/re-entry, Moon quarters), then matches all reference discoveries against staged candidates by original span index, event labels and bracket-midpoint separation **no greater than the producer's declared precision**. A missing event, extra event, time/label disagreement, numerical ambiguity, zero/too-coarse rescan step or exceeded budget exits nonzero with no JSON stdout. The result reports `reference_rescan_performed`, `reference_rescan_step_us`, `reference_rescan_grid_steps`, `reference_rescan_candidates_matched` and `reference_rescan_correspondence_consistent`; absent rescan metrics are JSON null, except the opt-in boolean fields which are false. Existing output fields and unverified status are preserved.
+
+Synthetic tests prove that two Mars stations or two zodiac crossings can hide inside a coarse daily interval with no initial candidates, yet are exposed by a three-hour reference scan. **This is a finite-grid cross-check, not independent proof of physical continuity, genuine provider independence, scientific precision or completeness.** Even two providers with different self-reported identities can share a common error; multiple short crossings can remain hidden between *both* grids. A real independently reviewed reference, pinned kernel/version/time-scale and owner-approved scientific parity are required. The Windows batch script does **not** automatically enable the full-span rescan; run the reviewer option explicitly on staged files.
+
 ### Optional SHA-256-bound reference timestamp comparison
 
 For developer-only real Swiss/DE441 golden-event checks **without bundling real ephemeris data**, `vseph-review-candidates` also accepts a separately prepared JSON event list and its **independently trusted SHA-256** (never taken from the staging report). An optional timestamp tolerance defaults to **0** and cannot exceed the candidate bracket precision:
