@@ -22,6 +22,7 @@ use std::fmt;
 use virgostars_events_core::{BodyId, MotionDirection, TimestampMicros, ZodiacSign};
 
 pub mod adaptive;
+pub mod aspects;
 pub mod gaps;
 pub mod lunar;
 pub mod provider_process;
@@ -71,9 +72,11 @@ impl SearchWindow {
 #[derive(Debug, PartialEq, Eq)]
 pub enum GenerationError {
     InvalidWindow,
+    InvalidBodyPair,
     TooManySteps,
     InvalidSample,
     AmbiguousIngressStep,
+    AmbiguousAspectStep,
     AmbiguousLunarStep,
     Provider(String),
 }
@@ -82,9 +85,11 @@ impl fmt::Display for GenerationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidWindow => f.write_str("invalid UTC generation window or precision"),
+            Self::InvalidBodyPair => f.write_str("aspect requires two distinct celestial bodies"),
             Self::TooManySteps => f.write_str("generation window exceeds sample budget"),
             Self::InvalidSample => f.write_str("non-finite ephemeris position or speed"),
             Self::AmbiguousIngressStep => f.write_str("ambiguous ingress; reduce scan step"),
+            Self::AmbiguousAspectStep => f.write_str("ambiguous aspect; reduce scan step"),
             Self::AmbiguousLunarStep => f.write_str("ambiguous lunar phase; reduce scan step"),
             Self::Provider(message) => write!(f, "ephemeris provider error: {message}"),
         }

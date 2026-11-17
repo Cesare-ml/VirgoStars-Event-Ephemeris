@@ -1,3 +1,9 @@
+## 2026-11-17 — Experimental Rust exact-aspect candidate detector (draft)
+
+- **Scope:** added `crates/events-generator/src/aspects.rs` exposing provider-neutral `exact_aspect_candidates` for canonical pairs of bodies and conjunction 0°, sextile ±60°, square ±90° and trine ±120°, producing UTC microsecond **brackets**, not certified astronomical events. Uses a half-open search interval, 0°/360° wrap handling, bounded relative movement rejection, bisection and conservative zero-speed boundary treatment.
+- **Verification:** 6 synthetic unit tests cover all requested exact aspect types, reversed pairs, wrap, retrograde movement, inclusivity, coarse-grid refusal, invalid samples and a tangent case which is deliberately **not** asserted as a discovered event. Linux Rust 1.90 `cargo fmt -p virgostars-events-generator -- --check`, `cargo test --locked --workspace --quiet` (all executed pass, one pre-existing ignored), `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo build --locked --workspace --release --quiet`, and `git diff --check` all **PASS**. No real ephemeris-provider execution, independently validated astronomical timestamps, missing-span completeness or source data have been verified.
+- **Unfinished:** tangential contacts, hidden repeated crossings/adaptive sampling and independent scientific parity; generator CLI, reviewed per-pair/type coverage, versioned aspect archive and offline reader. No P0/DB/source archive mutation, deployment or release; the draft PR must remain unmerged until reviewed.
+
 ## 2026-11-17 — Event-family audit: planet-pair aspects, stations and speed extrema (draft)
 
 - Owner requests all pairwise exact conjunctions 0°, sextiles 60°, squares 90°, trines 120°; ingress into signs; station/return-to-direct moments; and maximum apparent longitude speed, with missing algorithms explicitly tracked.

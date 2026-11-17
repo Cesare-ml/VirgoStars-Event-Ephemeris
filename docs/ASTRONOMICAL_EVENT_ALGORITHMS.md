@@ -6,10 +6,10 @@
 
 | Evento richiesto | Definizione di calcolo proposta | Rust `events-generator` | Archivio offline / API pubblica | Lavoro ancora necessario |
 | --- | --- | --- | --- | --- |
-| Congiunzione fra due pianeti | Longitudini eclittiche geocentriche coincidenti: **0°** | **Da scrivere** per coppie generiche; la Luna–Sole a 0° esiste *solo* come candidato di fase lunare | **Da progettare**, non è una famiglia P0 | Calcolo coppie, timestamp esatto, molteplicità, confronto indipendente, schema/reader |
-| Sestile | Separazione longitudinale **60°** | **Da scrivere** | **Da progettare** | Come sopra, entrambi i versi e retrogradazioni |
-| Quadratura | Separazione longitudinale **90°** | **Da scrivere** | **Da progettare** | Come sopra |
-| Trigono | Separazione longitudinale **120°** | **Da scrivere** | **Da progettare** | Come sopra |
+| Congiunzione fra due pianeti | Longitudini eclittiche geocentriche coincidenti: **0°** | **Rilevatore di candidati Rust sperimentale** `aspects::exact_aspect_candidates` | **Da progettare**, non è una famiglia P0 | Contatti tangenti, scansione adattiva, confronto indipendente, schema/reader |
+| Sestile | Separazione longitudinale **60°** | **Candidati Rust sperimentali** | **Da progettare** | Come sopra, entrambe le orientazioni e retrogradazioni |
+| Quadratura | Separazione longitudinale **90°** | **Candidati Rust sperimentali** | **Da progettare** | Come sopra |
+| Trigono | Separazione longitudinale **120°** | **Candidati Rust sperimentali** | **Da progettare** | Come sopra |
 | Ingresso di un pianeta in un segno | Attraversamento delle soglie zodiacali ogni 30°, compreso rientro retrogrado | **Candidati implementati**: `ingress_candidates` con isolamento per bisezione | Famiglia `ingresses` esistente **solo come eventi registrati**, copertura non certificata | Parità astronomica, finestre mancanti, validazione e API stabile |
 | Pianeta che si ferma e inverte la marcia | Velocità longitudinale geocentrica `dλ/dt = 0` con cambio di segno | **Candidati implementati**: `station_candidates`, `direction_after` diretta o retrograda | Famiglia `motions` registra cambi di direzione; copertura non certificata | Parità, errori di campionamento, eventuale modello di “sosta apparente” |
 | Momento in cui riprende a muoversi | **Stesso istante matematico della stazione** che cambia da velocità negativa a positiva (oppure l'altro verso) | **Già rappresentabile** dal candidato `direction_after`; nessun secondo evento distinto | Lettura dello stato successivo da evento di moto registrato, non universalmente verificata | Specificare se l'utente richiede *anche* un intervallo vicino a velocità zero: serve una soglia convenzionale |
@@ -20,7 +20,9 @@
 
 ## Definizioni algoritmiche da implementare
 
-### A. Aspetti esatti fra pianeti — **manca il porting Rust**
+### A. Aspetti esatti fra pianeti — **primo rilevatore Rust sperimentale presente**
+
+`crates/events-generator/src/aspects.rs` ora espone `exact_aspect_candidates` (funzione Rust, **non ancora CLI**, formato P0 o API lettore). Produce brackets candidati per i quattro aspetti e prova a rifiutare passi di campionamento troppo ampi; conserva il comportamento non certificato. **Manca ancora** la rilevazione sistematica di contatti tangenti, ripetizioni nascoste fra campioni, la scansione adattiva completa, la verifica scientifica indipendente e l'integrazione nell'archivio. Non interpretare un risultato vuoto come assenza verificata di aspetti.
 
 - Usare le **longitudini eclittiche geocentriche tropicali** dei due corpi ottenute dallo **stesso provider configurato**, con ephemeris, flags, scala temporale, kernel e versione documentati. Il calcolo riguarda l'aspetto *in longitudine*, non la distanza angolare tridimensionale fra corpi osservati nel cielo.
 - Trovare tutti gli istanti in cui `wrap360(λB(t) − λA(t))` raggiunge `0`, `60/300`, `90/270` o `120/240` gradi (orientazioni ± modulo 360). Ordinare le coppie per identificatore canonico, senza duplicare `A–B` e `B–A` o conteggiare due volte la congiunzione `0° = 360°`.
@@ -42,7 +44,7 @@
 
 ## Contratti di pubblicazione e verifiche necessarie
 
-1. **Generatore:** funzioni Rust testabili senza accesso al DB: `aspect_candidates(provider, body_a, body_b, aspect, window)` e `speed_extremum_candidates(provider, body, window)` sono **API proposte, non disponibili**. Prevedere errori fail-closed per provider instabile, dati non finiti, passi ambigui, doppi attraversamenti non risolvibili e budget superati.
+1. **Generatore:** `exact_aspect_candidates(provider, body_a, body_b, window)` è **disponibile solo come calcolatore Rust sperimentale**; `speed_extremum_candidates(provider, body, window)` è **solo proposto**. Sono ancora da aggiungere le verifiche complete dei contatti senza attraversamento, degli eventi nascosti fra campioni e la pipeline di importazione. Prevedere errori fail-closed per provider instabile, dati non finiti, passi ambigui e budget superati.
 2. **Archivio:** versionare nuovi tipi di evento (`aspects`, `speed_extrema`) e metadata per coppia/tipo/verso, senza cambiare il significato dei tre tipi P0 già esistenti (`synods`, `motions`, `ingresses`). Conservare identità del dataset, SHA, fonte e copertura scientifica. Per “stazione” riusare `motions` anziché creare due righe inventate “stop” e “restart”.
 3. **Lettore offline:** proporre `aspects.between/next/previous` per coppia e tipo, e `motions.speedExtremaBetween/next/previous` per corpo/tipo; mai calcolare le posizioni astronomiche a runtime. I dettagli non sono ancora API pubbliche approvate.
 4. **Test obbligatori:** casi sintetici con aspettazione esatta 0°/60°/90°/120°, attraversamenti 0°/360°, moto relativo nullo, retrogradazioni e triplicazione dello stesso aspetto, timestamp coincidenti, massimi diretti/retrogradi distinti, bordi UTC `[start,end)`, provider che restituisce NaN/errore e scansioni che perdono due zeri. Golden timestamps da una seconda ephemeris indipendente, con precisione e tolleranza approvate; cross-platform Rust Desktop/Android e parità del decoder.
