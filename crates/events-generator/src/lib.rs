@@ -73,6 +73,7 @@ impl SearchWindow {
 pub enum GenerationError {
     InvalidWindow,
     InvalidBodyPair,
+    InvalidAspectTolerance,
     TooManySteps,
     InvalidSample,
     AmbiguousIngressStep,
@@ -86,6 +87,9 @@ impl fmt::Display for GenerationError {
         match self {
             Self::InvalidWindow => f.write_str("invalid UTC generation window or precision"),
             Self::InvalidBodyPair => f.write_str("aspect requires two distinct celestial bodies"),
+            Self::InvalidAspectTolerance => {
+                f.write_str("aspect tangency tolerance must be finite and within 0..=0.01 degrees")
+            }
             Self::TooManySteps => f.write_str("generation window exceeds sample budget"),
             Self::InvalidSample => f.write_str("non-finite ephemeris position or speed"),
             Self::AmbiguousIngressStep => f.write_str("ambiguous ingress; reduce scan step"),

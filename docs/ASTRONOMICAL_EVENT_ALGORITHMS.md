@@ -6,7 +6,7 @@
 
 | Evento richiesto | Definizione di calcolo proposta | Rust `events-generator` | Archivio offline / API pubblica | Lavoro ancora necessario |
 | --- | --- | --- | --- | --- |
-| Congiunzione fra due pianeti | Longitudini eclittiche geocentriche coincidenti: **0°** | **Rilevatore di candidati Rust sperimentale** `aspects::exact_aspect_candidates` | **Da progettare**, non è una famiglia P0 | Contatti tangenti, scansione adattiva, confronto indipendente, schema/reader |
+| Congiunzione fra due pianeti | Longitudini eclittiche geocentriche coincidenti: **0°** | **Candidati Rust sperimentali** per attraversamenti e avvisi separati di possibili tangenze | **Da progettare**, non è una famiglia P0 | Verifica reale delle tangenze, completezza delle scansioni, confronto indipendente, schema/reader |
 | Sestile | Separazione longitudinale **60°** | **Candidati Rust sperimentali** | **Da progettare** | Come sopra, entrambe le orientazioni e retrogradazioni |
 | Quadratura | Separazione longitudinale **90°** | **Candidati Rust sperimentali** | **Da progettare** | Come sopra |
 | Trigono | Separazione longitudinale **120°** | **Candidati Rust sperimentali** | **Da progettare** | Come sopra |
@@ -22,7 +22,11 @@
 
 ### A. Aspetti esatti fra pianeti — **primo rilevatore Rust sperimentale presente**
 
-`crates/events-generator/src/aspects.rs` espone `exact_aspect_candidates` e il controllo aggiuntivo **euristico** `adaptive_exact_aspect_scan` (funzioni Rust, **non ancora CLI**, formato P0 o API lettore). Il secondo usa campioni intermedi e suddivisione limitata da profondità/budget per individuare anche **due attraversamenti nascosti fra estremi uguali**: questo scenario è verificato con dati sintetici. **Manca ancora** la rilevazione sistematica dei contatti tangenti e delle ripetizioni invisibili anche ai campioni intermedi, una prova di completezza della scansione, la verifica scientifica indipendente e l'integrazione nell'archivio. Non interpretare un risultato vuoto come assenza verificata di aspetti.
+`crates/events-generator/src/aspects.rs` espone `exact_aspect_candidates` e il controllo aggiuntivo **euristico** `adaptive_exact_aspect_scan` (funzioni Rust, **non ancora CLI**, formato P0 o API lettore). Il secondo usa campioni intermedi e suddivisione limitata da profondità/budget per individuare anche **due attraversamenti nascosti fra estremi uguali**: questo scenario è verificato con dati sintetici.
+
+`potential_aspect_tangencies(provider, body_a, body_b, window, tolerance_degrees)` aggiunge una **lista separata di avvisi**, cercando inversioni campionate della velocità longitudinale *relativa* e verificando quanto il punto stazionario si avvicini a 0°/60°/90°/120° (entrambi gli orientamenti). Il parametro esplicito `tolerance_degrees` è compreso fra 0 e **0,01°** ed è **solo una soglia di segnalazione**, non la precisione garantita dell'effemeride. Ogni avviso contiene il bracket temporale e il `residual_degrees` misurato: **residuo non nullo significa possibile quasi-aspetto, NON aspetto esatto**. Anche un residuo numericamente nullo richiede controllo indipendente. Gli estremi della finestra privi di informazioni su entrambi i lati e le inversioni multiple non campionate possono essere assenti dagli avvisi.
+
+**Mancano ancora** la rilevazione sistematica e completa dei contatti tangenti, le ripetizioni invisibili anche ai campioni intermedi, una prova di completezza, la verifica scientifica indipendente e l'integrazione nell'archivio. Non interpretare un risultato vuoto come assenza verificata di aspetti.
 
 - Usare le **longitudini eclittiche geocentriche tropicali** dei due corpi ottenute dallo **stesso provider configurato**, con ephemeris, flags, scala temporale, kernel e versione documentati. Il calcolo riguarda l'aspetto *in longitudine*, non la distanza angolare tridimensionale fra corpi osservati nel cielo.
 - Trovare tutti gli istanti in cui `wrap360(λB(t) − λA(t))` raggiunge `0`, `60/300`, `90/270` o `120/240` gradi (orientazioni ± modulo 360). Ordinare le coppie per identificatore canonico, senza duplicare `A–B` e `B–A` o conteggiare due volte la congiunzione `0° = 360°`.

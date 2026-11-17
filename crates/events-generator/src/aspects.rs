@@ -207,6 +207,155 @@ pub fn exact_aspect_candidates<P: LongitudeProvider>(
     Ok(found)
 }
 
+/// An **unverified near-tangency warning**, never an exact-aspect event.
+///
+/// A relative-longitude stationary point is bracketed, then compared with a
+/// target angle. An accepted nonzero residual is explicitly a *near miss*;
+/// even zero residual depends on provider accuracy and temporal precision.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PotentialAspectTangency {
+    pub body_a: BodyId,
+    pub body_b: BodyId,
+    pub aspect: ExactAspectKind,
+    pub relative_target_degrees: u16,
+    pub station_bracket_start_us: i64,
+    pub station_bracket_end_us: i64,
+    pub residual_degrees: f64,
+}
+
+fn angular_residual(separation: f64, target: u16) -> f64 {
+    let distance = (separation - f64::from(target)).rem_euclid(360.0);
+    distance.min(360.0 - distance)
+}
+
+fn append_potential_tangencies<P: LongitudeProvider>(
+    provider: &P,
+    a: &BodyId,
+    b: &BodyId,
+    left_us: i64,
+    right_us: i64,
+    tolerance_degrees: f64,
+    result: &mut Vec<PotentialAspectTangency>,
+) -> Result<(), GenerationError> {
+    let at_us = midpoint(left_us, right_us);
+    let sample = sample_pair(provider, a, b, at_us)?;
+    for (aspect, target) in targets() {
+        let residual_degrees = angular_residual(sample.separation, target);
+        if residual_degrees <= tolerance_degrees {
+            result.push(PotentialAspectTangency {
+                body_a: a.clone(),
+                body_b: b.clone(),
+                aspect,
+                relative_target_degrees: target,
+                station_bracket_start_us: left_us,
+                station_bracket_end_us: right_us,
+                residual_degrees,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn opposite_nonzero_signs(first: f64, second: f64) -> bool {
+    (first < 0.0 && second > 0.0) || (first > 0.0 && second < 0.0)
+}
+
+/// Find **possible** contacts with an exact aspect at a relative-longitude
+/// extremum (velocity zero): a separate warning stream from exact crossings.
+///
+/// `tolerance_degrees` is a caller-chosen **warning threshold** in 0..=0.01°;
+/// it is not an error bound or permission to call a near miss an exact event.
+/// Only sampled speed sign changes (or a zero-speed interior sample with
+/// opposing neighbors) are investigated. Hidden double stations, endpoint
+/// stations and non-smooth providers remain unverified. Use independently
+/// audited astronomy before treating any candidate as a real tangency.
+pub fn potential_aspect_tangencies<P: LongitudeProvider>(
+    provider: &P,
+    body_a: &BodyId,
+    body_b: &BodyId,
+    window: SearchWindow,
+    tolerance_degrees: f64,
+) -> Result<Vec<PotentialAspectTangency>, GenerationError> {
+    window.validate()?;
+    if body_a == body_b {
+        return Err(GenerationError::InvalidBodyPair);
+    }
+    if !tolerance_degrees.is_finite() || !(0.0..=0.01).contains(&tolerance_degrees) {
+        return Err(GenerationError::InvalidAspectTolerance);
+    }
+    let (a, b) = if body_a.as_str() < body_b.as_str() {
+        (body_a, body_b)
+    } else {
+        (body_b, body_a)
+    };
+    let mut found = Vec::new();
+    let mut t = window.start_us;
+    let mut before = sample_pair(provider, a, b, t)?;
+    let mut previous_speed = None;
+
+    while t < window.end_us {
+        let end = next_time(t, window);
+        let after = sample_pair(provider, a, b, end)?;
+        let days = (end as i128 - t as i128) as f64 / MICROS_PER_DAY;
+        let max_estimated_sweep =
+            before.relative_speed.abs().max(after.relative_speed.abs()) * days;
+        if short_delta(before.separation, after.separation).abs() >= MAX_RELATIVE_STEP_DEGREES
+            || max_estimated_sweep >= MAX_RELATIVE_STEP_DEGREES
+        {
+            return Err(GenerationError::AmbiguousAspectStep);
+        }
+
+        // A sampled velocity zero is only useful with evidence of a reversal
+        // on both sides; `end` remains exclusive in the user search window.
+        if before.relative_speed == 0.0
+            && previous_speed
+                .is_some_and(|speed| opposite_nonzero_signs(speed, after.relative_speed))
+        {
+            append_potential_tangencies(provider, a, b, t, t, tolerance_degrees, &mut found)?;
+        }
+
+        if opposite_nonzero_signs(before.relative_speed, after.relative_speed) {
+            let mut left = t;
+            let mut right = end;
+            let mut left_speed = before.relative_speed;
+            while needs_refinement(left, right, window.precision_us) {
+                let mid = midpoint(left, right);
+                let middle_speed = sample_pair(provider, a, b, mid)?.relative_speed;
+                if middle_speed == 0.0 {
+                    left = mid;
+                    right = mid;
+                    break;
+                }
+                if (left_speed < 0.0) == (middle_speed < 0.0) {
+                    left = mid;
+                    left_speed = middle_speed;
+                } else {
+                    right = mid;
+                }
+            }
+            append_potential_tangencies(
+                provider,
+                a,
+                b,
+                left,
+                right,
+                tolerance_degrees,
+                &mut found,
+            )?;
+        }
+        previous_speed = Some(before.relative_speed);
+        before = after;
+        t = end;
+    }
+    found.sort_by_key(|candidate| {
+        (
+            candidate.station_bracket_start_us,
+            candidate.relative_target_degrees,
+        )
+    });
+    Ok(found)
+}
+
 /// Diagnostic counters for a risk-triggered rescan. Neither the counters nor
 /// the returned crossings establish complete astronomical coverage.
 #[derive(Default, Debug)]
@@ -643,5 +792,135 @@ mod tests {
             GenerationError::InvalidWindow
         );
         assert_eq!(budget, 10);
+    }
+
+    struct TangencyPair {
+        minimum_separation: f64,
+    }
+
+    impl LongitudeProvider for TangencyPair {
+        fn sample(&self, body: &BodyId, at: TimestampMicros) -> Result<LongitudeSample, String> {
+            if body.as_str() == "Mars" {
+                return Ok(LongitudeSample {
+                    longitude_degrees: 0.0,
+                    longitude_speed_degrees_per_day: 0.0,
+                });
+            }
+            let day = at.as_i64() as f64 / DAY as f64;
+            Ok(LongitudeSample {
+                longitude_degrees: self.minimum_separation + (day - 1.0).powi(2),
+                longitude_speed_degrees_per_day: 2.0 * (day - 1.0),
+            })
+        }
+    }
+
+    #[test]
+    fn tangency_probe_reports_exact_sample_without_claiming_certification() {
+        let provider = TangencyPair {
+            minimum_separation: 60.0,
+        };
+        let direct = potential_aspect_tangencies(
+            &provider,
+            &body("Mars"),
+            &body("Venus"),
+            double_crossing_window(),
+            0.0,
+        )
+        .unwrap();
+        assert_eq!(direct.len(), 1);
+        assert_eq!(direct[0].aspect, ExactAspectKind::Sextile);
+        assert_eq!(direct[0].station_bracket_start_us, DAY);
+        assert_eq!(direct[0].station_bracket_end_us, DAY);
+        assert_eq!(direct[0].residual_degrees, 0.0);
+
+        let mut one_day_step = double_crossing_window();
+        one_day_step.step_us = DAY;
+        let internal_sample = potential_aspect_tangencies(
+            &provider,
+            &body("Venus"),
+            &body("Mars"),
+            one_day_step,
+            0.0,
+        )
+        .unwrap();
+        assert_eq!(internal_sample, direct);
+    }
+
+    #[test]
+    fn near_miss_is_separately_labeled_with_nonzero_residual() {
+        let provider = TangencyPair {
+            minimum_separation: 60.005,
+        };
+        let a = body("Mars");
+        let b = body("Venus");
+        assert!(
+            potential_aspect_tangencies(&provider, &a, &b, double_crossing_window(), 0.001)
+                .unwrap()
+                .is_empty()
+        );
+        let warnings =
+            potential_aspect_tangencies(&provider, &a, &b, double_crossing_window(), 0.01).unwrap();
+        assert_eq!(warnings.len(), 1);
+        assert!((warnings[0].residual_degrees - 0.005).abs() < 1e-10);
+    }
+
+    #[test]
+    fn tangency_probe_rejects_bad_tolerances_and_non_stationary_aspects() {
+        let a = body("Mars");
+        let b = body("Venus");
+        for invalid in [f64::NAN, f64::INFINITY, -0.01, 0.0101] {
+            assert_eq!(
+                potential_aspect_tangencies(
+                    &TangencyPair {
+                        minimum_separation: 60.0,
+                    },
+                    &a,
+                    &b,
+                    double_crossing_window(),
+                    invalid,
+                )
+                .unwrap_err(),
+                GenerationError::InvalidAspectTolerance
+            );
+        }
+        let crossing = LinearPair {
+            start: 59.0,
+            rate_per_day: 2.0,
+        };
+        assert!(
+            potential_aspect_tangencies(&crossing, &a, &b, double_crossing_window(), 0.01)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn tangency_at_exclusive_end_or_unverified_start_is_not_invented() {
+        let provider = TangencyPair {
+            minimum_separation: 60.0,
+        };
+        let mut first_day = double_crossing_window();
+        first_day.end_us = DAY;
+        assert!(potential_aspect_tangencies(
+            &provider,
+            &body("Mars"),
+            &body("Venus"),
+            first_day,
+            0.01,
+        )
+        .unwrap()
+        .is_empty());
+        let mut second_day = first_day;
+        second_day.start_us = DAY;
+        second_day.end_us = 2 * DAY;
+        assert!(potential_aspect_tangencies(
+            &provider,
+            &body("Mars"),
+            &body("Venus"),
+            second_day,
+            0.01,
+        )
+        .unwrap()
+        .is_empty());
     }
 }
