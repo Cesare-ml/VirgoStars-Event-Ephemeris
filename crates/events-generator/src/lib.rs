@@ -25,6 +25,7 @@ pub mod adaptive;
 pub mod gaps;
 pub mod lunar;
 pub mod provider_process;
+pub mod speed_extrema;
 
 const MAX_SCAN_STEPS: i128 = 100_000;
 
@@ -75,6 +76,8 @@ pub enum GenerationError {
     InvalidSample,
     AmbiguousIngressStep,
     AmbiguousLunarStep,
+    AmbiguousSpeedExtremum,
+    InsufficientSpeedSamples,
     Provider(String),
 }
 
@@ -86,6 +89,12 @@ impl fmt::Display for GenerationError {
             Self::InvalidSample => f.write_str("non-finite ephemeris position or speed"),
             Self::AmbiguousIngressStep => f.write_str("ambiguous ingress; reduce scan step"),
             Self::AmbiguousLunarStep => f.write_str("ambiguous lunar phase; reduce scan step"),
+            Self::AmbiguousSpeedExtremum => {
+                f.write_str("ambiguous speed extremum; reduce scan step or investigate plateau")
+            }
+            Self::InsufficientSpeedSamples => {
+                f.write_str("speed extrema search needs at least three sample times")
+            }
             Self::Provider(message) => write!(f, "ephemeris provider error: {message}"),
         }
     }
