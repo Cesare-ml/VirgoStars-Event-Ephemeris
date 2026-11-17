@@ -33,6 +33,33 @@ Suggested (not yet frozen) types:
 - The old backend sometimes uses lower-case `d1/r2/r3/d4` and other implementations uppercase. Canonical public values proposed: uppercase codes, with an **optional legacy adapter** preserving original case.
 - A return value should include `datasetVersion` and `coverage` when queries depend on incomplete data.
 
+## Python-first minimal API contract — highest delivery priority (NOT IMPLEMENTED)
+
+The project's first **usable** deliverable is the Python synod/new-moon query, **before** JS/TS and before full VSEPH v1. Authoritative schema, packaging and tests: [PYTHON_FIRST_MVP.md](PYTHON_FIRST_MVP.md). Delivery milestones: [DELIVERY_MILESTONES.md](DELIVERY_MILESTONES.md).
+
+**Proposed package:** local distribution `virgostars-event-ephemeris`; import as `virgostars_events`. Final public package naming remains subject to PyPI name availability and approved publication. Implementation should use PyO3/maturin over the **existing Rust** reader, not reimplement the event decoder in Python.
+
+```python
+from virgostars_events import VirgoStarsEvents
+
+reader = VirgoStarsEvents.open("local-dataset.vseph-p0", expected_sha256="<trusted digest>")
+snapshot = reader.get_synods_at("2026-11-11T12:00:00Z")
+planetary_cycles = snapshot["synods"]  # dict keyed by the bodies in this dataset
+moon = snapshot["new_moon"]             # same recorded Moon cycle data as synods["Moon"]
+current_mercury_phase = planetary_cycles["Mercury"]["phase"]["code"]
+```
+
+`get_synods_at(X)` must perform **one latest recorded synod `start <= X` per indexed body** (not "all events during the calendar day"), with original source row ID and full phase timestamp array, normalized ISO UTC timestamps, metadata identifying the dataset, and explicit unknown/coverage status. Default body set comes from the archive; a later optional subset parameter is allowed if it preserves identical semantics.
+
+- **Planet four-part cycle**, with three valid original phase thresholds: D1 at cycle start; R2 at first extra; R3 at second extra; D4 at third extra. Boundary equality selects the new phase. Do not confuse synodic phase R2/R3 with the `moto_pianeti` direct/retrograde state.
+- **Moon cycle:** Moon synod anchor is the latest *recorded* new moon (as defined by the source data convention); phase between that anchor, first quarter, full and last quarter maps to CRESC1 / CRESC2 / CAL1 / CAL2. These are **stage labels**, not a continuous illuminated-fraction calculation. Mark the source convention unverified if required by the release manifest.
+- **No sufficient phase thresholds:** return `phase.code = None` with a meaningful status; preserve SQL `NULL` separately from `[]`; body with no preceding anchor must return a predictable missing-data record, not a future or imaginary cycle. Avoid claiming a valid final D4/CAL2 period past an unreviewed gap if the next cycle is unavailable.
+- **Time input:** accept an ISO-8601 instant with `Z` or numeric offset, or a timezone-aware Python `datetime`, preserve microseconds; reject naive date-times with a typed error. Exact equality with a new-moon/synod anchor counts that anchor as current.
+- **Status:** the archive might contain recorded results but lack human-approved completeness windows; expose `coverage_certified=false` and warnings, do not present a historical phase as independently verified. The SHA-256 identifies file bytes, not scientific certainty.
+- **Output:** normal Python `dict` / list / int / str / bool / `None` suitable for `json.dumps`, with `synods`, `new_moon`, `requested_at_utc`, and `dataset`. These are **proposed** names until the binding and regression suite exist.
+
+Acceptance includes Python local `pip install .`, an installable wheel, actual `import virgostars_events` in a fresh virtual environment and tested parity against the backend's latest synod and phase logic. The separate dataset licensing decision gates public dataset redistribution, not a local install of the code for evaluation. **Do not report this API as available before it is implemented and tested.**
+
 ## Illustrative JS / TS API (not implemented)
 
 ~~~ts

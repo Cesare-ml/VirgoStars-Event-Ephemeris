@@ -1,0 +1,9 @@
+[workspace]
+members = ["crates/events-core", "crates/events-format", "crates/events-p0", "crates/python-bindings"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "CPAL-1.0"
