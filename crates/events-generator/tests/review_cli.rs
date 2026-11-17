@@ -249,6 +249,31 @@ fn review_with_rescan(
     rescan_step: Option<&str>,
     hidden_pair_flag: Option<&str>,
 ) -> Output {
+    review_with_rescan_and_digest(
+        archive,
+        stage,
+        digest,
+        provider,
+        name,
+        offset,
+        rescan_step,
+        hidden_pair_flag,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn review_with_rescan_and_digest(
+    archive: &Path,
+    stage: &serde_json::Value,
+    digest: &str,
+    provider: Option<&Path>,
+    name: Option<&str>,
+    offset: Option<&str>,
+    rescan_step: Option<&str>,
+    hidden_pair_flag: Option<&str>,
+    trusted_reference_executable_sha256: Option<&str>,
+) -> Output {
     let staging = tempfile::NamedTempFile::new().unwrap();
     fs::write(staging.path(), serde_json::to_vec(stage).unwrap()).unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_vseph-review-candidates"));
@@ -262,6 +287,9 @@ fn review_with_rescan(
     ]);
     if let Some(provider) = provider {
         command.args(["--reference-provider-program", provider.to_str().unwrap()]);
+    }
+    if let Some(trusted_digest) = trusted_reference_executable_sha256 {
+        command.args(["--reference-provider-sha256", trusted_digest]);
     }
     if let Some(rescan_step) = rescan_step {
         command.args(["--reference-rescan-step-us", rescan_step]);
@@ -621,6 +649,115 @@ fn independent_numeric_crossing_check_accepts_matching_synthetic_ingress() {
         false
     );
     assert_eq!(report["safe_to_import"], false);
+}
+
+#[test]
+fn separately_pinned_reference_executable_is_hashed_before_numerical_rescan() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let stage = generate(&archive, Some(&mock));
+    let trusted_sha = format!("{:x}", Sha256::digest(fs::read(&mock).unwrap()));
+    let passed = review_with_rescan_and_digest(
+        &archive,
+        &stage,
+        SHA,
+        Some(&mock),
+        Some("synthetic-reference"),
+        None,
+        Some(&(DAY / 2).to_string()),
+        None,
+        Some(&trusted_sha),
+    );
+    assert!(
+        passed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&passed.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&passed.stdout).unwrap();
+    assert_eq!(report["reference_provider_digest_authenticated"], true);
+    assert_eq!(report["reference_provider_executable_sha256"], trusted_sha);
+    assert_eq!(report["reference_rescan_performed"], true);
+    assert_eq!(
+        report["reference_independence_scientifically_established"],
+        false
+    );
+    assert_eq!(report["safe_to_import"], false);
+
+    let without_pin = review_with_reference(
+        &archive,
+        &stage,
+        SHA,
+        Some(&mock),
+        Some("synthetic-reference"),
+        None,
+    );
+    assert!(without_pin.status.success());
+    let unpinned: serde_json::Value = serde_json::from_slice(&without_pin.stdout).unwrap();
+    assert_eq!(unpinned["reference_provider_digest_authenticated"], false);
+    assert!(unpinned["reference_provider_executable_sha256"].is_null());
+}
+
+#[test]
+fn reference_executable_pinning_rejects_wrong_digest_invalid_inputs_and_missing_provider() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let stage = generate(&archive, Some(&mock));
+    let trusted_sha = format!("{:x}", Sha256::digest(fs::read(&mock).unwrap()));
+    for bad in ["0".repeat(64), "bad".into(), trusted_sha.to_uppercase()] {
+        let rejected = review_with_rescan_and_digest(
+            &archive,
+            &stage,
+            SHA,
+            Some(&mock),
+            Some("synthetic-reference"),
+            None,
+            None,
+            None,
+            Some(&bad),
+        );
+        assert!(!rejected.status.success());
+        assert!(rejected.stdout.is_empty());
+    }
+    let no_program = review_with_rescan_and_digest(
+        &archive,
+        &stage,
+        SHA,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some(&trusted_sha),
+    );
+    assert!(!no_program.status.success());
+    assert!(no_program.stdout.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn reference_executable_pin_rejects_symlink_programs() {
+    use std::os::unix::fs::symlink;
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let stage = generate(&archive, Some(&mock));
+    let directory = tempfile::tempdir().unwrap();
+    let link = directory.path().join("reference-link");
+    symlink(&mock, &link).unwrap();
+    let trusted_sha = format!("{:x}", Sha256::digest(fs::read(&mock).unwrap()));
+    let rejected = review_with_rescan_and_digest(
+        &archive,
+        &stage,
+        SHA,
+        Some(&link),
+        Some("synthetic-reference"),
+        None,
+        None,
+        None,
+        Some(&trusted_sha),
+    );
+    assert!(!rejected.status.success());
+    assert!(rejected.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains("non-symlinked"));
 }
 
 #[test]

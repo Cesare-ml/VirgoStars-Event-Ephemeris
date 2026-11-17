@@ -134,6 +134,21 @@ cargo run --locked -p virgostars-events-generator --bin vseph-review-candidates 
 
 The reference must announce a **different** provider identity/settings from the source-stage metadata; an exact match aborts. The calculation is limited to **10,000 brackets per invocation**. Any inconsistent crossing aborts with no JSON stdout. A successful report adds `numerical_crossings_checked`, `reference_crossings_consistent: true` and the declared `reference_provider` identity, while retaining `reference_independence_scientifically_established: false`, `astronomical_accuracy_verified: false` and `safe_to_import: false`. **Crucial:** distinct self-declared identities do not prove actual independence, reference-provider authenticity, sub-second accuracy, missed events between samples, or historical source parity. A real independent implementation, signed/pinned software and golden source comparisons remain prerequisites for scientific release. In particular, the legacy Swiss adapter rounds positions to whole UTC seconds; a one-second candidate bracket may fail against a differently rounded reference even when both calculations are reasonable, requiring a documented tolerance/precision policy before promotion.
 
+#### Optional SHA-256 pin of the reference executable
+
+To bind a reference run to an **operator-trusted local executable file**, append `--reference-provider-sha256 TRUSTED_64_LOWERCASE_HEX_DIGEST` alongside `--reference-provider-program`. The reviewer streams the selected regular non-symlink file (at most 512 MiB) through SHA-256 **before starting it**, refuses wrong or malformed digests without JSON stdout, and includes `reference_provider_digest_authenticated:true` and `reference_provider_executable_sha256` in a successful report. Without this option the boolean is false and the digest field is null. The digest must be obtained and reviewed independently, never copied from the provider's self-description or a staging file.
+
+```bash
+# Get the reviewed digest separately: sha256sum /path/to/separate-reference-provider
+cargo run --locked -p virgostars-events-generator --bin vseph-review-candidates -- \
+  --archive /path/to/authorized.p0 --sha256 YOUR_TRUSTED_ARCHIVE_DIGEST \
+  --staging /path/to/calculated-staging.json \
+  --reference-provider-program /path/to/separate-reference-provider \
+  --reference-provider-sha256 YOUR_SEPARATELY_TRUSTED_EXECUTABLE_SHA256
+```
+
+**Scope of the pin is deliberately narrow:** it authenticates only the bytes at that executable path during the check, not any `.cmd`/Node/Python wrapper's dependencies, imported source, dynamically loaded libraries, ephemeris kernel, environment, accuracy, or file replacement between verification and launch. Keep those components/version/flags pinned and independently audited for a meaningful scientific comparison. A matching SHA is **not a signature of the developer, evidence of independent computations, or permission to import events**.
+
 ### Optional second-provider full-span rescan
 
 The endpoint-only check above cannot discover additional events outside the staged brackets. To *also* search **all independently authenticated P0 sparse spans**, supply a positive, strictly **finer** scan interval using `--reference-rescan-step-us`. The rescan is valid only in `calculate` mode, requires `--reference-provider-program` and at least one sparse span, and allows an originally **empty candidate list**. The selected step must be between the producer's bracket precision and its original step (exclusive upper bound). Example with a **synthetic** 12-hour rescan:
@@ -186,7 +201,7 @@ For a timestamp comparison, the report now also includes **descriptive UTC micro
 
 ### Windows batch script for known gaps and resumable intervals
 
-`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. Optional `-VerifyHalfStep` in `-Mode calculate` enables the producer's finer-cadence scan; `-AdaptiveStationDepth 1..8` enables the **motion-only** speed-risk check; `-AdaptiveIngressDepth 1..8` independently enables the **ingress-only** boundary check; `-AdaptiveLunarDepth 1..8` independently enables the **Moon-only** phase-alias check; optional `-ReferenceProviderProgram` additionally requires numerical crossing agreement before saving new outputs. **`-ReferenceRescanStepHours N`** enables the newly added full-span second-provider scan only with `-Mode calculate -ReferenceProviderProgram`, with a positive integer `N` strictly smaller than `-StepHours`. The independent reviewer also enforces its original precision and **100,000 total reference grid steps**; an empty-sparse-span window cannot use this option. The script checks all rescan report counts and flags before saving. **Separate `_halfstep` / `_adaptiveN` / `_ingressAdaptiveN` / `_lunarAdaptiveN` / `_reference_rescanNh` filenames** distinguish these check modes from ordinary staging, without overwriting existing artifacts. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs either a compatible independent `-ProviderProgram` executable, **or** an authorized private backend checkout with its existing Node dependencies and Swiss license configured for the default legacy adapter. For instance:
+`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. Optional `-VerifyHalfStep` in `-Mode calculate` enables the producer's finer-cadence scan; `-AdaptiveStationDepth 1..8` enables the **motion-only** speed-risk check; `-AdaptiveIngressDepth 1..8` independently enables the **ingress-only** boundary check; `-AdaptiveLunarDepth 1..8` independently enables the **Moon-only** phase-alias check; optional `-ReferenceProviderProgram` additionally requires numerical crossing agreement before saving new outputs. **`-ReferenceProviderSha256 DIGEST`** optionally pins the selected reference executable bytes and validates the reviewer's digest report; the filename receives `_sha` plus the first 12 digest characters. **`-ReferenceRescanStepHours N`** enables the newly added full-span second-provider scan only with `-Mode calculate -ReferenceProviderProgram`, with a positive integer `N` strictly smaller than `-StepHours`. The independent reviewer also enforces its original precision and **100,000 total reference grid steps**; an empty-sparse-span window cannot use this option. The script checks all rescan report counts and flags before saving. **Separate `_halfstep` / `_adaptiveN` / `_ingressAdaptiveN` / `_lunarAdaptiveN` / `_reference_shaXXXXXXXXXXXX_rescanNh` filenames** distinguish these check modes from ordinary staging, without overwriting existing artifacts. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs either a compatible independent `-ProviderProgram` executable, **or** an authorized private backend checkout with its existing Node dependencies and Swiss license configured for the default legacy adapter. For instance:
 
 ```powershell
 # Analyze the two known Moon source discontinuities (1918–1920, 2017–2019).
@@ -230,12 +245,15 @@ For a timestamp comparison, the report now also includes **descriptive UTC micro
 
 # Independently rescan every source gap at 3-hour cadence after an initial
 # 6-hour calculation; distinct providers/kernels must be reviewed separately.
+# In Windows PowerShell, obtain a vetted executable digest beforehand:
+# (Get-FileHash 'D:\ephemerides\reference-provider.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
 .\tools\compute-missing-intervals.ps1 -Archive "D:\data\authorized.p0" `
   -TrustedSha256 "<trusted 64-char lowercase digest>" -OutputDir "D:\vseph-staging" `
   -Family ingresses -Body Mars -FromUtc "2020-01-01T00:00:00Z" `
   -ToUtc "2021-01-01T00:00:00Z" -Mode calculate -ThresholdDays 45 `
   -ProviderProgram "D:\ephemerides\generation-provider.exe" -StepHours 6 `
   -ReferenceProviderProgram "D:\ephemerides\reference-provider.exe" `
+  -ReferenceProviderSha256 "<independently trusted lowercase executable digest>" `
   -ReferenceRescanStepHours 3
 ```
 

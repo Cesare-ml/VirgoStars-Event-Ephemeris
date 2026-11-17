@@ -10,6 +10,7 @@
 
 use std::collections::BTreeSet;
 use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 
 use serde::Deserialize;
@@ -28,7 +29,8 @@ const MAX_CANDIDATES: usize = 100_000;
 const MAX_REFERENCE_CANDIDATES: usize = 10_000;
 const MAX_REFERENCE_RESCAN_STEPS: i128 = 100_000;
 const MAX_REFERENCE_BYTES: u64 = 16 * 1024 * 1024;
-const USAGE: &str = "Usage: vseph-review-candidates --archive P0 --sha256 INDEPENDENT_TRUSTED_DIGEST --staging GENERATED_JSON [--reference-provider-program EXEC --reference-rescan-step-us POSITIVE_I64] [--reference-events JSON --reference-events-sha256 TRUSTED_DIGEST --reference-tolerance-us I64]\nRead-only: authenticates source/structural provenance. Optional second-provider full-span finer rescan and SHA-bound reference timestamps check candidates; none certifies astronomical accuracy or coverage.";
+const MAX_REFERENCE_EXECUTABLE_BYTES: u64 = 512 * 1024 * 1024;
+const USAGE: &str = "Usage: vseph-review-candidates --archive P0 --sha256 INDEPENDENT_TRUSTED_DIGEST --staging GENERATED_JSON [--reference-provider-program EXEC [--reference-provider-sha256 TRUSTED_EXECUTABLE_DIGEST] [--reference-rescan-step-us POSITIVE_I64]] [--reference-events JSON --reference-events-sha256 TRUSTED_DIGEST --reference-tolerance-us I64]\nRead-only: authenticates source/structural provenance. Optional pinned executable SHA, second-provider finer rescan and SHA-bound reference event timestamps check candidates; none certifies astronomical accuracy or coverage.";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -178,6 +180,7 @@ struct ReviewOptions {
     digest: String,
     staging: PathBuf,
     reference_provider: Option<PathBuf>,
+    reference_provider_sha256: Option<String>,
     reference_rescan_step_us: Option<i64>,
     reference_events: Option<PathBuf>,
     reference_events_sha256: Option<String>,
@@ -189,6 +192,7 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<ReviewOptions, Stri
     let mut sha256 = None;
     let mut staging = None;
     let mut reference_provider = None;
+    let mut reference_provider_sha256 = None;
     let mut reference_rescan_step_us = None;
     let mut reference_events = None;
     let mut reference_events_sha256 = None;
@@ -201,6 +205,7 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<ReviewOptions, Stri
             "--sha256" => &mut sha256,
             "--staging" => &mut staging,
             "--reference-provider-program" => &mut reference_provider,
+            "--reference-provider-sha256" => &mut reference_provider_sha256,
             "--reference-rescan-step-us" => &mut reference_rescan_step_us,
             "--reference-events" => &mut reference_events,
             "--reference-events-sha256" => &mut reference_events_sha256,
@@ -240,11 +245,25 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<ReviewOptions, Stri
             "reference rescan needs a positive step and --reference-provider-program".into(),
         );
     }
+    if let Some(digest) = &reference_provider_sha256 {
+        if reference_provider.is_none()
+            || digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        {
+            return Err(
+                "reference provider SHA-256 needs a provider and exactly 64 lowercase hex digits"
+                    .into(),
+            );
+        }
+    }
     Ok(ReviewOptions {
         archive: PathBuf::from(archive.ok_or("missing --archive")?),
         digest: sha256.ok_or("missing --sha256")?,
         staging: PathBuf::from(staging.ok_or("missing --staging")?),
         reference_provider: reference_provider.map(PathBuf::from),
+        reference_provider_sha256,
         reference_rescan_step_us,
         reference_events: reference_events.map(PathBuf::from),
         reference_events_sha256,
@@ -592,12 +611,52 @@ fn check_numerical_bracket<P: LongitudeProvider>(
 
 struct ReferenceReview {
     identity: ProviderIdentity,
+    executable_sha256: Option<String>,
     rescan: Option<ReferenceRescan>,
 }
 
 struct ReferenceRescan {
     steps: i128,
     matched: usize,
+}
+
+/// Verify the exact file supplied as the executable against an independent
+/// trust anchor before starting it. This cannot authenticate its dependencies,
+/// runtime environment, scientific behavior or a file replaced after hashing.
+fn check_reference_executable(
+    program: &std::path::Path,
+    trusted_digest: &str,
+) -> Result<String, String> {
+    let metadata = fs::symlink_metadata(program)
+        .map_err(|error| format!("cannot inspect reference executable: {error}"))?;
+    if !metadata.is_file() || metadata.len() > MAX_REFERENCE_EXECUTABLE_BYTES {
+        return Err(
+            "pinned reference executable must be a regular non-symlinked file <= 512 MiB".into(),
+        );
+    }
+    let mut file = fs::File::open(program)
+        .map_err(|error| format!("cannot open reference executable for hashing: {error}"))?;
+    let mut hash = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut read_total = 0_u64;
+    loop {
+        let count = file
+            .read(&mut buffer)
+            .map_err(|error| format!("cannot read reference executable for hashing: {error}"))?;
+        if count == 0 {
+            break;
+        }
+        read_total += count as u64;
+        if read_total > MAX_REFERENCE_EXECUTABLE_BYTES {
+            return Err("reference executable exceeded SHA-256 hashing byte budget".into());
+        }
+        hash.update(&buffer[..count]);
+    }
+    let actual = format!("{:x}", hash.finalize());
+    if actual != trusted_digest {
+        return Err("reference executable does not match independently trusted SHA-256".into());
+    }
+    Ok(actual)
 }
 
 /// Bound every sparse span before launching an external process. This is a
@@ -752,6 +811,7 @@ fn rescan_reference_spans<P: LongitudeProvider>(
 fn check_reference_provider(
     stage: &Staging,
     program: &std::path::Path,
+    trusted_executable_sha256: Option<&str>,
     rescan_step_us: Option<i64>,
 ) -> Result<ReferenceReview, String> {
     if stage.mode != "calculate" || (stage.candidates.is_empty() && rescan_step_us.is_none()) {
@@ -764,6 +824,9 @@ fn check_reference_provider(
     }
     let budget = rescan_step_us
         .map(|step| reference_rescan_budget(stage, step))
+        .transpose()?;
+    let executable_sha256 = trusted_executable_sha256
+        .map(|digest| check_reference_executable(program, digest))
         .transpose()?;
     let provider = ProcessLongitudeProvider::spawn(program)?;
     let identity = provider.identity().clone();
@@ -788,7 +851,11 @@ fn check_reference_provider(
         .zip(budget)
         .map(|(step, steps)| rescan_reference_spans(stage, &provider, &body, family, step, steps))
         .transpose()?;
-    Ok(ReferenceReview { identity, rescan })
+    Ok(ReferenceReview {
+        identity,
+        executable_sha256,
+        rescan,
+    })
 }
 
 /// Compare a complete per-span reference event list against all staged brackets.
@@ -963,7 +1030,14 @@ fn run() -> Result<(), String> {
     let reference = opts
         .reference_provider
         .as_deref()
-        .map(|program| check_reference_provider(&staging, program, opts.reference_rescan_step_us))
+        .map(|program| {
+            check_reference_provider(
+                &staging,
+                program,
+                opts.reference_provider_sha256.as_deref(),
+                opts.reference_rescan_step_us,
+            )
+        })
         .transpose()?;
     let crosschecked = reference.is_some();
     println!(
@@ -977,6 +1051,8 @@ fn run() -> Result<(), String> {
             "candidate_brackets_checked": count,
             "brackets_touching_recorded_anchors": touching,
             "reference_provider": reference.as_ref().map(|result| &result.identity),
+            "reference_provider_executable_sha256": reference.as_ref().and_then(|result| result.executable_sha256.as_deref()),
+            "reference_provider_digest_authenticated": reference.as_ref().is_some_and(|result| result.executable_sha256.is_some()),
             "numerical_crossings_checked": if crosschecked { count } else { 0 },
             "reference_crossings_consistent": crosschecked,
             "reference_rescan_performed": reference.as_ref().is_some_and(|result| result.rescan.is_some()),

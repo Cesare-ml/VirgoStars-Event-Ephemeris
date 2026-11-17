@@ -22,6 +22,7 @@ param(
     [string]$BackendRoot,
     [string]$ProviderProgram,
     [string]$ReferenceProviderProgram,
+    [string]$ReferenceProviderSha256,
     [Nullable[int]]$ReferenceRescanStepHours,
     [switch]$VerifyHalfStep,
     [int]$AdaptiveStationDepth = 0,
@@ -63,6 +64,10 @@ if ($ReferenceProviderProgram) {
         throw '-ReferenceProviderProgram requires -Mode calculate.'
     }
     $ReferenceProviderProgram = (Resolve-Path -LiteralPath $ReferenceProviderProgram).Path
+}
+if ($PSBoundParameters.ContainsKey('ReferenceProviderSha256') -and
+    (-not $ReferenceProviderProgram -or $ReferenceProviderSha256 -cnotmatch '^[0-9a-f]{64}$')) {
+    throw '-ReferenceProviderSha256 requires -ReferenceProviderProgram and 64 lowercase hex digits from a separately trusted file digest.'
 }
 if ($null -ne $ReferenceRescanStepHours) {
     if ($Mode -ne 'calculate' -or -not $ReferenceProviderProgram -or
@@ -138,6 +143,7 @@ foreach ($range in $ranges) {
         if ($AdaptiveIngressDepth -gt 0) { $modeLabel += '_ingressAdaptive' + $AdaptiveIngressDepth }
         if ($AdaptiveLunarDepth -gt 0) { $modeLabel += '_lunarAdaptive' + $AdaptiveLunarDepth }
         if ($ReferenceProviderProgram) { $modeLabel += '_reference' }
+        if ($ReferenceProviderSha256) { $modeLabel += '_sha' + $ReferenceProviderSha256.Substring(0, 12) }
         if ($null -ne $ReferenceRescanStepHours) { $modeLabel += '_rescan' + $ReferenceRescanStepHours + 'h' }
         $filename = '{0}_{1}_{2}_{3}_{4}_{5}.json' -f $Family, $safeBody, $fromUs, $toUs, $modeLabel, $TrustedSha256.Substring(0, 12)
         $destination = Join-Path $outputRoot $filename
@@ -215,6 +221,9 @@ foreach ($range in $ranges) {
             if ($ReferenceProviderProgram) {
                 $reviewArgs += @('--reference-provider-program', $ReferenceProviderProgram)
             }
+            if ($ReferenceProviderSha256) {
+                $reviewArgs += @('--reference-provider-sha256', $ReferenceProviderSha256)
+            }
             if ($null -ne $ReferenceRescanStepHours) {
                 $reviewArgs += @('--reference-rescan-step-us', [string]([long]$ReferenceRescanStepHours * 3600000000L))
             }
@@ -234,6 +243,11 @@ foreach ($range in $ranges) {
                 ($review.reference_crossings_consistent -ne $true -or
                  $review.numerical_crossings_checked -ne $report.candidates.Count)) {
                 throw "Reference provider did not verify all candidate crossing brackets for $filename"
+            }
+            if ($ReferenceProviderSha256 -and
+                ($review.reference_provider_digest_authenticated -ne $true -or
+                 $review.reference_provider_executable_sha256 -cne $ReferenceProviderSha256)) {
+                throw "Reference executable did not match independently trusted SHA-256 for $filename"
             }
             if ($null -ne $ReferenceRescanStepHours -and
                 ($review.reference_rescan_performed -ne $true -or
