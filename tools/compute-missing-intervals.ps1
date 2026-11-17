@@ -22,6 +22,7 @@ param(
     [string]$BackendRoot,
     [string]$ProviderProgram,
     [string]$ReferenceProviderProgram,
+    [Nullable[int]]$ReferenceRescanStepHours,
     [switch]$VerifyHalfStep,
     [int]$AdaptiveStationDepth = 0,
     [int]$AdaptiveIngressDepth = 0,
@@ -62,6 +63,12 @@ if ($ReferenceProviderProgram) {
         throw '-ReferenceProviderProgram requires -Mode calculate.'
     }
     $ReferenceProviderProgram = (Resolve-Path -LiteralPath $ReferenceProviderProgram).Path
+}
+if ($null -ne $ReferenceRescanStepHours) {
+    if ($Mode -ne 'calculate' -or -not $ReferenceProviderProgram -or
+        $ReferenceRescanStepHours -le 0 -or $ReferenceRescanStepHours -ge $StepHours) {
+        throw '-ReferenceRescanStepHours requires -Mode calculate, -ReferenceProviderProgram and a positive step finer than -StepHours.'
+    }
 }
 
 if ($Mode -eq 'calculate') {
@@ -131,6 +138,7 @@ foreach ($range in $ranges) {
         if ($AdaptiveIngressDepth -gt 0) { $modeLabel += '_ingressAdaptive' + $AdaptiveIngressDepth }
         if ($AdaptiveLunarDepth -gt 0) { $modeLabel += '_lunarAdaptive' + $AdaptiveLunarDepth }
         if ($ReferenceProviderProgram) { $modeLabel += '_reference' }
+        if ($null -ne $ReferenceRescanStepHours) { $modeLabel += '_rescan' + $ReferenceRescanStepHours + 'h' }
         $filename = '{0}_{1}_{2}_{3}_{4}_{5}.json' -f $Family, $safeBody, $fromUs, $toUs, $modeLabel, $TrustedSha256.Substring(0, 12)
         $destination = Join-Path $outputRoot $filename
         if (Test-Path -LiteralPath $destination) {
@@ -207,6 +215,9 @@ foreach ($range in $ranges) {
             if ($ReferenceProviderProgram) {
                 $reviewArgs += @('--reference-provider-program', $ReferenceProviderProgram)
             }
+            if ($null -ne $ReferenceRescanStepHours) {
+                $reviewArgs += @('--reference-rescan-step-us', [string]([long]$ReferenceRescanStepHours * 3600000000L))
+            }
             $reviewLines = & cargo @reviewArgs
             if ($LASTEXITCODE -ne 0) {
                 throw "Independent Rust staging review failed; no artifact saved for $filename"
@@ -215,13 +226,26 @@ foreach ($range in $ranges) {
             if ($review.staging_structure_verified -ne $true -or
                 $review.source_archive_authenticated -ne $true -or
                 $review.safe_to_import -ne $false -or
-                $review.coverage_certified -ne $false) {
+                $review.coverage_certified -ne $false -or
+                $review.astronomical_accuracy_verified -ne $false) {
                 throw "Independent Rust review rejected the staging-only contract for $filename"
             }
             if ($ReferenceProviderProgram -and
                 ($review.reference_crossings_consistent -ne $true -or
                  $review.numerical_crossings_checked -ne $report.candidates.Count)) {
                 throw "Reference provider did not verify all candidate crossing brackets for $filename"
+            }
+            if ($null -ne $ReferenceRescanStepHours -and
+                ($review.reference_rescan_performed -ne $true -or
+                 $review.reference_rescan_correspondence_consistent -ne $true -or
+                 $null -eq $review.reference_rescan_step_us -or
+                 $review.reference_rescan_step_us -ne ([long]$ReferenceRescanStepHours * 3600000000L) -or
+                 $null -eq $review.reference_rescan_candidates_matched -or
+                 $review.reference_rescan_candidates_matched -ne $report.candidates.Count -or
+                 $null -eq $review.reference_rescan_grid_steps -or
+                 $review.reference_rescan_grid_steps -le 0 -or
+                 $review.reference_rescan_grid_steps -gt 100000)) {
+                throw "Independent reference full-span rescan missing or inconsistent for $filename"
             }
             if ($AdaptiveStationDepth -gt 0 -and $report.sparse_spans.Count -gt 0 -and
                 ($review.producer_claimed_adaptive_station_check -ne $true -or
