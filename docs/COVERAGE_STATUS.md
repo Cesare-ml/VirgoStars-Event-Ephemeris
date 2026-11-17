@@ -14,7 +14,9 @@ Le date sono **UTC**. Gli intervalli di elaborazione sono scritti come `[inizio 
 | Sinodi / altri corpi | **non determinato** | **non determinato** | Nessun manifest pubblico di copertura per corpo | Audit P0 e parità scientifica, oltre a portare i calcoli planetari; **ignoto** |
 | Moto / corpi supportati | **non determinato** | **non determinato** | Nessun manifest pubblico di copertura per corpo | Audit P0 per ogni corpo, dati da elaborare da identificare; **ignoto** |
 | Ingressi / altri corpi | **non determinato** | **non determinato** | Nessun manifest pubblico di copertura per corpo | Audit P0 per ogni corpo, dati da elaborare da identificare; **ignoto** |
-| Aspetti ed eclissi | **non determinato** | **non determinato** | Generatori Rust non portati | Definizione della famiglia, algoritmo, sorgente e audit; **non implementato** |
+| Aspetti fra pianeti / congiunzioni 0°, sestili 60°, quadrature 90°, trigoni 120° | **non determinato, per coppia** | **non determinato, per coppia** | Calcolo legacy JS presente; algoritmo Rust e famiglia archivio **assenti** | Scrivere rilevatore, verificare i risultati, creare formato e audit per ogni coppia/tipo; **non implementato** |
+| Estremi di velocità diretta e retrograda / ogni corpo | **non determinato** | **non determinato** | Provider già fornisce velocità, ma **non esiste un algoritmo per ricercarne i massimi** | Scrivere calcolo degli estremi, validazione e formato/reader; **non implementato** |
+| Eclissi solari e lunari | **non determinato** | **non determinato** | Metodi specialistici legacy, non portati in Rust | Algoritmo astronomico specialistico, sorgente e audit; **non implementato** |
 
 **Attenzione:** il range ampio 2099–4836 è solo l'area *proposta* per la ricerca e richiede una scansione in piccole finestre. Non va mai etichettato come intervallo completamente privo di eventi. Anche fuori dagli intervalli qui indicati la copertura è **sconosciuta**, non dichiarata completa.
 
@@ -51,3 +53,5 @@ La soglia è un'**euristica per il corpo/famiglia**, non un criterio universale.
 Il futuro manifest pubblico deve riportare **per ogni famiglia e corpo**: versione e SHA-256 del dataset effettivamente revisionato, intervallo UTC esaminato `[start_us,end_us)`, soglia e metodo di scansione, **elenco esatto** degli intervalli non coperti, evidenze e limiti della verifica scientifica, revisore e data dell'approvazione. Se manca uno di questi elementi, lo stato rimane `unknown`/`unreviewed`, mai `complete`. Conservare lo storico delle revisioni, senza sovrascrivere gli eventi/ID originali. L'eventuale pubblicazione del dataset e del manifest resta subordinata alla licenza e all'approvazione del proprietario: [provenienza](DATA_PROVENANCE.md).
 
 Per partecipare ai calcoli: [guida ai contributi per nuovi intervalli](CONTRIBUTING_EVENT_RANGES.md).
+
+Per la distinzione fra algoritmo **esistente**, algoritmo **da scrivere** e dati **da convalidare** per tutti i nuovi eventi richiesti: [inventario tecnico degli algoritmi](ASTRONOMICAL_EVENT_ALGORITHMS.md). Il reporter P0 attuale legge solo `synods`, `motions`, `ingresses`: **non può** inventariare le lacune delle future famiglie `aspects` o `speed_extrema` finché non esistono un formato e dati verificabili.

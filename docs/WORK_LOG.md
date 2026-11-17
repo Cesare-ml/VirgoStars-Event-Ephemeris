@@ -1,3 +1,10 @@
+## 2026-11-17 — Event-family audit: planet-pair aspects, stations and speed extrema (draft)
+
+- Owner requests all pairwise exact conjunctions 0°, sextiles 60°, squares 90°, trines 120°; ingress into signs; station/return-to-direct moments; and maximum apparent longitude speed, with missing algorithms explicitly tracked.
+- Inspected public Rust generator: `station_candidates` and `ingress_candidates` exist as unverified brackets; Moon phases 0°/90°/180°/270° are **not** generic planet-pair aspects. Inspected private legacy reference: `backend/routines/calcolo-aspetti-per-db.js` and `backend/services/astrology/aspetti-func.js` have an old aspect detector, **not ported/validated** in Rust. No speed-extrema Rust search found.
+- Added [ASTRONOMICAL_EVENT_ALGORITHMS](ASTRONOMICAL_EVENT_ALGORITHMS.md), revised the G3A–G3D roadmap, proposed separate offline API and dataset families without changing P0. Distinguished one instantaneous velocity-zero station from optional conventional near-zero-speed intervals. Updated read-only coverage notes: entirely **unknown** for aspect pair/type and speed extremum body/type until independently reviewed.
+- Documentation only: no Rust algorithm code written for new families, no new dataset generated, no astronomical golden-timestamp parity or release. Next: implement independent synthetic pairwise exact-aspect brackets first, then separately speed extrema, versioned schema and reviewer gates. No Actions or DB writes.
+
 ## 2026-11-17 — Contributor interval guide and readable missing-date inventory (draft)
 
 - Added `docs/CONTRIBUTING_EVENT_RANGES.md` to distinguish independent code/provider contributions from owner-authorized P0 gap calculations; requires bounded UTC intervals, methodology, independent comparison, a draft PR and no dataset/credential sharing.

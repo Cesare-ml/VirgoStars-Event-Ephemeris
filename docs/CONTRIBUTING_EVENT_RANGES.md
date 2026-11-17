@@ -2,6 +2,8 @@
 
 La libreria Event Ephemeris è progettata per leggere eventi astronomici precalcolati senza un motore astronomico a runtime. **Si può contribuire estendendo il calcolo e controllando le lacune, ma un calcolo non diventa automaticamente un dato pubblico o certificato.** Prima di iniziare leggere [AGENTS.md](../AGENTS.md), [CONTRIBUTING.md](../CONTRIBUTING.md), [stato della copertura](COVERAGE_STATUS.md), [rigenerazione](REGENERATION_PIPELINE.md) e [provenienza/licenza](DATA_PROVENANCE.md).
 
+Per le nuove famiglie richieste (aspetti esatti **0°/60°/90°/120°**, estremi della velocità), partire dalla [matrice di funzionalità e algoritmi mancanti](ASTRONOMICAL_EVENT_ALGORITHMS.md): **non sono ancora supportate dal generatore di lacune P0**. Un contributore può svilupparne e testarne il motore Rust con fixture sintetiche prima che un dataset autorizzato sia disponibile.
+
 ## Percorso 1 — contributi senza il dataset originale
 
 **Non è necessario accedere al database VirgoStars** per migliorare algoritmi, generare casi di prova o confrontare due motori. Un contributore può:
