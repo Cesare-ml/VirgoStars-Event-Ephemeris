@@ -1,5 +1,7 @@
 # Rebuilding missing event intervals — source inventory and migration contract
 
+**Where are the exact missing dates?** [Coverage and gaps status](COVERAGE_STATUS.md) lists publicly documented source anomalies and the still-unknown ranges. After generating read-only `--mode plan` staging JSON, run `python3 tools/report_missing_intervals.py --format markdown STAGING.json` (or pass multiple same-P0/family/body/threshold files) to print **UTC inclusive start / exclusive end dates, source anchors, flagged ranges, and unscanned gaps between submitted windows**. A no-flags report is **not** a completeness certificate. Contributors should follow [contributing additional time ranges](CONTRIBUTING_EVENT_RANGES.md).
+
 **Status (2026-11-17):** executable Rust sparse-span planner and candidate calculation for motions, tropical sign ingresses and **Moon-only** lunar synod phases, plus a thin optional development adapter to the existing private backend's Swiss position function. Linux synthetic tests pass; **no real astronomical backfill or scientifically verified coverage** is claimed. No production database or original dataset was modified.
 
 The authoritative legacy implementation is in the **private** [`Cesare-ml/virgo-stars`](https://github.com/Cesare-ml/virgo-stars) repository, under `backend/routines/` (not a separate `Cesare-ml/virgostars` repository). These scripts and their helpers must be treated as reference behavior to audit and port, not blindly copied into this public repository, and should never bring credentials or private exports with them.

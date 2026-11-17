@@ -1,3 +1,10 @@
+## 2026-11-17 — Contributor interval guide and readable missing-date inventory (draft)
+
+- Added `docs/CONTRIBUTING_EVENT_RANGES.md` to distinguish independent code/provider contributions from owner-authorized P0 gap calculations; requires bounded UTC intervals, methodology, independent comparison, a draft PR and no dataset/credential sharing.
+- Added `docs/COVERAGE_STATUS.md` as the public register: two verified **source-anchor anomalies** for Moon synods (1918–1920, 2017–2019), the broad 2099–4836 ingress **investigation range only**, and explicitly **unknown** coverage for other family/body pairs. No missing astronomical events or scientifically complete epochs are asserted.
+- Added read-only `tools/report_missing_intervals.py` for plan/calculate staging files: makes UTC `[start,end)` ranges, source IDs, stage status, audited windows and unchecked gaps between supplied windows visible; rejects untrusted completion flags, inconsistent dataset/body/family/threshold and overlapping windows. Links from README, CONTRIBUTING and regeneration guide.
+- Verified `python3 -m unittest tools/test_report_missing_intervals.py -v`: **7/7 pass**, all synthetic. No real P0 snapshot available/used, no scientific parity, release, import, GitHub Actions or merge. Next: authorized P0 interval-by-interval report, independent scientific review, explicit maintainer approval before any coverage manifest is marked complete.
+
 ## 2026-11-14 — Unicode normalization aliases in offline wheel ZIP preflight (draft PR #5)
 
 - **Issue:** the pre-install wheel checker canonicalized paths using `str.casefold()` but did not consider canonically equivalent Unicode spellings, such as `café.py` versus `cafe\\u0301.py`. ZIP entries with distinct raw names can resolve to the same name on Unicode-normalizing filesystems.
