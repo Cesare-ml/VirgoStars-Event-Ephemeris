@@ -19,6 +19,9 @@ These commands are expected review gates, not evidence they have run. On the ori
 
 ## Crates
 
+- `virgostars-event-ephemeris` (`crates/events-rust`): draft Rust-only facade over `events-p0`, requiring a trusted SHA-256 and full-block audit before serving recorded-event queries. Intended for native Desktop and Android clients. See [Rust consumer MVP](RUST_CONSUMER_MVP.md); Linux Cargo/Clippy/release build passed, platform integration pending.
+- `virgostars-events-generator` (`crates/events-generator`): separate development-time, provider-neutral station/ingress candidate discovery and runnable staging CLI with separately supplied ephemeris process. A deterministic Rust mock adapter passes end-to-end CLI tests. No Swiss dependency bundled, no database write, no coverage certification. See [regeneration pipeline](REGENERATION_PIPELINE.md); other four generation algorithms pending.
+
 - `virgostars-events-format`: exposes `VSEPH_MAGIC` and `probe_magic()` only. This is **not a complete binary parser**, version validator, checksum checker or reader. The binary layout is still draft and belongs to issue #3.
 - `virgostars-events-core`: `TimestampMicros`, `BodyId`, `ZodiacSign`, `MotionDirection`, typed `SynodPhase`, `SynodEvent`, `MotionEvent`, `IngressEvent`, `Event` and `ModelError`. The crate now also exposes a **preliminary immutable in-memory** `EventIndex`, `EventFamily`, `SynodHandle`, `IndexError` and `QueryError`. It provides indexed `at`, `next`, `previous`, `between`, and `synod_at`/handle navigation over **already loaded, recorded events**. No file-backed VSEPH decoder or completeness certification exists.
 

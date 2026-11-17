@@ -128,7 +128,8 @@ fn half_open_boundaries_and_pre_epoch_instants_are_exact() {
     assert!(empty.events.is_empty());
     assert!(empty.next_cursor.is_none());
 
-    let unknown = EventIndex::default()
+    let empty_index = EventIndex::default();
+    let unknown = empty_index
         .chronological_between(time(-10), time(11), 10, None)
         .unwrap();
     assert!(unknown.events.is_empty());
