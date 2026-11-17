@@ -23,6 +23,19 @@ Suggested (not yet frozen) types:
 | Ingresses | `onDate(date,tz)`, `between(start,end,bodies?)`, `next`, `previous`, `signAt(body,t)`, `lunarEvents(year,month,tz)` | Latest valid ingress determines sign, including retrograde re-entries |
 | Unified | `events.between(start,end,filter?,limit?)`, `events.onDate(date,tz,filter?)` | Stable chronological merge of all three families, with event type and body |
 
+## Requested event families beyond the current three — proposals only
+
+**Requested 2026-11-17; not implemented in the Rust offline reader or P0 format.** See the [algorithm and missing-work inventory](ASTRONOMICAL_EVENT_ALGORITHMS.md).
+
+| Proposed family | Proposed query (names not frozen) | Data/event semantics | Status |
+| --- | --- | --- | --- |
+| `aspects` | `aspects.between(start,end,bodyA?,bodyB?,types?)`, `next`, `previous` | Pair of canonical body IDs, exact longitude aspect 0°/60°/90°/120°, UTC instant, provenance and independently reviewed per-pair coverage; configurable orb windows later | **Requires new algorithm, schema and reader** |
+| `speed_extrema` | `motions.speedExtremaBetween(start,end,body?,kind?)`, `next`, `previous` | Body, positive local longitudinal speed maximum or most negative local retrograde speed (maximum retrograde magnitude), UTC instant, signed degrees/day, calculation version and coverage | **Requires new algorithm, schema and reader** |
+| `motions` (station labels) | Existing/target `motions.between`, `motions.stateAt` | A signed-speed zero crossing is **one station event**: `direction_after=retrograde` means stop of direct motion/start retrograde; `direction_after=direct` means end of retrograde/restart direct. Separate start/end of a near-zero-speed interval require a *new*, explicitly chosen threshold | **Rust candidate algorithm exists, scientific certification pending** |
+| `ingresses` | Existing/target `ingresses.between`, `ingresses.signAt` | Crossings of tropical longitude 0°,30°, ...330°, including retrograde re-entry with entered sign | **Rust candidate algorithm exists, scientific certification pending** |
+
+No runtime position calculation, hidden interpolation, invented source IDs, or inference of a fully covered interval from empty results. New families require a versioned binary/manifest extension and explicit «unreviewed/missing coverage» responses until authorized datasets and independent scientific checks exist.
+
 `onDate` accepts local ISO calendar dates (e.g. 2030-03-31) and IANA zone names; convert to [UTC start of local day, UTC start of next local day). No ambiguous local timestamp parsing. Functions that accept an instant require an explicit `Z` or offset. Expose a Rust UTC-range primitive; wrappers may use a versioned timezone implementation.
 
 ## Date, boundary and failure policy

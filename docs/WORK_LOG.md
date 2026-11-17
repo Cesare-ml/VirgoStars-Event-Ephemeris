@@ -1,3 +1,17 @@
+## 2026-11-17 — Event-family audit: planet-pair aspects, stations and speed extrema (draft)
+
+- Owner requests all pairwise exact conjunctions 0°, sextiles 60°, squares 90°, trines 120°; ingress into signs; station/return-to-direct moments; and maximum apparent longitude speed, with missing algorithms explicitly tracked.
+- Inspected public Rust generator: `station_candidates` and `ingress_candidates` exist as unverified brackets; Moon phases 0°/90°/180°/270° are **not** generic planet-pair aspects. Inspected private legacy reference: `backend/routines/calcolo-aspetti-per-db.js` and `backend/services/astrology/aspetti-func.js` have an old aspect detector, **not ported/validated** in Rust. No speed-extrema Rust search found.
+- Added [ASTRONOMICAL_EVENT_ALGORITHMS](ASTRONOMICAL_EVENT_ALGORITHMS.md), revised the G3A–G3D roadmap, proposed separate offline API and dataset families without changing P0. Distinguished one instantaneous velocity-zero station from optional conventional near-zero-speed intervals. Updated read-only coverage notes: entirely **unknown** for aspect pair/type and speed extremum body/type until independently reviewed.
+- Documentation only: no Rust algorithm code written for new families, no new dataset generated, no astronomical golden-timestamp parity or release. Next: implement independent synthetic pairwise exact-aspect brackets first, then separately speed extrema, versioned schema and reviewer gates. No Actions or DB writes.
+
+## 2026-11-17 — Contributor interval guide and readable missing-date inventory (draft)
+
+- Added `docs/CONTRIBUTING_EVENT_RANGES.md` to distinguish independent code/provider contributions from owner-authorized P0 gap calculations; requires bounded UTC intervals, methodology, independent comparison, a draft PR and no dataset/credential sharing.
+- Added `docs/COVERAGE_STATUS.md` as the public register: two verified **source-anchor anomalies** for Moon synods (1918–1920, 2017–2019), the broad 2099–4836 ingress **investigation range only**, and explicitly **unknown** coverage for other family/body pairs. No missing astronomical events or scientifically complete epochs are asserted.
+- Added read-only `tools/report_missing_intervals.py` for plan/calculate staging files: makes UTC `[start,end)` ranges, source IDs, stage status, audited windows and unchecked gaps between supplied windows visible; rejects untrusted completion flags, inconsistent dataset/body/family/threshold and overlapping windows. Links from README, CONTRIBUTING and regeneration guide.
+- Verified `python3 -m unittest tools/test_report_missing_intervals.py -v`: **7/7 pass**, all synthetic. No real P0 snapshot available/used, no scientific parity, release, import, GitHub Actions or merge. Next: authorized P0 interval-by-interval report, independent scientific review, explicit maintainer approval before any coverage manifest is marked complete.
+
 ## 2026-11-14 — Unicode normalization aliases in offline wheel ZIP preflight (draft PR #5)
 
 - **Issue:** the pre-install wheel checker canonicalized paths using `str.casefold()` but did not consider canonically equivalent Unicode spellings, such as `café.py` versus `cafe\\u0301.py`. ZIP entries with distinct raw names can resolve to the same name on Unicode-normalizing filesystems.
