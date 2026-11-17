@@ -1,0 +1,19 @@
+[package]
+name = "virgostars-event-ephemeris"
+description = "Rust-first offline VirgoStars event archive interface for desktop and mobile"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+virgostars-events-core = { path = "../events-core" }
+virgostars-events-p0 = { path = "../events-p0" }
+tempfile = "3"
+
+[dev-dependencies]
+base64 = "0.22"
+
+[lib]
+path = "src/lib.rs"

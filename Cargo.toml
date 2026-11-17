@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/events-core", "crates/events-format", "crates/events-p0", "crates/python-bindings"]
+members = ["crates/events-core", "crates/events-format", "crates/events-p0", "crates/events-rust", "crates/events-generator", "crates/python-bindings"]
 resolver = "2"
 
 [workspace.package]

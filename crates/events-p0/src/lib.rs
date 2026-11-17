@@ -630,10 +630,11 @@ impl P0Archive {
 
         // A single decoded block per active series and an ordered next-event
         // head. A block contains at most MAX_RECORDS events (512 in P0).
-        let mut heads: BTreeMap<
+        type ChronologicalHeads = BTreeMap<
             (TimestampMicros, EventFamily, BodyId),
             (Vec<P0Record>, usize, usize),
-        > = BTreeMap::new();
+        >;
+        let mut heads: ChronologicalHeads = BTreeMap::new();
         for ((family, body), series) in &self.blocks {
             let threshold = after.map_or(start, |cursor| start.max(cursor.at));
             let mut block_index = series.partition_point(|block| block.last < threshold);
