@@ -5,6 +5,7 @@
  * See LICENSE, Exhibits A/B and NOTICE; provided AS IS.
  */
 use base64::{engine::general_purpose::STANDARD, Engine};
+use sha2::{Digest, Sha256};
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -140,6 +141,43 @@ fn generate_lunar(archive: &Path, provider: &Path) -> serde_json::Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+fn generate_motion_stations(archive: &Path, provider: &Path) -> serde_json::Value {
+    let output = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args([
+            "--mode",
+            "calculate",
+            "--archive",
+            archive.to_str().unwrap(),
+            "--sha256",
+            SHA,
+            "--family",
+            "motions",
+            "--body",
+            "Mars",
+            "--start-us",
+            "0",
+            "--end-us",
+            &DAY.to_string(),
+            "--threshold-us",
+            "1000000000",
+            "--step-us",
+            &(DAY / 8).to_string(),
+            "--precision-us",
+            "1000000",
+            "--provider-program",
+            provider.to_str().unwrap(),
+        ])
+        .env("MOCK_DOUBLE_STATION", "1")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+
 fn review(archive: &Path, stage: &serde_json::Value, digest: &str) -> Output {
     review_with_reference(archive, stage, digest, None, None, None)
 }
@@ -173,6 +211,204 @@ fn review_with_reference(
         command.env("MOCK_LONGITUDE_OFFSET", offset);
     }
     command.output().unwrap()
+}
+
+fn independent_event_fixture(stage: &serde_json::Value) -> serde_json::Value {
+    let spans: Vec<_> = stage["sparse_spans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|span| {
+            serde_json::json!({
+                "start_us": span["start_us"],
+                "end_us": span["end_us"]
+            })
+        })
+        .collect();
+    let events: Vec<_> = stage["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|candidate| {
+            let begin = candidate["bracket_start_us"].as_i64().unwrap();
+            let end = candidate["bracket_end_us"].as_i64().unwrap();
+            let mut event = serde_json::json!({
+                "gap_index": candidate["gap_index"],
+                "at_us": begin + (end - begin) / 2
+            });
+            for key in ["direction_after", "sign_after_index", "retrograde", "phase"] {
+                if let Some(value) = candidate.get(key) {
+                    event[key] = value.clone();
+                }
+            }
+            event
+        })
+        .collect();
+    serde_json::json!({
+        "schema": "vseph-reference-events-v1",
+        "source": "synthetic-independent-oracle",
+        "version": "test-1",
+        "family": stage["family"],
+        "body": stage["body"],
+        "requested_window": stage["requested_window"],
+        "sparse_spans": spans,
+        "events": events
+    })
+}
+
+fn review_event_fixture(
+    archive: &Path,
+    stage: &serde_json::Value,
+    golden: &serde_json::Value,
+    tolerance: Option<&str>,
+    corrupt_digest: bool,
+) -> Output {
+    let staging = tempfile::NamedTempFile::new().unwrap();
+    fs::write(staging.path(), serde_json::to_vec(stage).unwrap()).unwrap();
+    let reference = tempfile::NamedTempFile::new().unwrap();
+    let bytes = serde_json::to_vec(golden).unwrap();
+    fs::write(reference.path(), &bytes).unwrap();
+    let digest = if corrupt_digest {
+        "0".repeat(64)
+    } else {
+        format!("{:x}", Sha256::digest(&bytes))
+    };
+    let mut command = Command::new(env!("CARGO_BIN_EXE_vseph-review-candidates"));
+    command.args([
+        "--archive",
+        archive.to_str().unwrap(),
+        "--sha256",
+        SHA,
+        "--staging",
+        staging.path().to_str().unwrap(),
+        "--reference-events",
+        reference.path().to_str().unwrap(),
+        "--reference-events-sha256",
+        &digest,
+    ]);
+    if let Some(tolerance) = tolerance {
+        command.args(["--reference-tolerance-us", tolerance]);
+    }
+    command.output().unwrap()
+}
+
+#[test]
+fn authenticated_reference_events_compare_all_supported_event_families() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    for stage in [
+        generate(&archive, Some(&mock)),
+        generate_lunar(&archive, &mock),
+        generate_motion_stations(&archive, &mock),
+    ] {
+        assert!(!stage["candidates"].as_array().unwrap().is_empty());
+        let golden = independent_event_fixture(&stage);
+        let output = review_event_fixture(&archive, &stage, &golden, None, false);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["reference_event_digest_authenticated"], true);
+        assert_eq!(
+            report["reference_event_timestamps_matched"],
+            stage["candidates"].as_array().unwrap().len()
+        );
+        assert_eq!(report["reference_events_correspondence_consistent"], true);
+        assert_eq!(report["reference_events_scientifically_independent"], false);
+        assert_eq!(report["astronomical_accuracy_verified"], false);
+        assert_eq!(report["safe_to_import"], false);
+    }
+}
+
+#[test]
+fn reference_event_comparison_fails_closed_on_bad_trust_and_false_golden_data() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let stage = generate(&archive, Some(&mock));
+    let golden = independent_event_fixture(&stage);
+    assert!(!review_event_fixture(&archive, &stage, &golden, None, true)
+        .status
+        .success());
+
+    let mut wrong_time = golden.clone();
+    wrong_time["events"][0]["at_us"] = serde_json::json!(0);
+    let failed = review_event_fixture(&archive, &stage, &wrong_time, None, false);
+    assert!(!failed.status.success());
+    assert!(failed.stdout.is_empty());
+
+    let mut wrong_sign = golden.clone();
+    wrong_sign["events"][0]["sign_after_index"] = serde_json::json!(11);
+    assert!(
+        !review_event_fixture(&archive, &stage, &wrong_sign, None, false)
+            .status
+            .success()
+    );
+
+    let mut missing = golden.clone();
+    missing["events"] = serde_json::json!([]);
+    assert!(
+        !review_event_fixture(&archive, &stage, &missing, None, false)
+            .status
+            .success()
+    );
+
+    let mut extra = golden.clone();
+    extra["events"]
+        .as_array_mut()
+        .unwrap()
+        .push(golden["events"][0].clone());
+    assert!(!review_event_fixture(&archive, &stage, &extra, None, false)
+        .status
+        .success());
+
+    let mut wrong_spans = golden.clone();
+    wrong_spans["sparse_spans"][0]["end_us"] = serde_json::json!(42);
+    assert!(
+        !review_event_fixture(&archive, &stage, &wrong_spans, None, false)
+            .status
+            .success()
+    );
+
+    let mut invented_field = golden.clone();
+    invented_field["events"][0]["source_id"] = serde_json::json!(12);
+    assert!(
+        !review_event_fixture(&archive, &stage, &invented_field, None, false)
+            .status
+            .success()
+    );
+
+    let precision = stage["calculation_settings"]["precision_us"]
+        .as_i64()
+        .unwrap();
+    assert!(!review_event_fixture(
+        &archive,
+        &stage,
+        &golden,
+        Some(&(precision + 1).to_string()),
+        false
+    )
+    .status
+    .success());
+}
+
+#[test]
+fn reference_time_tolerance_has_an_explicit_precision_cap() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let stage = generate(&archive, Some(&mock));
+    let mut golden = independent_event_fixture(&stage);
+    let end = stage["candidates"][0]["bracket_end_us"].as_i64().unwrap();
+    golden["events"][0]["at_us"] = serde_json::json!(end + 50);
+    let strict = review_event_fixture(&archive, &stage, &golden, None, false);
+    assert!(!strict.status.success());
+    let relaxed = review_event_fixture(&archive, &stage, &golden, Some("50"), false);
+    assert!(
+        relaxed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&relaxed.stderr)
+    );
 }
 
 #[test]

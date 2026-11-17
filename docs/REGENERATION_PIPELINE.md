@@ -134,6 +134,38 @@ cargo run --locked -p virgostars-events-generator --bin vseph-review-candidates 
 
 The reference must announce a **different** provider identity/settings from the source-stage metadata; an exact match aborts. The calculation is limited to **10,000 brackets per invocation**. Any inconsistent crossing aborts with no JSON stdout. A successful report adds `numerical_crossings_checked`, `reference_crossings_consistent: true` and the declared `reference_provider` identity, while retaining `reference_independence_scientifically_established: false`, `astronomical_accuracy_verified: false` and `safe_to_import: false`. **Crucial:** distinct self-declared identities do not prove actual independence, reference-provider authenticity, sub-second accuracy, missed events between samples, or historical source parity. A real independent implementation, signed/pinned software and golden source comparisons remain prerequisites for scientific release. In particular, the legacy Swiss adapter rounds positions to whole UTC seconds; a one-second candidate bracket may fail against a differently rounded reference even when both calculations are reasonable, requiring a documented tolerance/precision policy before promotion.
 
+### Optional SHA-256-bound reference timestamp comparison
+
+For developer-only real Swiss/DE441 golden-event checks **without bundling real ephemeris data**, `vseph-review-candidates` also accepts a separately prepared JSON event list and its **independently trusted SHA-256** (never taken from the staging report). An optional timestamp tolerance defaults to **0** and cannot exceed the candidate bracket precision:
+
+```bash
+cargo run --locked -p virgostars-events-generator --bin vseph-review-candidates -- \
+  --archive /path/to/authorized.p0 --sha256 YOUR_TRUSTED_ARCHIVE_DIGEST \
+  --staging /path/to/previously-generated-staging.json \
+  --reference-events /path/to/independent-event-list.json \
+  --reference-events-sha256 YOUR_SEPARATELY_TRUSTED_REFERENCE_DIGEST \
+  --reference-tolerance-us 1000000
+```
+
+Reference JSON schema `vseph-reference-events-v1`, illustrated with **purely synthetic numbers** (not real Mars event times):
+
+```json
+{
+  "schema": "vseph-reference-events-v1",
+  "source": "independently-reviewed-ephemeris-implementation",
+  "version": "pinned-implementation-and-flags-version",
+  "family": "ingresses",
+  "body": "Mars",
+  "requested_window": { "start_us": 0, "end_us": 172800000000 },
+  "sparse_spans": [{ "start_us": 0, "end_us": 172800000000 }],
+  "events": [{ "gap_index": 0, "at_us": 43200000000, "sign_after_index": 1, "retrograde": false }]
+}
+```
+
+`requested_window` and *all* `sparse_spans` must match the authenticated staging. For motion events, replace ingress sign/retrograde fields with `direction_after: "direct"|"retrograde"`; for Moon quarters use `phase: "new_moon"|"first_quarter"|"full_moon"|"last_quarter"`. Events must be strictly sorted and unique by `(gap_index, at_us)`, remain within their sparse span and use signed UTC/POSIX microseconds. The reviewer compares **every** reference event one-to-one with staged candidates by order, gap index and family-specific labels, and requires the reference instant inside `[bracket_start_us - tolerance, bracket_end_us + tolerance]`. Missing/extra events, invalid labels, wrong source window, forged keys, incorrect file SHA or an excessive tolerance **fail closed with empty stdout**. Limits: 16 MiB JSON file and 10,000 events per review.
+
+Successful report fields: `reference_event_digest_authenticated:true`, `reference_event_timestamps_matched`, `reference_events_correspondence_consistent:true`, **but** `reference_events_scientifically_independent:false`, `astronomical_accuracy_verified:false`, `coverage_certified:false`, `safe_to_import:false`. The trusted hash authenticates bytes, **not** the astronomy, alleged reference independence, or completeness of claimed reference spans. A reference file copied from the stage can trivially pass and is **not an independent oracle**. The reviewer does not generate trusted reference data, and the Windows batch script does not auto-run this optional scientific comparison. Supply a separately authored file for each stage and run this check explicitly; never commit owner data without distribution approval.
+
 ### Windows batch script for known gaps and resumable intervals
 
 `tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. Optional `-VerifyHalfStep` in `-Mode calculate` enables the producer's finer-cadence scan; `-AdaptiveStationDepth 1..8` enables the **motion-only** speed-risk check; `-AdaptiveIngressDepth 1..8` independently enables the **ingress-only** boundary check; `-AdaptiveLunarDepth 1..8` independently enables the **Moon-only** phase-alias check; optional `-ReferenceProviderProgram` additionally requires numerical crossing agreement before saving new outputs. **Separate `_halfstep` / `_adaptiveN` / `_ingressAdaptiveN` / `_lunarAdaptiveN` / `_reference` filenames** distinguish these check modes from ordinary staging, without overwriting existing artifacts. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs either a compatible independent `-ProviderProgram` executable, **or** an authorized private backend checkout with its existing Node dependencies and Swiss license configured for the default legacy adapter. For instance:

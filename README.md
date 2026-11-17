@@ -1,5 +1,7 @@
 # VirgoStars Event Ephemeris
 
+**Developer-only reference timestamp parity:** `vseph-review-candidates` can additionally compare every staged event to a separately authored, SHA-256-authenticated JSON reference list, checking exact UTC brackets, labels, missed and extra events. Agreement does **not** prove astronomical independence, scientifically complete coverage or permission to import. See [reference timestamp comparison](docs/REGENERATION_PIPELINE.md#optional-sha-256-bound-reference-timestamp-comparison).
+
 **Independent, free/open-source, offline-first event ephemerides for astrology.**
 
 **New maintainer priority (2026-11-17): Rust-first native MVP for VirgoStars Desktop and VirgoStars Mobile App.** The draft [`virgostars-event-ephemeris` consumer crate](docs/RUST_CONSUMER_MVP.md) wraps the existing experimental P0 reader for both applications; the separate [regeneration pipeline](docs/REGENERATION_PIPELINE.md) adds provider-neutral motion/ingress candidate detectors and a runnable Rust staging command with an external ephemeris process protocol. **Both crates compiled and their Rust tests passed on Linux/Rust 1.90; no package/dataset release, Windows/Android build or app integration is claimed.** Python/WASM are later optional distribution layers, not prerequisites for the Rust MVP. This replaces the historical Python-first product priority described below.

@@ -455,6 +455,7 @@ dependencies = [
  "base64",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "virgostars-event-ephemeris",
  "virgostars-events-core",
