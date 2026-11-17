@@ -12,6 +12,7 @@
 //! certifies that unsampled peaks do not exist. Independently review real
 //! timestamps, providers, time scales, kernels and temporal completeness.
 
+use std::collections::BTreeMap;
 use virgostars_events_core::BodyId;
 
 use crate::{
@@ -36,6 +37,16 @@ pub struct SpeedExtremumCandidate {
     pub bracket_end_us: i64,
     /// Apparent geocentric ecliptic longitude speed in degrees/day (not km/s).
     pub sampled_signed_speed_degrees_per_day: f64,
+}
+
+/// Diagnostic counts from an experimental quarter-point / adaptive speed scan.
+/// An empty list is **not** evidence of complete astronomical coverage.
+#[derive(Debug, Default)]
+pub struct AdaptiveSpeedExtremaReport {
+    pub candidates: Vec<SpeedExtremumCandidate>,
+    pub interior_probes: usize,
+    pub refined_segments: usize,
+    pub leaf_segments: usize,
 }
 
 fn checked_speed<P: LongitudeProvider>(
@@ -99,6 +110,23 @@ fn measured_local_peak<P: LongitudeProvider>(
     })
 }
 
+fn classified_peak(
+    before: f64,
+    center: f64,
+    after: f64,
+) -> Result<Option<SpeedExtremumKind>, GenerationError> {
+    if before == center || center == after {
+        return Err(GenerationError::AmbiguousSpeedExtremum);
+    }
+    Ok(if before < center && center > after && center > 0.0 {
+        Some(SpeedExtremumKind::DirectMaximum)
+    } else if before > center && center < after && center < 0.0 {
+        Some(SpeedExtremumKind::RetrogradeMagnitudeMaximum)
+    } else {
+        None
+    })
+}
+
 /// Discover *possible* local maximum direct speeds and strongest retrograde
 /// speeds from consecutive three-point samples.
 ///
@@ -129,17 +157,7 @@ pub fn speed_extremum_candidates<P: LongitudeProvider>(
     while center_us < window.end_us {
         let last_us = next_time(center_us, window);
         let last_speed = checked_speed(provider, body, last_us, remaining_probes)?;
-        if first_speed == center_speed || center_speed == last_speed {
-            return Err(GenerationError::AmbiguousSpeedExtremum);
-        }
-        let kind = if first_speed < center_speed && center_speed > last_speed && center_speed > 0.0
-        {
-            Some(SpeedExtremumKind::DirectMaximum)
-        } else if first_speed > center_speed && center_speed < last_speed && center_speed < 0.0 {
-            Some(SpeedExtremumKind::RetrogradeMagnitudeMaximum)
-        } else {
-            None
-        };
+        let kind = classified_peak(first_speed, center_speed, last_speed)?;
         if let Some(kind) = kind {
             found.push(measured_local_peak(
                 provider,
@@ -158,6 +176,155 @@ pub fn speed_extremum_candidates<P: LongitudeProvider>(
     }
     found.sort_by_key(|candidate| candidate.bracket_start_us);
     Ok(found)
+}
+
+fn suspicious_half(before: f64, mid: f64, after: f64) -> bool {
+    // A sampled turning point or a pronounced deviation from the secant
+    // prompts another subdivision. Neither condition bounds the true second
+    // derivative or proves that unobserved peaks cannot exist.
+    let turn = (before < mid && mid > after) || (before > mid && mid < after);
+    let secant_mid = before / 2.0 + after / 2.0;
+    turn || (mid - secant_mid).abs() > (after - before).abs() / 2.0
+}
+
+struct AdaptiveSpeedScan<'a, P> {
+    provider: &'a P,
+    body: &'a BodyId,
+    remaining_probes: &'a mut usize,
+    sampled: BTreeMap<i64, f64>,
+    report: AdaptiveSpeedExtremaReport,
+}
+
+impl<P: LongitudeProvider> AdaptiveSpeedScan<'_, P> {
+    fn sample(&mut self, at_us: i64, interior: bool) -> Result<f64, GenerationError> {
+        if let Some(speed) = self.sampled.get(&at_us) {
+            return Ok(*speed);
+        }
+        let speed = checked_speed(self.provider, self.body, at_us, self.remaining_probes)?;
+        self.sampled.insert(at_us, speed);
+        if interior {
+            self.report.interior_probes += 1;
+        }
+        Ok(speed)
+    }
+
+    fn segment(
+        &mut self,
+        start_us: i64,
+        end_us: i64,
+        start_speed: f64,
+        end_speed: f64,
+        depth_remaining: u8,
+        precision_us: i64,
+    ) -> Result<(), GenerationError> {
+        let span = end_us as i128 - start_us as i128;
+        if depth_remaining == 0 || span <= precision_us as i128 * 4 {
+            self.report.leaf_segments += 1;
+            return Ok(());
+        }
+        let q1 = (start_us as i128 + span / 4) as i64;
+        let mid = midpoint(start_us, end_us);
+        let q3 = (start_us as i128 + span * 3 / 4) as i64;
+        if !(start_us < q1 && q1 < mid && mid < q3 && q3 < end_us) {
+            self.report.leaf_segments += 1;
+            return Ok(());
+        }
+
+        // Always inspect quarters, not just a midpoint: two speed peaks at
+        // 1/4 and 3/4 can alias to identical coarse endpoints and midpoint.
+        let first = self.sample(q1, true)?;
+        let center = self.sample(mid, true)?;
+        let last = self.sample(q3, true)?;
+        for (left, right, a, b, c) in [
+            (start_us, mid, start_speed, first, center),
+            (mid, end_us, center, last, end_speed),
+        ] {
+            if depth_remaining > 1 && suspicious_half(a, b, c) {
+                self.report.refined_segments += 1;
+                self.segment(left, right, a, c, depth_remaining - 1, precision_us)?;
+            } else {
+                self.report.leaf_segments += 1;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Uncertified bounded rescan that checks each coarse segment at its quarter,
+/// midpoint and three-quarter times, then recursively inspects suspicious
+/// half-segments up to `max_depth` (1..=8).
+///
+/// Candidate classification uses the chronologically ordered, deduplicated
+/// samples, so two extrema hidden in a single coarse step may be discovered.
+/// Cached provider samples and peak-refinement probes share one caller budget;
+/// any exhaustion or sampled speed plateau fails closed. Sub-quarter/narrow
+/// extrema may still alias, and a successful report **never** certifies a UTC
+/// interval or the absence of other peaks. End timestamps are probe-only:
+/// the requested UTC window remains half-open `[start_us, end_us)`.
+pub fn adaptive_speed_extrema_scan<P: LongitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    window: SearchWindow,
+    max_depth: u8,
+    remaining_probes: &mut usize,
+) -> Result<AdaptiveSpeedExtremaReport, GenerationError> {
+    window.validate()?;
+    if !(1..=8).contains(&max_depth)
+        || (window.step_us as i128) / (1_i128 << (max_depth as u32 + 2))
+            < window.precision_us as i128
+        || *remaining_probes == 0
+    {
+        return Err(GenerationError::InvalidWindow);
+    }
+
+    let mut scan = AdaptiveSpeedScan {
+        provider,
+        body,
+        remaining_probes,
+        sampled: BTreeMap::new(),
+        report: AdaptiveSpeedExtremaReport::default(),
+    };
+    let mut start = window.start_us;
+    let mut start_speed = scan.sample(start, false)?;
+    while start < window.end_us {
+        let end = next_time(start, window);
+        let end_speed = scan.sample(end, false)?;
+        scan.segment(
+            start,
+            end,
+            start_speed,
+            end_speed,
+            max_depth,
+            window.precision_us,
+        )?;
+        start = end;
+        start_speed = end_speed;
+    }
+
+    let ordered: Vec<_> = scan.sampled.into_iter().collect();
+    if ordered.len() < 3 {
+        return Err(GenerationError::InsufficientSpeedSamples);
+    }
+    for triple in ordered.windows(3) {
+        let [(first_us, first), (_, center), (last_us, last)] = triple else {
+            unreachable!("windows(3) yields triples")
+        };
+        if let Some(kind) = classified_peak(*first, *center, *last)? {
+            scan.report.candidates.push(measured_local_peak(
+                provider,
+                body,
+                *first_us,
+                *last_us,
+                window.precision_us,
+                kind,
+                scan.remaining_probes,
+            )?);
+        }
+    }
+    scan.report
+        .candidates
+        .sort_by_key(|candidate| candidate.bracket_start_us);
+    Ok(scan.report)
 }
 
 #[cfg(test)]
@@ -336,5 +503,120 @@ mod tests {
             speed_extremum_candidates(&BadProvider, &body(), window(4), &mut budget).unwrap_err(),
             GenerationError::InvalidSample
         );
+    }
+
+    struct TwoPeaksPerCoarseStep {
+        retrograde: bool,
+    }
+
+    impl LongitudeProvider for TwoPeaksPerCoarseStep {
+        fn sample(&self, _: &BodyId, at: TimestampMicros) -> Result<LongitudeSample, String> {
+            let day = at.as_i64() as f64 / DAY as f64;
+            let angle = 2.0 * std::f64::consts::PI * day;
+            let (longitude_degrees, longitude_speed_degrees_per_day) = (
+                3.5 * day - (2.0 * angle).sin() / (8.0 * std::f64::consts::PI),
+                3.0 + angle.sin().powi(2),
+            );
+            let sign = if self.retrograde { -1.0 } else { 1.0 };
+            Ok(LongitudeSample {
+                longitude_degrees: sign * longitude_degrees,
+                longitude_speed_degrees_per_day: sign * longitude_speed_degrees_per_day,
+            })
+        }
+    }
+
+    #[test]
+    fn quarter_probes_find_two_direct_maxima_hidden_per_coarse_step() {
+        let provider = TwoPeaksPerCoarseStep { retrograde: false };
+        let mut budget = 1_000;
+        // All integer-day coarse speeds are 3, so the simple scan rejects
+        // them as an ambiguous plateau; two peaks exist between each pair.
+        assert_eq!(
+            speed_extremum_candidates(&provider, &body(), window(2), &mut budget).unwrap_err(),
+            GenerationError::AmbiguousSpeedExtremum
+        );
+
+        let mut budget = 1_000;
+        let report =
+            adaptive_speed_extrema_scan(&provider, &body(), window(2), 3, &mut budget).unwrap();
+        assert_eq!(report.candidates.len(), 4);
+        assert!(report.interior_probes >= 6);
+        assert!(report.refined_segments > 0);
+        for (peak, expected) in
+            report
+                .candidates
+                .iter()
+                .zip([DAY / 4, 3 * DAY / 4, 5 * DAY / 4, 7 * DAY / 4])
+        {
+            assert_eq!(peak.kind, SpeedExtremumKind::DirectMaximum);
+            assert!(peak.bracket_start_us <= expected);
+            assert!(peak.bracket_end_us >= expected);
+            assert!(peak.bracket_end_us - peak.bracket_start_us <= 1_000_000);
+            assert!((peak.sampled_signed_speed_degrees_per_day - 4.0).abs() < 1e-8);
+        }
+    }
+
+    #[test]
+    fn quarter_probes_classify_hidden_retrograde_magnitude_peaks() {
+        let mut budget = 1_000;
+        let report = adaptive_speed_extrema_scan(
+            &TwoPeaksPerCoarseStep { retrograde: true },
+            &body(),
+            window(2),
+            2,
+            &mut budget,
+        )
+        .unwrap();
+        assert_eq!(report.candidates.len(), 4);
+        assert!(report.candidates.iter().all(|peak| {
+            peak.kind == SpeedExtremumKind::RetrogradeMagnitudeMaximum
+                && (peak.sampled_signed_speed_degrees_per_day + 4.0).abs() < 1e-8
+        }));
+    }
+
+    #[test]
+    fn adaptive_speed_respects_budget_and_rejects_invalid_depths() {
+        let provider = TwoPeaksPerCoarseStep { retrograde: false };
+        let mut budget = 4;
+        assert_eq!(
+            adaptive_speed_extrema_scan(&provider, &body(), window(2), 3, &mut budget).unwrap_err(),
+            GenerationError::TooManySteps
+        );
+        for depth in [0, 9] {
+            let mut budget = 100;
+            assert_eq!(
+                adaptive_speed_extrema_scan(&provider, &body(), window(2), depth, &mut budget)
+                    .unwrap_err(),
+                GenerationError::InvalidWindow
+            );
+        }
+    }
+
+    #[test]
+    fn adaptive_speed_rejects_flat_curve_and_does_not_invent_linear_peaks() {
+        let mut budget = 100;
+        assert_eq!(
+            adaptive_speed_extrema_scan(&ConstantSpeed, &body(), window(2), 1, &mut budget)
+                .unwrap_err(),
+            GenerationError::AmbiguousSpeedExtremum
+        );
+
+        struct LinearSpeed;
+        impl LongitudeProvider for LinearSpeed {
+            fn sample(&self, _: &BodyId, at: TimestampMicros) -> Result<LongitudeSample, String> {
+                let day = at.as_i64() as f64 / DAY as f64;
+                Ok(LongitudeSample {
+                    longitude_degrees: 3.0 * day + day * day / 2.0,
+                    longitude_speed_degrees_per_day: 3.0 + day,
+                })
+            }
+        }
+        let mut budget = 100;
+        let report =
+            adaptive_speed_extrema_scan(&LinearSpeed, &body(), window(2), 3, &mut budget).unwrap();
+        assert!(report.candidates.is_empty());
+        assert_eq!(report.interior_probes, 6);
+        assert_eq!(report.refined_segments, 0);
+        assert_eq!(report.leaf_segments, 4);
     }
 }

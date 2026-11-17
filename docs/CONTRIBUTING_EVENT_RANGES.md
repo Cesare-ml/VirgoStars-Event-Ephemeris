@@ -4,6 +4,8 @@ La libreria Event Ephemeris è progettata per leggere eventi astronomici precalc
 
 Per le nuove famiglie richieste (aspetti esatti **0°/60°/90°/120°**, estremi della velocità), partire dalla [matrice di funzionalità e algoritmi mancanti](ASTRONOMICAL_EVENT_ALGORITHMS.md): **non sono ancora supportate dal generatore di lacune P0**. Un contributore può svilupparne e testarne il motore Rust con fixture sintetiche prima che un dataset autorizzato sia disponibile.
 
+**Sperimentare i picchi di velocità senza dataset:** il crate Rust `events-generator` offre `speed_extrema::speed_extremum_candidates` (campionamento a tre punti) e `speed_extrema::adaptive_speed_extrema_scan` (quarti di passo, rischio di inversione/curvatura, profondità limitata). Entrambi richiedono un `LongitudeProvider`, un `BodyId`, una `SearchWindow` UTC e un budget condiviso di campioni (`&mut usize`); la seconda accetta anche `max_depth` da 1 a 8 e restituisce contatori diagnostici. Sono **API di sviluppo**, non modalità CLI `vseph-fill-gaps` né contenuti leggibili dalle app: confrontare sempre i risultati con un provider indipendente e segnalare tutti gli intervalli non controllati. I test sintetici si eseguono con `cargo test --locked -p virgostars-events-generator speed_extrema`.
+
 ## Percorso 1 — contributi senza il dataset originale
 
 **Non è necessario accedere al database VirgoStars** per migliorare algoritmi, generare casi di prova o confrontare due motori. Un contributore può:
