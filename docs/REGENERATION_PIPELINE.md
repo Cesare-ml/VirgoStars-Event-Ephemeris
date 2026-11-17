@@ -52,6 +52,16 @@ cargo run --locked -p virgostars-events-generator --bin vseph-fill-gaps -- \
 
 These epoch numbers are **illustrative** and must be checked against the desired approved source window before running. The tool's explicit `--max-steps` (default 100,000, maximum 1,000,000) fails closed before provider launch if the job is too large; `--chunk-us` (default 365 days) subdivides long spans safely. For `--family synods`, **only `--body Moon` is calculable**. All three families can be *planned*, but synods for other planets, nodes, aspects and eclipses still require dedicated science/code and source parity review. Original source row IDs remain present only as anchors in the sparse-span report, never attached to newly calculated candidates. Empty results never establish scientific completeness.
 
+### Optional half-step cadence rescan
+
+For `--mode calculate`, add `--cadence-check half` to rescan **every same chunk** with half the requested sample stride, against the same position provider. Before starting the provider, the CLI budgets the **combined** original and half-step sample count under `--max-steps` (hard cap 1,000,000), and requires `step_us / 2 >= precision_us`. The calculation aborts **without staging JSON** if the finer scan finds more/fewer events, changes any candidate phase/direction/sign label or moves an event midpoint by more than the declared bracket precision. Otherwise it emits an explicitly unverified `cadence_check` object with the checked count and actual half-step stride. Example (add to the calculation command above):
+
+```bash
+  --cadence-check half
+```
+
+This catches *some* missed pairs of closely spaced events. Synthetic regression: a daily scan with **two** hidden motion stations reports zero candidates; the half-day scan finds both and refuses to stage an apparently empty interval. **It does not prove absence of even faster multiple crossings or scientific correctness**. Repeating with another halved step, testing phases near a chunk edge and comparing genuine source records are still necessary. The separate `vseph-review-candidates` executable checks `cadence_check` metadata consistency but **does not recompute the half-step scan**; it reports `cadence_check_independently_recomputed: false`. Do not use this self-reported heuristic as certified coverage.
+
 ### Independent structural review before keeping staging JSON
 
 The separate `vseph-review-candidates` Rust executable takes an **existing** output file and reopens the original immutable P0 through the independently supplied trusted SHA-256. It re-audits all archive blocks, checks the staged dataset identity, **recalculates every sparse interval and source ID from recorded P0 rows**, and validates all proposed brackets against their claimed interval, family, body, phase/sign/direction fields and declared search precision. It rejects unexpected JSON keys (including forged `source_id` fields), invalid provider settings and duplicate/out-of-order brackets. The producer's SHA-256 field must never be used as the reviewer's trust anchor.
@@ -84,7 +94,7 @@ The reference must announce a **different** provider identity/settings from the 
 
 ### Windows batch script for known gaps and resumable intervals
 
-`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. An optional `-ReferenceProviderProgram` in `-Mode calculate` additionally requires numerical crossing agreement before saving new outputs. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs either a compatible independent `-ProviderProgram` executable, **or** an authorized private backend checkout with its existing Node dependencies and Swiss license configured for the default legacy adapter. For instance:
+`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. Optional `-VerifyHalfStep` in `-Mode calculate` enables the producer's finer-cadence scan; optional `-ReferenceProviderProgram` additionally requires numerical crossing agreement before saving new outputs. **Separate `_halfstep` / `_reference` filenames** distinguish these check modes from ordinary staging, without overwriting existing artifacts. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs either a compatible independent `-ProviderProgram` executable, **or** an authorized private backend checkout with its existing Node dependencies and Swiss license configured for the default legacy adapter. For instance:
 
 ```powershell
 # Analyze the two known Moon source discontinuities (1918–1920, 2017–2019).
@@ -95,7 +105,8 @@ The reference must announce a **different** provider identity/settings from the 
 # Generate Moon-phase brackets through the existing backend's Swiss calculation.
 .\tools\compute-missing-intervals.ps1 -Archive "D:\data\authorized.p0" `
   -TrustedSha256 "<trusted 64-char lowercase digest>" -OutputDir "D:\vseph-staging" `
-  -KnownMoonGaps -Mode calculate -BackendRoot "D:\GitHub\virgo-stars"
+  -KnownMoonGaps -Mode calculate -BackendRoot "D:\GitHub\virgo-stars" `
+  -VerifyHalfStep
 
 # Long ingress gap: bounded, resumable slices; example 8-day threshold is
 # only a user-selected investigation rule, not scientifically certified.

@@ -33,6 +33,15 @@ fn main() {
             "Moon" => (10.0 + 13.0 * days, 13.0),
             _ => (29.0 + days * 2.0, 2.0),
         };
+        // Two stations strictly inside a daily scan step: the daily endpoints
+        // have equal speed sign, but a half-day sample exposes both crossings.
+        let speed = if requested_body == "Mars"
+            && std::env::var_os("MOCK_DOUBLE_STATION").is_some()
+        {
+            (days - 0.25) * (days - 0.75)
+        } else {
+            speed
+        };
         let body = if std::env::var_os("MOCK_BAD_ECHO").is_some() {
             "Venus"
         } else {

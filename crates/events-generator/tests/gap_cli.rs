@@ -175,3 +175,96 @@ fn moon_phase_staging_produces_four_review_only_phase_brackets() {
     assert!(!phases.is_empty());
     assert_eq!(doc["generation_complete"], false);
 }
+
+#[test]
+fn half_step_rescan_detects_two_stations_hidden_between_daily_samples() {
+    let (_dir, archive) = fixture();
+    let (_program_dir, program) = compiled_provider();
+    let end = DAY.to_string();
+    let base = [
+        "--mode",
+        "calculate",
+        "--archive",
+        archive.to_str().unwrap(),
+        "--sha256",
+        SHA,
+        "--family",
+        "motions",
+        "--body",
+        "Mars",
+        "--start-us",
+        "0",
+        "--end-us",
+        &end,
+        "--threshold-us",
+        "1000000000",
+        "--step-us",
+        &end,
+        "--precision-us",
+        "1000000",
+        "--provider-program",
+        program.to_str().unwrap(),
+    ];
+    let coarse = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args(base)
+        .env("MOCK_DOUBLE_STATION", "1")
+        .output()
+        .unwrap();
+    assert!(
+        coarse.status.success(),
+        "{}",
+        String::from_utf8_lossy(&coarse.stderr)
+    );
+    let stage: serde_json::Value = serde_json::from_slice(&coarse.stdout).unwrap();
+    assert_eq!(stage["candidates"].as_array().unwrap().len(), 0);
+
+    let checked = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args(base)
+        .args(["--cadence-check", "half"])
+        .env("MOCK_DOUBLE_STATION", "1")
+        .output()
+        .unwrap();
+    assert!(!checked.status.success());
+    assert!(checked.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&checked.stderr).contains("possible missed crossings"));
+}
+
+#[test]
+fn half_step_calculation_budget_fails_before_provider_and_emits_no_partial_json() {
+    let (_dir, archive) = fixture();
+    let end = DAY.to_string();
+    let output = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args([
+            "--mode",
+            "calculate",
+            "--archive",
+            archive.to_str().unwrap(),
+            "--sha256",
+            SHA,
+            "--family",
+            "motions",
+            "--body",
+            "Mars",
+            "--start-us",
+            "0",
+            "--end-us",
+            &end,
+            "--threshold-us",
+            "1000000000",
+            "--step-us",
+            &end,
+            "--precision-us",
+            "1000000",
+            "--max-steps",
+            "2",
+            "--provider-program",
+            "nonexistent-mock-provider",
+            "--cadence-check",
+            "half",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("needs 3 position steps"));
+}

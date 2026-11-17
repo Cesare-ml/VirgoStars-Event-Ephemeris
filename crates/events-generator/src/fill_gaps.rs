@@ -20,7 +20,7 @@ use virgostars_events_generator::{ingress_candidates, station_candidates, Search
 const DEFAULT_CHUNK_US: i64 = 365 * 86_400_000_000;
 const DEFAULT_MAX_STEPS: u64 = 100_000;
 const HARD_MAX_STEPS: u64 = 1_000_000;
-const USAGE: &str = "Usage: vseph-fill-gaps --mode plan|calculate --archive P0 --sha256 TRUSTED_DIGEST --family synods|motions|ingresses --body NAME --start-us I64 --end-us I64 --threshold-us I64 [--provider-program EXEC --step-us I64 --precision-us I64] [--chunk-us I64] [--max-steps U64]\nOnly synods/Moon, motions, ingresses can be calculated; others are report-only. Never writes P0, original IDs or database. Redirect reviewed JSON staging output explicitly to a file.";
+const USAGE: &str = "Usage: vseph-fill-gaps --mode plan|calculate --archive P0 --sha256 TRUSTED_DIGEST --family synods|motions|ingresses --body NAME --start-us I64 --end-us I64 --threshold-us I64 [--provider-program EXEC --step-us I64 --precision-us I64] [--chunk-us I64] [--max-steps U64] [--cadence-check half|none]\nOnly synods/Moon, motions, ingresses can be calculated; others are report-only. Optional half-step rescan catches some missed events, NOT scientific completeness. Never writes P0, original IDs or database.";
 
 struct Options {
     mode: String,
@@ -37,6 +37,7 @@ struct Options {
     precision_us: Option<i64>,
     chunk_us: i64,
     max_steps: u64,
+    verify_half_step: bool,
 }
 
 fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
@@ -56,6 +57,7 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
         "--precision-us",
         "--chunk-us",
         "--max-steps",
+        "--cadence-check",
     ];
     while let Some(key) = args.next() {
         if !NAMES.contains(&key.as_str()) || map.contains_key(&key) {
@@ -115,6 +117,11 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
     if max_steps == 0 || max_steps > HARD_MAX_STEPS {
         return Err("--max-steps must be in 1..=1000000".into());
     }
+    let verify_half_step = match map.get("--cadence-check").map(String::as_str) {
+        None | Some("none") => false,
+        Some("half") => true,
+        Some(_) => return Err("--cadence-check must be half or none".into()),
+    };
     let provider_program = map.get("--provider-program").map(PathBuf::from);
     let step_us = map
         .get("--step-us")
@@ -138,8 +145,15 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
         if family == EventFamily::Synod && body.as_str() != "Moon" {
             return Err("only Moon synod phase candidates are currently implemented".into());
         }
+        if verify_half_step
+            && step_us.expect("validated step") / 2 < precision_us.expect("validated precision")
+        {
+            return Err("half-step verification requires step_us / 2 >= precision_us".into());
+        }
     } else if provider_program.is_some() || step_us.is_some() || precision_us.is_some() {
         return Err("plan does not invoke a provider; remove calculation options".into());
+    } else if verify_half_step {
+        return Err("half-step verification requires calculate mode".into());
     }
     Ok(Options {
         mode,
@@ -156,7 +170,116 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
         precision_us,
         chunk_us,
         max_steps,
+        verify_half_step,
     })
+}
+
+fn generate_chunk(
+    provider: &ProcessLongitudeProvider,
+    family: EventFamily,
+    body: &BodyId,
+    gap_index: usize,
+    window: SearchWindow,
+) -> Result<Vec<Value>, String> {
+    match family {
+        EventFamily::Motion => station_candidates(provider, body, window)
+            .map_err(|error| error.to_string())
+            .map(|found| {
+                found
+                    .into_iter()
+                    .map(|candidate| {
+                        json!({
+                            "gap_index": gap_index,
+                            "family": "motions",
+                            "body": candidate.body.as_str(),
+                            "bracket_start_us": candidate.bracket_start_us,
+                            "bracket_end_us": candidate.bracket_end_us,
+                            "direction_after": match candidate.direction_after {
+                                MotionDirection::Direct => "direct",
+                                MotionDirection::Retrograde => "retrograde",
+                            },
+                        })
+                    })
+                    .collect()
+            }),
+        EventFamily::Ingress => ingress_candidates(provider, body, window)
+            .map_err(|error| error.to_string())
+            .map(|found| {
+                found
+                    .into_iter()
+                    .map(|candidate| {
+                        json!({
+                            "gap_index": gap_index,
+                            "family": "ingresses",
+                            "body": candidate.body.as_str(),
+                            "bracket_start_us": candidate.bracket_start_us,
+                            "bracket_end_us": candidate.bracket_end_us,
+                            "sign_after_index": candidate.sign_after.index(),
+                            "retrograde": candidate.retrograde,
+                        })
+                    })
+                    .collect()
+            }),
+        EventFamily::Synod => lunar_phase_candidates(provider, window)
+            .map_err(|error| error.to_string())
+            .map(|found| {
+                found
+                    .into_iter()
+                    .map(|candidate| {
+                        json!({
+                            "gap_index": gap_index,
+                            "family": "synods",
+                            "body": "Moon",
+                            "phase": candidate.phase.code(),
+                            "bracket_start_us": candidate.bracket_start_us,
+                            "bracket_end_us": candidate.bracket_end_us,
+                        })
+                    })
+                    .collect()
+            }),
+    }
+}
+
+fn compare_half_step(coarse: &[Value], fine: &[Value], precision_us: i64) -> Result<(), String> {
+    if coarse.len() != fine.len() {
+        return Err(format!(
+            "half-step rescan found {} candidates, initial scan found {}; possible missed crossings",
+            fine.len(),
+            coarse.len()
+        ));
+    }
+    for (index, (original, checked)) in coarse.iter().zip(fine).enumerate() {
+        for field in [
+            "gap_index",
+            "family",
+            "body",
+            "phase",
+            "direction_after",
+            "sign_after_index",
+            "retrograde",
+        ] {
+            if original.get(field) != checked.get(field) {
+                return Err(format!(
+                    "half-step candidate #{index} changed event identity at {field}"
+                ));
+            }
+        }
+        let midpoint = |event: &Value| -> Result<i128, String> {
+            let start = event["bracket_start_us"]
+                .as_i64()
+                .ok_or("invalid first bracket endpoint")?;
+            let end = event["bracket_end_us"]
+                .as_i64()
+                .ok_or("invalid second bracket endpoint")?;
+            Ok((start as i128 + end as i128) / 2)
+        };
+        if (midpoint(original)? - midpoint(checked)?).abs() > precision_us as i128 {
+            return Err(format!(
+                "half-step candidate #{index} moved by more than the requested precision"
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn run() -> Result<(), String> {
@@ -205,6 +328,10 @@ fn run() -> Result<(), String> {
                 let end = (start as i128 + options.chunk_us as i128).min(gap.end_us as i128) as i64;
                 let span_len = end as i128 - start as i128;
                 total_steps += (span_len + step as i128 - 1) / step as i128;
+                if options.verify_half_step {
+                    let half = (step / 2) as i128;
+                    total_steps += (span_len + half - 1) / half;
+                }
                 if total_steps > options.max_steps as i128 {
                     return Err(format!(
                         "calculation needs {total_steps} position steps: split the window or raise --max-steps (max 1000000)"
@@ -232,54 +359,22 @@ fn run() -> Result<(), String> {
         provider_identity = serde_json::to_value(provider.identity())
             .map_err(|error| format!("cannot serialize provider identity: {error}"))?;
         for (gap_index, window) in chunks {
-            match options.family {
-                EventFamily::Motion => {
-                    for candidate in station_candidates(&provider, &options.body, window)
-                        .map_err(|error| error.to_string())?
-                    {
-                        candidates.push(json!({
-                            "gap_index": gap_index,
-                            "family": "motions",
-                            "body": candidate.body.as_str(),
-                            "bracket_start_us": candidate.bracket_start_us,
-                            "bracket_end_us": candidate.bracket_end_us,
-                            "direction_after": match candidate.direction_after {
-                                MotionDirection::Direct => "direct",
-                                MotionDirection::Retrograde => "retrograde",
-                            }
-                        }));
-                    }
-                }
-                EventFamily::Ingress => {
-                    for candidate in ingress_candidates(&provider, &options.body, window)
-                        .map_err(|error| error.to_string())?
-                    {
-                        candidates.push(json!({
-                            "gap_index": gap_index,
-                            "family": "ingresses",
-                            "body": candidate.body.as_str(),
-                            "bracket_start_us": candidate.bracket_start_us,
-                            "bracket_end_us": candidate.bracket_end_us,
-                            "sign_after_index": candidate.sign_after.index(),
-                            "retrograde": candidate.retrograde,
-                        }));
-                    }
-                }
-                EventFamily::Synod => {
-                    for candidate in lunar_phase_candidates(&provider, window)
-                        .map_err(|error| error.to_string())?
-                    {
-                        candidates.push(json!({
-                            "gap_index": gap_index,
-                            "family": "synods",
-                            "body": "Moon",
-                            "phase": candidate.phase.code(),
-                            "bracket_start_us": candidate.bracket_start_us,
-                            "bracket_end_us": candidate.bracket_end_us,
-                        }));
-                    }
-                }
+            let found =
+                generate_chunk(&provider, options.family, &options.body, gap_index, window)?;
+            if options.verify_half_step {
+                let fine = generate_chunk(
+                    &provider,
+                    options.family,
+                    &options.body,
+                    gap_index,
+                    SearchWindow {
+                        step_us: step / 2,
+                        ..window
+                    },
+                )?;
+                compare_half_step(&found, &fine, precision)?;
             }
+            candidates.extend(found);
         }
     }
     // Atomic single output: no partly calculated output after provider errors.
@@ -309,6 +404,14 @@ fn run() -> Result<(), String> {
                 })
             } else { Value::Null },
             "provider": provider_identity,
+            "cadence_check": if options.verify_half_step && !spans.is_empty() {
+                json!({
+                    "mode": "half_step",
+                    "step_us": options.step_us.expect("validated step") / 2,
+                    "matched_candidates": candidates.len(),
+                    "coverage_certified": false,
+                })
+            } else { Value::Null },
             "sparse_spans": gaps,
             "candidates": candidates,
         })

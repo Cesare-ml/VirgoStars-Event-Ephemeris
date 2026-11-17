@@ -21,7 +21,8 @@ param(
     [int]$MaxSteps = 100000,
     [string]$BackendRoot,
     [string]$ProviderProgram,
-    [string]$ReferenceProviderProgram
+    [string]$ReferenceProviderProgram,
+    [switch]$VerifyHalfStep
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,6 +38,9 @@ if ($ThresholdDays -le 0 -or $StepHours -le 0 -or $SliceYears -le 0 -or $MaxJobs
 }
 if ($KnownMoonGaps -and ($Family -ne 'synods' -or $Body -ne 'Moon')) {
     throw '-KnownMoonGaps only applies to synods/Moon.'
+}
+if ($VerifyHalfStep -and $Mode -ne 'calculate') {
+    throw '-VerifyHalfStep requires -Mode calculate.'
 }
 if ($ReferenceProviderProgram) {
     if ($Mode -ne 'calculate') {
@@ -106,7 +110,10 @@ foreach ($range in $ranges) {
         $fromUs = [long]($cursor.ToUnixTimeMilliseconds() * 1000L)
         $toUs = [long]($next.ToUnixTimeMilliseconds() * 1000L)
         $safeBody = $Body -replace '[^A-Za-z0-9_-]', '_'
-        $filename = '{0}_{1}_{2}_{3}_{4}_{5}.json' -f $Family, $safeBody, $fromUs, $toUs, $Mode, $TrustedSha256.Substring(0, 12)
+        $modeLabel = $Mode
+        if ($VerifyHalfStep) { $modeLabel += '_halfstep' }
+        if ($ReferenceProviderProgram) { $modeLabel += '_reference' }
+        $filename = '{0}_{1}_{2}_{3}_{4}_{5}.json' -f $Family, $safeBody, $fromUs, $toUs, $modeLabel, $TrustedSha256.Substring(0, 12)
         $destination = Join-Path $outputRoot $filename
         if (Test-Path -LiteralPath $destination) {
             Write-Host "Existing artifact preserved (skip): $filename"
@@ -128,6 +135,7 @@ foreach ($range in $ranges) {
             $argsForCargo += @('--provider-program', $ProviderProgram,
                 '--step-us', [string]([long]$StepHours * 3600000000L),
                 '--precision-us', '1000000', '--max-steps', [string]$MaxSteps)
+            if ($VerifyHalfStep) { $argsForCargo += @('--cadence-check', 'half') }
         }
         Write-Host "Processing $Family/$Body $($cursor.ToString('u')) → $($next.ToString('u')) ($Mode)"
         $jsonLines = & cargo @argsForCargo
@@ -139,6 +147,11 @@ foreach ($range in $ranges) {
         if ($report.kind -ne 'unverified_sparse_interval_staging' -or
             $report.dataset.sha256 -cne $TrustedSha256 -or $report.coverage_certified -ne $false) {
             throw 'Rust report did not match the trusted archive or staging-only contract.'
+        }
+        if ($VerifyHalfStep -and $report.sparse_spans.Count -gt 0 -and
+            ($report.cadence_check.mode -ne 'half_step' -or
+             $report.cadence_check.matched_candidates -ne $report.candidates.Count)) {
+            throw "Rust half-step rescan metadata missing or inconsistent for $filename"
         }
         $temporary = Join-Path $outputRoot ('.' + $filename + '.' + [Guid]::NewGuid().ToString('N') + '.tmp')
         [IO.File]::WriteAllText($temporary, $jsonText, (New-Object Text.UTF8Encoding($false)))

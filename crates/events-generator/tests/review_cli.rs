@@ -49,6 +49,14 @@ fn provider() -> (tempfile::TempDir, PathBuf) {
 }
 
 fn generate(archive: &Path, provider: Option<&Path>) -> serde_json::Value {
+    generate_with_cadence(archive, provider, false)
+}
+
+fn generate_with_cadence(
+    archive: &Path,
+    provider: Option<&Path>,
+    half_step: bool,
+) -> serde_json::Value {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"));
     cmd.args([
         "--mode",
@@ -81,6 +89,9 @@ fn generate(archive: &Path, provider: Option<&Path>) -> serde_json::Value {
             "--provider-program",
             provider.to_str().unwrap(),
         ]);
+    }
+    if half_step {
+        cmd.args(["--cadence-check", "half"]);
     }
     let output = cmd.output().unwrap();
     assert!(
@@ -352,6 +363,31 @@ fn numerical_reference_checks_all_four_lunar_phase_types() {
         Some("synthetic-reference"),
         None,
     );
+    assert!(!rejected.status.success());
+    assert!(rejected.stdout.is_empty());
+}
+
+#[test]
+fn reviewer_checks_half_step_metadata_without_claiming_to_recompute_cadence() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let doc = generate_with_cadence(&archive, Some(&mock), true);
+    assert_eq!(doc["cadence_check"]["mode"], "half_step");
+    assert_eq!(doc["cadence_check"]["matched_candidates"], 1);
+    let checked = review(&archive, &doc, SHA);
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&checked.stdout).unwrap();
+    assert_eq!(report["producer_claimed_half_step_check"], true);
+    assert_eq!(report["cadence_check_independently_recomputed"], false);
+    assert_eq!(report["safe_to_import"], false);
+
+    let mut forged = doc;
+    forged["cadence_check"]["matched_candidates"] = serde_json::json!(77);
+    let rejected = review(&archive, &forged, SHA);
     assert!(!rejected.status.success());
     assert!(rejected.stdout.is_empty());
 }

@@ -49,6 +49,15 @@ struct CalculationSettings {
     max_steps: u64,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CadenceCheck {
+    mode: String,
+    step_us: i64,
+    matched_candidates: usize,
+    coverage_certified: bool,
+}
+
 #[derive(Deserialize, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
 struct StagedSpan {
@@ -92,6 +101,7 @@ struct Staging {
     requested_window: Window,
     sparse_threshold_us: i64,
     calculation_settings: Option<CalculationSettings>,
+    cadence_check: Option<CadenceCheck>,
     provider: Option<ProviderIdentity>,
     sparse_spans: Vec<StagedSpan>,
     candidates: Vec<StagedCandidate>,
@@ -190,6 +200,7 @@ fn check_staging(
         "plan" => {
             if stage.provider.is_some()
                 || stage.calculation_settings.is_some()
+                || stage.cadence_check.is_some()
                 || !stage.candidates.is_empty()
             {
                 return Err("plan mode cannot contain provider, settings or candidates".into());
@@ -212,6 +223,17 @@ fn check_staging(
                 || settings.max_steps > 1_000_000
             {
                 return Err("invalid calculation settings".into());
+            }
+            if let Some(cadence) = stage.cadence_check.as_ref() {
+                if cadence.mode != "half_step"
+                    || cadence.coverage_certified
+                    || settings.step_us / 2 < settings.precision_us
+                    || cadence.step_us != settings.step_us / 2
+                    || cadence.matched_candidates != stage.candidates.len()
+                    || stage.sparse_spans.is_empty()
+                {
+                    return Err("invalid self-reported half-step cadence metadata".into());
+                }
             }
             if !stage.sparse_spans.is_empty() {
                 let identity = stage
@@ -472,6 +494,8 @@ fn run() -> Result<(), String> {
             "numerical_crossings_checked": if crosschecked { count } else { 0 },
             "reference_crossings_consistent": crosschecked,
             "reference_independence_scientifically_established": false,
+            "producer_claimed_half_step_check": staging.cadence_check.is_some(),
+            "cadence_check_independently_recomputed": false,
             "coverage_certified": false,
             "astronomical_accuracy_verified": false,
             "safe_to_import": false,
