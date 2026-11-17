@@ -28,3 +28,7 @@ path = "src/main.rs"
 [[bin]]
 name = "vseph-fill-gaps"
 path = "src/fill_gaps.rs"
+
+[[bin]]
+name = "vseph-review-candidates"
+path = "src/review_candidates.rs"

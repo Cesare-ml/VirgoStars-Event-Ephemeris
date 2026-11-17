@@ -52,9 +52,22 @@ cargo run --locked -p virgostars-events-generator --bin vseph-fill-gaps -- \
 
 These epoch numbers are **illustrative** and must be checked against the desired approved source window before running. The tool's explicit `--max-steps` (default 100,000, maximum 1,000,000) fails closed before provider launch if the job is too large; `--chunk-us` (default 365 days) subdivides long spans safely. For `--family synods`, **only `--body Moon` is calculable**. All three families can be *planned*, but synods for other planets, nodes, aspects and eclipses still require dedicated science/code and source parity review. Original source row IDs remain present only as anchors in the sparse-span report, never attached to newly calculated candidates. Empty results never establish scientific completeness.
 
+### Independent structural review before keeping staging JSON
+
+The separate `vseph-review-candidates` Rust executable takes an **existing** output file and reopens the original immutable P0 through the independently supplied trusted SHA-256. It re-audits all archive blocks, checks the staged dataset identity, **recalculates every sparse interval and source ID from recorded P0 rows**, and validates all proposed brackets against their claimed interval, family, body, phase/sign/direction fields and declared search precision. It rejects unexpected JSON keys (including forged `source_id` fields), invalid provider settings and duplicate/out-of-order brackets. The producer's SHA-256 field must never be used as the reviewer's trust anchor.
+
+```bash
+# First produce a JSON file explicitly, then use an independently trusted digest.
+cargo run --locked -p virgostars-events-generator --bin vseph-review-candidates -- \
+  --archive /path/to/authorized.p0 --sha256 YOUR_TRUSTED_64_HEX_DIGEST \
+  --staging /path/to/previously-generated-staging.json
+```
+
+Success emits a small report with `staging_structure_verified: true`, `source_archive_authenticated: true`, `brackets_touching_recorded_anchors` and **still** `coverage_certified: false`, `astronomical_accuracy_verified: false`, `safe_to_import: false`. Such a check catches altered reports and structural contradictions but **cannot independently confirm the astronomy, the original source's legacy grouping, correct scan cadence or genuine absence of events**. It neither assigns source IDs nor builds a revised archive. The producer now includes `calculation_settings` (step, precision, chunk and budget) to make bracket-width checks possible; older staging files without these settings require regeneration to pass the strict schema. Structurally reviewed staging is **not** publishable event data. A separate scientist/source-parity review and owner approval remain mandatory.
+
 ### Windows batch script for known gaps and resumable intervals
 
-`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs this Rust command in **small UTC slices**, saves UTF-8 JSON only after a successful full calculation and refuses to overwrite a previous artifact. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs an authorized private backend checkout with its existing Node dependencies and Swiss license configured. For instance:
+`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs an authorized private backend checkout with its existing Node dependencies and Swiss license configured. For instance:
 
 ```powershell
 # Analyze the two known Moon source discontinuities (1918–1920, 2017–2019).
@@ -75,7 +88,7 @@ These epoch numbers are **illustrative** and must be checked against the desired
   -ToUtc "4836-01-01T00:00:00Z" -ThresholdDays 8 -SliceYears 1 -MaxJobs 10 -Mode plan
 ```
 
-The script reads `backend/services/astrology/func.js` through `-BackendRoot` only for calculation, and assigns the private Git revision to `VSEPH_LEGACY_COMMIT`; it does not copy or publish that code. Users who need a different provider can set `-ProviderProgram` and the compatible provider's environment. The script generates no astronomical records until `-Mode calculate` is selected. Existing JSON artifacts are skipped, **not** re-verified or overwritten; handle them as untrusted staging and review them before reuse. For large multi-century gaps, work in small year slices rather than launching one giant Swiss scan.
+The script reads `backend/services/astrology/func.js` through `-BackendRoot` only for calculation, and assigns the private Git revision to `VSEPH_LEGACY_COMMIT`; it does not copy or publish that code. Users who need a different provider can set `-ProviderProgram` and the compatible provider's environment. The script generates no astronomical records until `-Mode calculate` is selected. Existing JSON artifacts are skipped, **not** re-verified or overwritten; handle them as untrusted staging and review them before reuse. For large multi-century gaps, work in small year slices rather than launching one giant Swiss scan. The Windows PowerShell integration has **not yet been executed** on a Windows host.
 
 ## Low-level candidate staging command
 

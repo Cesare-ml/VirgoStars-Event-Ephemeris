@@ -300,6 +300,14 @@ fn run() -> Result<(), String> {
             "body": options.body.as_str(),
             "requested_window": {"start_us": options.start_us, "end_us": options.end_us},
             "sparse_threshold_us": options.threshold_us,
+            "calculation_settings": if options.mode == "calculate" {
+                json!({
+                    "step_us": options.step_us.expect("validated step"),
+                    "precision_us": options.precision_us.expect("validated precision"),
+                    "chunk_us": options.chunk_us,
+                    "max_steps": options.max_steps,
+                })
+            } else { Value::Null },
             "provider": provider_identity,
             "sparse_spans": gaps,
             "candidates": candidates,

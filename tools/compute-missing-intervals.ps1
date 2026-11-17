@@ -135,9 +135,32 @@ foreach ($range in $ranges) {
         }
         $temporary = Join-Path $outputRoot ('.' + $filename + '.' + [Guid]::NewGuid().ToString('N') + '.tmp')
         [IO.File]::WriteAllText($temporary, $jsonText, (New-Object Text.UTF8Encoding($false)))
-        Move-Item -LiteralPath $temporary -Destination $destination -ErrorAction Stop
+        try {
+            # Second Rust process: independently opens/authenticates P0 and
+            # recomputes every recorded anchor before saving staging output.
+            # This structural gate does NOT establish astronomical accuracy.
+            $reviewArgs = @('run', '--quiet', '--locked', '--manifest-path', $manifest,
+                '-p', 'virgostars-events-generator', '--bin', 'vseph-review-candidates', '--',
+                '--archive', $archivePath, '--sha256', $TrustedSha256, '--staging', $temporary)
+            $reviewLines = & cargo @reviewArgs
+            if ($LASTEXITCODE -ne 0) {
+                throw "Independent Rust staging review failed; no artifact saved for $filename"
+            }
+            $review = ($reviewLines -join "`n") | ConvertFrom-Json
+            if ($review.staging_structure_verified -ne $true -or
+                $review.source_archive_authenticated -ne $true -or
+                $review.safe_to_import -ne $false -or
+                $review.coverage_certified -ne $false) {
+                throw "Independent Rust review rejected the staging-only contract for $filename"
+            }
+            Move-Item -LiteralPath $temporary -Destination $destination -ErrorAction Stop
+        } finally {
+            if (Test-Path -LiteralPath $temporary) {
+                Remove-Item -LiteralPath $temporary -Force
+            }
+        }
         $completeJobs++
-        Write-Host "Saved staging artifact: $destination"
+        Write-Host "Saved structurally reviewed, astronomically unverified staging artifact: $destination"
         $cursor = $next
     }
 }
