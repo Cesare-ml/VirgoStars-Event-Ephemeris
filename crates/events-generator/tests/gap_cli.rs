@@ -561,3 +561,136 @@ fn adaptive_ingress_option_rejects_motion_family_without_starting_provider() {
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("requires family ingresses"));
 }
+
+#[test]
+fn adaptive_lunar_crosscheck_rejects_full_turn_alias_hidden_between_daily_samples() {
+    let (_dir, archive) = fixture();
+    let (_program_dir, program) = compiled_provider();
+    let end = DAY.to_string();
+    let base = [
+        "--mode",
+        "calculate",
+        "--archive",
+        archive.to_str().unwrap(),
+        "--sha256",
+        SHA,
+        "--family",
+        "synods",
+        "--body",
+        "Moon",
+        "--start-us",
+        "0",
+        "--end-us",
+        &end,
+        "--threshold-us",
+        "1000000000",
+        "--step-us",
+        &end,
+        "--precision-us",
+        "1000000",
+        "--provider-program",
+        program.to_str().unwrap(),
+    ];
+    let coarse = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args(base)
+        .env("MOCK_LUNAR_ALIAS", "1")
+        .output()
+        .unwrap();
+    assert!(
+        coarse.status.success(),
+        "{}",
+        String::from_utf8_lossy(&coarse.stderr)
+    );
+    let doc: serde_json::Value = serde_json::from_slice(&coarse.stdout).unwrap();
+    assert!(doc["candidates"].as_array().unwrap().is_empty());
+
+    let checked = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args(base)
+        .args(["--adaptive-lunar-depth", "6"])
+        .env("MOCK_LUNAR_ALIAS", "1")
+        .output()
+        .unwrap();
+    assert!(!checked.status.success());
+    assert!(checked.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&checked.stderr).contains("ambiguous lunar phase"));
+}
+
+#[test]
+fn ordinary_moon_phases_pass_adaptive_lunar_staging_without_coverage_claim() {
+    let (_dir, archive) = fixture();
+    let (_program_dir, program) = compiled_provider();
+    let end = (40 * DAY).to_string();
+    let step = (DAY / 4).to_string();
+    let doc = call(&[
+        "--mode",
+        "calculate",
+        "--archive",
+        archive.to_str().unwrap(),
+        "--sha256",
+        SHA,
+        "--family",
+        "synods",
+        "--body",
+        "Moon",
+        "--start-us",
+        "0",
+        "--end-us",
+        &end,
+        "--threshold-us",
+        "1000000000",
+        "--step-us",
+        &step,
+        "--precision-us",
+        "1000000",
+        "--provider-program",
+        program.to_str().unwrap(),
+        "--adaptive-lunar-depth",
+        "6",
+    ]);
+    assert_eq!(doc["candidates"].as_array().unwrap().len(), 5);
+    assert_eq!(doc["adaptive_lunar_check"]["mode"], "phase_angle_midpoint");
+    assert_eq!(doc["adaptive_lunar_check"]["max_depth"], 6);
+    assert_eq!(doc["adaptive_lunar_check"]["matched_candidates"], 5);
+    assert_eq!(doc["adaptive_lunar_check"]["coverage_certified"], false);
+    assert_eq!(doc["generation_complete"], false);
+}
+
+#[test]
+fn adaptive_lunar_probe_budget_rejects_before_provider_launch() {
+    let (_dir, archive) = fixture();
+    let end = DAY.to_string();
+    let output = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args([
+            "--mode",
+            "calculate",
+            "--archive",
+            archive.to_str().unwrap(),
+            "--sha256",
+            SHA,
+            "--family",
+            "synods",
+            "--body",
+            "Moon",
+            "--start-us",
+            "0",
+            "--end-us",
+            &end,
+            "--threshold-us",
+            "1000000000",
+            "--step-us",
+            &end,
+            "--precision-us",
+            "1000000",
+            "--max-steps",
+            "1",
+            "--provider-program",
+            "nonexistent-mock-provider",
+            "--adaptive-lunar-depth",
+            "6",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("budget exhausted"));
+}

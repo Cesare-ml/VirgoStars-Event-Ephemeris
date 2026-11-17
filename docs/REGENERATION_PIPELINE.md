@@ -72,7 +72,7 @@ For `--mode calculate --family motions`, `--adaptive-station-depth N` with `N` f
 
 The CLI requires `step_us / 2^N >= precision_us`; the `--max-steps` preflight accounts for coarse grid steps and optional full half-step rescans, while **the remaining budget caps additional adaptive midpoint probes** across chunks. Exhaustion aborts without output. The budget is *not* a direct cap on every provider evaluation inside the already bounded root-refinement brackets. When a rescan differs in candidate count, event labels or bracket-midpoint precision, staging fails closed with no JSON output. Otherwise `adaptive_station_check` records `mode: risk_midpoint`, depth and the midpoint/refinement/leaf counts, `matched_candidates` and `coverage_certified: false`. The separate reviewer validates this object's structure and consistency, but reports `adaptive_station_check_independently_recomputed: false`.
 
-**Scientific limitation:** a flat or misleading same-sign speed curve may hide multiple roots without triggering this station-risk heuristic. It is **not interval arithmetic, not proof of complete coverage, not an independent ephemeris**, and not a substitute for a validated smaller uniform step or comparison with source events. This station-specific option applies only to **motion stations**; ingresses have a distinct option below, while lunar synods, aspects and eclipses still lack adaptive checks. It does not modify the P0 dataset or assign new source IDs. Synthetic tests cover missed double stations, probe budget exhaustion, and reviewer metadata rejection; real Swiss calculations and Windows runs have not been validated.
+**Scientific limitation:** a flat or misleading same-sign speed curve may hide multiple roots without triggering this station-risk heuristic. It is **not interval arithmetic, not proof of complete coverage, not an independent ephemeris**, and not a substitute for a validated smaller uniform step or comparison with source events. This station-specific option applies only to **motion stations**; ingresses and Moon phases have distinct options below, while other synods, aspects and eclipses still lack adaptive checks. It does not modify the P0 dataset or assign new source IDs. Synthetic tests cover missed double stations, probe budget exhaustion, and reviewer metadata rejection; real Swiss calculations and Windows runs have not been validated.
 
 ### Optional adaptive tropical-ingress scan
 
@@ -84,7 +84,25 @@ For `--mode calculate --family ingresses`, add `--adaptive-ingress-depth N` (1�
 
 The ingress option is separate from the station option: each is valid only for its respective event family. It shares the existing `--max-steps` residual midpoint-probe budget and the `step_us / 2^N >= precision_us` constraint. A mismatch with the initial candidates aborts **without JSON stdout**. A matching result is annotated with `adaptive_ingress_check` (`mode: zodiac_boundary_midpoint`, depth, probes, refined/leaf segments and `coverage_certified: false`); the separate reviewer checks only the self-reported schema and responds `adaptive_ingress_check_independently_recomputed: false`. The Windows operator script accepts `-AdaptiveIngressDepth` and gives its results separate `_ingressAdaptiveN` filenames; it remains **untested on Windows**.
 
-**Caution:** the two-point-plus-midpoint risk heuristic can still miss an even faster pair of crossings, a subtle short excursion, or inconsistent physical samples. It does not prove complete zodiac coverage, validate a provider's calculations, or authorize importing staged events. Real ephemeris parity, scientific acceptance tolerances and owner-source comparisons are still required; synods, aspects and eclipses have **no adaptive scanner** in this iteration.
+**Caution:** the two-point-plus-midpoint risk heuristic can still miss an even faster pair of crossings, a subtle short excursion, or inconsistent physical samples. It does not prove complete zodiac coverage, validate a provider's calculations, or authorize importing staged events. Real ephemeris parity, scientific acceptance tolerances and owner-source comparisons are still required; other planetary synods, aspects and eclipses have **no adaptive scanner** in this iteration.
+
+### Optional adaptive lunar phase-angle scan
+
+For `--mode calculate --family synods --body Moon`, add `--adaptive-lunar-depth N` (1–8). The checker probes the **Moon–Sun relative angle and relative angular speed** at every coarse segment midpoint and uses three independent warnings:
+
+- Either half-step advances at least 30° in the 0°–360° phase angle, violating the generator's existing safe cadence.
+- Two measured half-step advances together exceed the coarse modulo-360 advance, revealing a possible hidden revolution.
+- A speed-based estimate for the full step exceeds the same 30° safety threshold, including an alias where even both half-step angles repeat after a complete revolution.
+
+If any warning triggers, candidate generation **fails closed without JSON stdout**; it does not infer or silently manufacture missing phases. Otherwise the algorithm subdivides intervals with a suspect speed peak or approach to a 0°/90°/180°/270° boundary, bracket-checks the leaves and compares their phase identities and event midpoint precision to the original scan. Example appended to a Moon calculation:
+
+```bash
+  --adaptive-lunar-depth 6
+```
+
+This produces `adaptive_lunar_check` (`mode: phase_angle_midpoint`, depth, midpoint/refinement/leaf counts, `matched_candidates`, `coverage_certified:false`) only for actually scanned gaps. The reviewer validates its structure but does **not** independently repeat the lunar rescan (`adaptive_lunar_check_independently_recomputed:false`). The scan shares the residual midpoint budget, `step_us / 2^N >= precision_us` constraint, and Windows PowerShell option `-AdaptiveLunarDepth` with separate `_lunarAdaptiveN` staging filenames. Real Swiss/DE441 execution and Windows integration remain **untested**.
+
+**Scientific boundary:** using a provider's instantaneous speeds to detect aliasing is not rigorous integration or proof that a fast excursion cannot hide between three samples. This is **Moon quarters only**; original `sinodi` rows for other planets are not reimplemented. Historical phase source semantics, high-precision real calculations, source parity and independent coverage approval remain pending.
 
 ### Independent structural review before keeping staging JSON
 
@@ -118,7 +136,7 @@ The reference must announce a **different** provider identity/settings from the 
 
 ### Windows batch script for known gaps and resumable intervals
 
-`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. Optional `-VerifyHalfStep` in `-Mode calculate` enables the producer's finer-cadence scan; `-AdaptiveStationDepth 1..8` enables the **motion-only** speed-risk check; `-AdaptiveIngressDepth 1..8` independently enables the **ingress-only** boundary check; optional `-ReferenceProviderProgram` additionally requires numerical crossing agreement before saving new outputs. **Separate `_halfstep` / `_adaptiveN` / `_ingressAdaptiveN` / `_reference` filenames** distinguish these check modes from ordinary staging, without overwriting existing artifacts. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs either a compatible independent `-ProviderProgram` executable, **or** an authorized private backend checkout with its existing Node dependencies and Swiss license configured for the default legacy adapter. For instance:
+`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. Optional `-VerifyHalfStep` in `-Mode calculate` enables the producer's finer-cadence scan; `-AdaptiveStationDepth 1..8` enables the **motion-only** speed-risk check; `-AdaptiveIngressDepth 1..8` independently enables the **ingress-only** boundary check; `-AdaptiveLunarDepth 1..8` independently enables the **Moon-only** phase-alias check; optional `-ReferenceProviderProgram` additionally requires numerical crossing agreement before saving new outputs. **Separate `_halfstep` / `_adaptiveN` / `_ingressAdaptiveN` / `_lunarAdaptiveN` / `_reference` filenames** distinguish these check modes from ordinary staging, without overwriting existing artifacts. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs either a compatible independent `-ProviderProgram` executable, **or** an authorized private backend checkout with its existing Node dependencies and Swiss license configured for the default legacy adapter. For instance:
 
 ```powershell
 # Analyze the two known Moon source discontinuities (1918–1920, 2017–2019).
@@ -153,6 +171,12 @@ The reference must announce a **different** provider identity/settings from the 
   -Family ingresses -Body Mars -FromUtc "2020-01-01T00:00:00Z" `
   -ToUtc "2021-01-01T00:00:00Z" -ThresholdDays 45 -Mode calculate `
   -BackendRoot "D:\GitHub\virgo-stars" -VerifyHalfStep -AdaptiveIngressDepth 6
+
+# Moon-only phase-alias check during a bounded known-gap calculation.
+.\tools\compute-missing-intervals.ps1 -Archive "D:\data\authorized.p0" `
+  -TrustedSha256 "<trusted 64-char lowercase digest>" -OutputDir "D:\vseph-staging" `
+  -KnownMoonGaps -Mode calculate -BackendRoot "D:\GitHub\virgo-stars" `
+  -VerifyHalfStep -AdaptiveLunarDepth 6
 ```
 
 The script reads `backend/services/astrology/func.js` through `-BackendRoot` only for calculation, and assigns the private Git revision to `VSEPH_LEGACY_COMMIT`; it does not copy or publish that code. Users who need a different provider can set `-ProviderProgram` and the compatible provider's environment. The script generates no astronomical records until `-Mode calculate` is selected. Existing JSON artifacts are skipped, **not** re-verified or overwritten; handle them as untrusted staging and review them before reuse. For large multi-century gaps, work in small year slices rather than launching one giant Swiss scan. The Windows PowerShell integration has **not yet been executed** on a Windows host.

@@ -11,9 +11,10 @@
 use virgostars_events_core::BodyId;
 
 use crate::{
-    checked_sample, ingress_candidates, midpoint, next_time, station_candidates, zodiac_sign,
-    GenerationError, IngressCandidate, LongitudeProvider, LongitudeSample, SearchWindow,
-    StationCandidate,
+    checked_sample, ingress_candidates,
+    lunar::{lunar_phase_candidates, phase_state, LunarPhaseCandidate, PhaseState},
+    midpoint, next_time, station_candidates, zodiac_sign, GenerationError, IngressCandidate,
+    LongitudeProvider, LongitudeSample, SearchWindow, StationCandidate,
 };
 
 #[derive(Default, Debug)]
@@ -28,6 +29,15 @@ pub struct AdaptiveStationReport {
 #[derive(Default, Debug)]
 pub struct AdaptiveIngressReport {
     pub candidates: Vec<IngressCandidate>,
+    pub midpoint_probes: usize,
+    pub refined_segments: usize,
+    pub leaf_segments: usize,
+}
+
+/// Results from an *uncertified* lunar-quarter-angle risk rescan.
+#[derive(Default, Debug)]
+pub struct AdaptiveLunarReport {
+    pub candidates: Vec<LunarPhaseCandidate>,
     pub midpoint_probes: usize,
     pub refined_segments: usize,
     pub leaf_segments: usize,
@@ -264,6 +274,137 @@ pub fn adaptive_ingress_scan<P: LongitudeProvider>(
     Ok(scan.report)
 }
 
+fn quarter_boundary_distance(angle: f64) -> f64 {
+    let within_quarter = angle.rem_euclid(90.0);
+    within_quarter.min(90.0 - within_quarter)
+}
+
+fn advancing_phase_angle(from: f64, to: f64) -> f64 {
+    (to - from).rem_euclid(360.0)
+}
+
+struct AdaptiveLunarScan<'a, P> {
+    provider: &'a P,
+    sun: &'a BodyId,
+    moon: &'a BodyId,
+    precision_us: i64,
+    remaining_probes: &'a mut usize,
+    report: AdaptiveLunarReport,
+}
+
+impl<P: LongitudeProvider> AdaptiveLunarScan<'_, P> {
+    fn segment(
+        &mut self,
+        start_us: i64,
+        end_us: i64,
+        start: PhaseState,
+        end: PhaseState,
+        depth_remaining: u8,
+    ) -> Result<(), GenerationError> {
+        if depth_remaining > 0 && end_us as i128 - start_us as i128 > self.precision_us as i128 {
+            let mid_us = midpoint(start_us, end_us);
+            if mid_us > start_us && mid_us < end_us {
+                if *self.remaining_probes == 0 {
+                    return Err(GenerationError::TooManySteps);
+                }
+                *self.remaining_probes -= 1;
+                self.report.midpoint_probes += 1;
+                let mid = phase_state(self.provider, self.sun, self.moon, mid_us)?;
+                let coarse = advancing_phase_angle(start.angle_degrees, end.angle_degrees);
+                let first = advancing_phase_angle(start.angle_degrees, mid.angle_degrees);
+                let second = advancing_phase_angle(mid.angle_degrees, end.angle_degrees);
+                // A full 360° loop can alias to a seemingly harmless coarse
+                // delta. Even two modulo-small half steps can mask two loops;
+                // use the supplied instantaneous relative speed as an
+                // additional conservative undersampling warning.
+                let days = (end_us as i128 - start_us as i128) as f64 / 86_400_000_000.0;
+                let speed_estimate = (start.speed_degrees_per_day
+                    + 2.0 * mid.speed_degrees_per_day
+                    + end.speed_degrees_per_day)
+                    * days
+                    / 4.0;
+                if first >= 30.0
+                    || second >= 30.0
+                    || first + second > coarse + 1e-7
+                    || speed_estimate >= 30.0
+                {
+                    return Err(GenerationError::AmbiguousLunarStep);
+                }
+
+                let boundary_start = quarter_boundary_distance(start.angle_degrees);
+                let boundary_end = quarter_boundary_distance(end.angle_degrees);
+                let boundary_mid = quarter_boundary_distance(mid.angle_degrees);
+                let speed_peak = mid.speed_degrees_per_day
+                    > start.speed_degrees_per_day.max(end.speed_degrees_per_day) * 1.5;
+                let risky = boundary_mid * 2.0 < boundary_start.min(boundary_end) || speed_peak;
+                if risky {
+                    self.report.refined_segments += 1;
+                    self.segment(start_us, mid_us, start, mid, depth_remaining - 1)?;
+                    self.segment(mid_us, end_us, mid, end, depth_remaining - 1)?;
+                    return Ok(());
+                }
+            }
+        }
+
+        self.report.leaf_segments += 1;
+        let span_us = (end_us as i128 - start_us as i128) as i64;
+        self.report.candidates.extend(lunar_phase_candidates(
+            self.provider,
+            SearchWindow {
+                start_us,
+                end_us,
+                step_us: span_us,
+                precision_us: self.precision_us.min(span_us),
+            },
+        )?);
+        Ok(())
+    }
+}
+
+/// Opt-in lunar phase-crossing risk check using midpoint Moon–Sun angles.
+///
+/// Validates each midpoint against the original modulo-360 advancement and
+/// a speed-derived warning threshold. Only suspicious quarters are further
+/// subdivided. Equal coarse and fine candidate sets are *not* a completeness
+/// certificate: this remains a sample-dependent synthetic quality gate.
+pub fn adaptive_lunar_scan<P: LongitudeProvider>(
+    provider: &P,
+    window: SearchWindow,
+    max_depth: u8,
+    remaining_probes: &mut usize,
+) -> Result<AdaptiveLunarReport, GenerationError> {
+    window.validate()?;
+    if max_depth == 0 || max_depth > 8 || *remaining_probes == 0 {
+        return Err(GenerationError::InvalidWindow);
+    }
+    if (window.step_us as i128) / (1_i128 << max_depth) < window.precision_us as i128 {
+        return Err(GenerationError::InvalidWindow);
+    }
+    let sun = BodyId::try_from("Sun").expect("known Sun");
+    let moon = BodyId::try_from("Moon").expect("known Moon");
+    let mut scan = AdaptiveLunarScan {
+        provider,
+        sun: &sun,
+        moon: &moon,
+        precision_us: window.precision_us,
+        remaining_probes,
+        report: AdaptiveLunarReport::default(),
+    };
+    let mut start_us = window.start_us;
+    let mut start = phase_state(provider, &sun, &moon, start_us)?;
+    while start_us < window.end_us {
+        let end_us = next_time(start_us, window);
+        let end = phase_state(provider, &sun, &moon, end_us)?;
+        scan.segment(start_us, end_us, start, end, max_depth)?;
+        start_us = end_us;
+        start = end;
+    }
+    scan.report
+        .candidates
+        .sort_by_key(|event| event.bracket_start_us);
+    Ok(scan.report)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -299,6 +440,27 @@ mod tests {
             let mut sample = DoubleIngress.sample(body, at)?;
             sample.longitude_degrees += 330.0;
             Ok(sample)
+        }
+    }
+
+    struct LunarOrbit {
+        relative_rate: f64,
+    }
+    impl LongitudeProvider for LunarOrbit {
+        fn sample(&self, body: &BodyId, at: TimestampMicros) -> Result<LongitudeSample, String> {
+            let days = at.as_i64() as f64 / DAY as f64;
+            let sun = 10.0 + days;
+            if body.as_str() == "Sun" {
+                Ok(LongitudeSample {
+                    longitude_degrees: sun,
+                    longitude_speed_degrees_per_day: 1.0,
+                })
+            } else {
+                Ok(LongitudeSample {
+                    longitude_degrees: sun + 10.0 + self.relative_rate * days,
+                    longitude_speed_degrees_per_day: 1.0 + self.relative_rate,
+                })
+            }
         }
     }
 
@@ -375,5 +537,63 @@ mod tests {
         assert!(!report.candidates[0].retrograde);
         assert_eq!(report.candidates[1].sign_after.index(), 11);
         assert!(report.candidates[1].retrograde);
+    }
+
+    #[test]
+    fn lunar_midpoint_speed_guard_rejects_alias_of_two_full_phase_revolutions() {
+        let fast = LunarOrbit {
+            relative_rate: 730.0,
+        };
+        assert!(lunar_phase_candidates(&fast, window()).unwrap().is_empty());
+        let mut budget = 100;
+        assert_eq!(
+            adaptive_lunar_scan(&fast, window(), 6, &mut budget).unwrap_err(),
+            GenerationError::AmbiguousLunarStep
+        );
+    }
+
+    #[test]
+    fn lunar_adaptive_scan_reproduces_normal_quarter_phase_brackets() {
+        let normal = LunarOrbit {
+            relative_rate: 12.0,
+        };
+        let days = SearchWindow {
+            start_us: 0,
+            end_us: 40 * DAY,
+            step_us: DAY / 4,
+            precision_us: 1_000_000,
+        };
+        let coarse = lunar_phase_candidates(&normal, days).unwrap();
+        assert_eq!(coarse.len(), 5);
+        let mut budget = 2000;
+        let report = adaptive_lunar_scan(&normal, days, 6, &mut budget).unwrap();
+        assert_eq!(report.candidates.len(), coarse.len());
+        for (a, b) in report.candidates.iter().zip(coarse.iter()) {
+            assert_eq!(a.phase, b.phase);
+            let a_mid = a.bracket_start_us as i128 + a.bracket_end_us as i128;
+            let b_mid = b.bracket_start_us as i128 + b.bracket_end_us as i128;
+            assert!((a_mid - b_mid).abs() <= 2_000_000);
+        }
+    }
+
+    #[test]
+    fn lunar_midpoint_probe_budget_fails_without_partial_results() {
+        let normal = LunarOrbit {
+            relative_rate: 12.0,
+        };
+        let mut budget = 1;
+        assert_eq!(
+            adaptive_lunar_scan(
+                &normal,
+                SearchWindow {
+                    end_us: 2 * DAY,
+                    ..window()
+                },
+                6,
+                &mut budget
+            )
+            .unwrap_err(),
+            GenerationError::TooManySteps
+        );
     }
 }

@@ -24,7 +24,8 @@ param(
     [string]$ReferenceProviderProgram,
     [switch]$VerifyHalfStep,
     [int]$AdaptiveStationDepth = 0,
-    [int]$AdaptiveIngressDepth = 0
+    [int]$AdaptiveIngressDepth = 0,
+    [int]$AdaptiveLunarDepth = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,6 +52,10 @@ if ($AdaptiveStationDepth -ne 0 -and ($Mode -ne 'calculate' -or $Family -ne 'mot
 if ($AdaptiveIngressDepth -ne 0 -and ($Mode -ne 'calculate' -or $Family -ne 'ingresses' -or
     $AdaptiveIngressDepth -lt 1 -or $AdaptiveIngressDepth -gt 8)) {
     throw '-AdaptiveIngressDepth must be 1..8 and requires -Mode calculate -Family ingresses.'
+}
+if ($AdaptiveLunarDepth -ne 0 -and ($Mode -ne 'calculate' -or $Family -ne 'synods' -or
+    $Body -ne 'Moon' -or $AdaptiveLunarDepth -lt 1 -or $AdaptiveLunarDepth -gt 8)) {
+    throw '-AdaptiveLunarDepth must be 1..8 and requires -Mode calculate -Family synods -Body Moon.'
 }
 if ($ReferenceProviderProgram) {
     if ($Mode -ne 'calculate') {
@@ -124,6 +129,7 @@ foreach ($range in $ranges) {
         if ($VerifyHalfStep) { $modeLabel += '_halfstep' }
         if ($AdaptiveStationDepth -gt 0) { $modeLabel += '_adaptive' + $AdaptiveStationDepth }
         if ($AdaptiveIngressDepth -gt 0) { $modeLabel += '_ingressAdaptive' + $AdaptiveIngressDepth }
+        if ($AdaptiveLunarDepth -gt 0) { $modeLabel += '_lunarAdaptive' + $AdaptiveLunarDepth }
         if ($ReferenceProviderProgram) { $modeLabel += '_reference' }
         $filename = '{0}_{1}_{2}_{3}_{4}_{5}.json' -f $Family, $safeBody, $fromUs, $toUs, $modeLabel, $TrustedSha256.Substring(0, 12)
         $destination = Join-Path $outputRoot $filename
@@ -150,6 +156,7 @@ foreach ($range in $ranges) {
             if ($VerifyHalfStep) { $argsForCargo += @('--cadence-check', 'half') }
             if ($AdaptiveStationDepth -gt 0) { $argsForCargo += @('--adaptive-station-depth', [string]$AdaptiveStationDepth) }
             if ($AdaptiveIngressDepth -gt 0) { $argsForCargo += @('--adaptive-ingress-depth', [string]$AdaptiveIngressDepth) }
+            if ($AdaptiveLunarDepth -gt 0) { $argsForCargo += @('--adaptive-lunar-depth', [string]$AdaptiveLunarDepth) }
         }
         Write-Host "Processing $Family/$Body $($cursor.ToString('u')) → $($next.ToString('u')) ($Mode)"
         $jsonLines = & cargo @argsForCargo
@@ -180,6 +187,13 @@ foreach ($range in $ranges) {
              $report.adaptive_ingress_check.coverage_certified -ne $false -or
              $report.adaptive_ingress_check.matched_candidates -ne $report.candidates.Count)) {
             throw "Rust adaptive ingress check metadata missing or inconsistent for $filename"
+        }
+        if ($AdaptiveLunarDepth -gt 0 -and $report.sparse_spans.Count -gt 0 -and
+            ($report.adaptive_lunar_check.mode -ne 'phase_angle_midpoint' -or
+             $report.adaptive_lunar_check.max_depth -ne $AdaptiveLunarDepth -or
+             $report.adaptive_lunar_check.coverage_certified -ne $false -or
+             $report.adaptive_lunar_check.matched_candidates -ne $report.candidates.Count)) {
+            throw "Rust adaptive lunar check metadata missing or inconsistent for $filename"
         }
         $temporary = Join-Path $outputRoot ('.' + $filename + '.' + [Guid]::NewGuid().ToString('N') + '.tmp')
         [IO.File]::WriteAllText($temporary, $jsonText, (New-Object Text.UTF8Encoding($false)))
@@ -218,6 +232,11 @@ foreach ($range in $ranges) {
                 ($review.producer_claimed_adaptive_ingress_check -ne $true -or
                  $review.adaptive_ingress_check_independently_recomputed -ne $false)) {
                 throw "Independent Rust review rejected adaptive ingress metadata for $filename"
+            }
+            if ($AdaptiveLunarDepth -gt 0 -and $report.sparse_spans.Count -gt 0 -and
+                ($review.producer_claimed_adaptive_lunar_check -ne $true -or
+                 $review.adaptive_lunar_check_independently_recomputed -ne $false)) {
+                throw "Independent Rust review rejected adaptive lunar metadata for $filename"
             }
             Move-Item -LiteralPath $temporary -Destination $destination -ErrorAction Stop
         } finally {

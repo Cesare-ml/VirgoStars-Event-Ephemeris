@@ -30,6 +30,9 @@ fn main() {
         let days = at as f64 / 86_400_000_000_f64;
         let (longitude, speed) = match requested_body {
             "Sun" => (10.0 + days, 1.0),
+            "Moon" if std::env::var_os("MOCK_LUNAR_ALIAS").is_some() => {
+                (20.0 + 731.0 * days, 731.0)
+            }
             "Moon" => (10.0 + 13.0 * days, 13.0),
             _ => (29.0 + days * 2.0, 2.0),
         };

@@ -12,9 +12,11 @@ use std::path::PathBuf;
 
 use serde_json::{json, Value};
 use virgostars_event_ephemeris::{BodyId, EventFamily, MotionDirection, VirgoStarsEventEphemeris};
-use virgostars_events_generator::adaptive::{adaptive_ingress_scan, adaptive_station_scan};
+use virgostars_events_generator::adaptive::{
+    adaptive_ingress_scan, adaptive_lunar_scan, adaptive_station_scan,
+};
 use virgostars_events_generator::gaps::detect_sparse_spans;
-use virgostars_events_generator::lunar::lunar_phase_candidates;
+use virgostars_events_generator::lunar::{lunar_phase_candidates, LunarPhaseCandidate};
 use virgostars_events_generator::provider_process::ProcessLongitudeProvider;
 use virgostars_events_generator::{
     ingress_candidates, station_candidates, IngressCandidate, SearchWindow, StationCandidate,
@@ -23,7 +25,7 @@ use virgostars_events_generator::{
 const DEFAULT_CHUNK_US: i64 = 365 * 86_400_000_000;
 const DEFAULT_MAX_STEPS: u64 = 100_000;
 const HARD_MAX_STEPS: u64 = 1_000_000;
-const USAGE: &str = "Usage: vseph-fill-gaps --mode plan|calculate --archive P0 --sha256 TRUSTED_DIGEST --family synods|motions|ingresses --body NAME --start-us I64 --end-us I64 --threshold-us I64 [--provider-program EXEC --step-us I64 --precision-us I64] [--chunk-us I64] [--max-steps U64] [--cadence-check half|none] [--adaptive-station-depth 1..8] [--adaptive-ingress-depth 1..8]\nMoon synods, stations and ingresses are candidate-only. Optional half-step and family-specific adaptive risk scans do NOT certify coverage. Never writes P0, original IDs or database.";
+const USAGE: &str = "Usage: vseph-fill-gaps --mode plan|calculate --archive P0 --sha256 TRUSTED_DIGEST --family synods|motions|ingresses --body NAME --start-us I64 --end-us I64 --threshold-us I64 [--provider-program EXEC --step-us I64 --precision-us I64] [--chunk-us I64] [--max-steps U64] [--cadence-check half|none] [--adaptive-station-depth 1..8] [--adaptive-ingress-depth 1..8] [--adaptive-lunar-depth 1..8]\nMoon synods, stations and ingresses are candidate-only. Optional half-step and family-specific adaptive risk scans do NOT certify coverage. Never writes P0, original IDs or database.";
 
 struct Options {
     mode: String,
@@ -43,6 +45,7 @@ struct Options {
     verify_half_step: bool,
     adaptive_station_depth: Option<u8>,
     adaptive_ingress_depth: Option<u8>,
+    adaptive_lunar_depth: Option<u8>,
 }
 
 fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
@@ -65,6 +68,7 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
         "--cadence-check",
         "--adaptive-station-depth",
         "--adaptive-ingress-depth",
+        "--adaptive-lunar-depth",
     ];
     while let Some(key) = args.next() {
         if !NAMES.contains(&key.as_str()) || map.contains_key(&key) {
@@ -151,6 +155,17 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
     if adaptive_ingress_depth.is_some_and(|depth| !(1..=8).contains(&depth)) {
         return Err("--adaptive-ingress-depth must be 1..=8".into());
     }
+    let adaptive_lunar_depth = map
+        .get("--adaptive-lunar-depth")
+        .map(|value| {
+            value
+                .parse::<u8>()
+                .map_err(|_| "invalid adaptive lunar depth".to_string())
+        })
+        .transpose()?;
+    if adaptive_lunar_depth.is_some_and(|depth| !(1..=8).contains(&depth)) {
+        return Err("--adaptive-lunar-depth must be 1..=8".into());
+    }
     let provider_program = map.get("--provider-program").map(PathBuf::from);
     let step_us = map
         .get("--step-us")
@@ -203,6 +218,18 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
                 );
             }
         }
+        if let Some(depth) = adaptive_lunar_depth {
+            if family != EventFamily::Synod || body.as_str() != "Moon" {
+                return Err("adaptive lunar scanning requires synods/Moon".into());
+            }
+            if (step_us.expect("validated step") as i128) / (1_i128 << depth)
+                < precision_us.expect("validated precision") as i128
+            {
+                return Err(
+                    "adaptive lunar depth requires step_us / 2^depth >= precision_us".into(),
+                );
+            }
+        }
     } else if provider_program.is_some() || step_us.is_some() || precision_us.is_some() {
         return Err("plan does not invoke a provider; remove calculation options".into());
     } else if verify_half_step {
@@ -211,6 +238,8 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
         return Err("adaptive station scanning requires calculate mode".into());
     } else if adaptive_ingress_depth.is_some() {
         return Err("adaptive ingress scanning requires calculate mode".into());
+    } else if adaptive_lunar_depth.is_some() {
+        return Err("adaptive lunar scanning requires calculate mode".into());
     }
     Ok(Options {
         mode,
@@ -230,6 +259,7 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
         verify_half_step,
         adaptive_station_depth,
         adaptive_ingress_depth,
+        adaptive_lunar_depth,
     })
 }
 
@@ -269,6 +299,22 @@ fn ingress_values(found: Vec<IngressCandidate>, gap_index: usize) -> Vec<Value> 
         .collect()
 }
 
+fn lunar_values(found: Vec<LunarPhaseCandidate>, gap_index: usize) -> Vec<Value> {
+    found
+        .into_iter()
+        .map(|candidate| {
+            json!({
+                "gap_index": gap_index,
+                "family": "synods",
+                "body": "Moon",
+                "phase": candidate.phase.code(),
+                "bracket_start_us": candidate.bracket_start_us,
+                "bracket_end_us": candidate.bracket_end_us,
+            })
+        })
+        .collect()
+}
+
 fn generate_chunk(
     provider: &ProcessLongitudeProvider,
     family: EventFamily,
@@ -285,21 +331,7 @@ fn generate_chunk(
             .map(|found| ingress_values(found, gap_index)),
         EventFamily::Synod => lunar_phase_candidates(provider, window)
             .map_err(|error| error.to_string())
-            .map(|found| {
-                found
-                    .into_iter()
-                    .map(|candidate| {
-                        json!({
-                            "gap_index": gap_index,
-                            "family": "synods",
-                            "body": "Moon",
-                            "phase": candidate.phase.code(),
-                            "bracket_start_us": candidate.bracket_start_us,
-                            "bracket_end_us": candidate.bracket_end_us,
-                        })
-                    })
-                    .collect()
-            }),
+            .map(|found| lunar_values(found, gap_index)),
     }
 }
 
@@ -421,7 +453,9 @@ fn run() -> Result<(), String> {
             }
         }
         let mut adaptive_budget = (options.max_steps as i128 - total_steps) as usize;
-        if (options.adaptive_station_depth.is_some() || options.adaptive_ingress_depth.is_some())
+        if (options.adaptive_station_depth.is_some()
+            || options.adaptive_ingress_depth.is_some()
+            || options.adaptive_lunar_depth.is_some())
             && adaptive_budget == 0
         {
             return Err("adaptive midpoint probe budget exhausted before provider startup".into());
@@ -489,6 +523,19 @@ fn run() -> Result<(), String> {
                     "adaptive ingress",
                 )?;
             }
+            if let Some(depth) = options.adaptive_lunar_depth {
+                let adaptive = adaptive_lunar_scan(&provider, window, depth, &mut adaptive_budget)
+                    .map_err(|error| format!("adaptive lunar scan failed: {error}"))?;
+                adaptive_midpoints += adaptive.midpoint_probes;
+                adaptive_refined += adaptive.refined_segments;
+                adaptive_leaves += adaptive.leaf_segments;
+                compare_rescans(
+                    &found,
+                    &lunar_values(adaptive.candidates, gap_index),
+                    precision,
+                    "adaptive lunar",
+                )?;
+            }
             candidates.extend(found);
         }
     }
@@ -541,6 +588,17 @@ fn run() -> Result<(), String> {
             "adaptive_ingress_check": if let Some(depth) = options.adaptive_ingress_depth.filter(|_| !spans.is_empty()) {
                 json!({
                     "mode": "zodiac_boundary_midpoint",
+                    "max_depth": depth,
+                    "midpoint_probes": adaptive_midpoints,
+                    "refined_segments": adaptive_refined,
+                    "leaf_segments": adaptive_leaves,
+                    "matched_candidates": candidates.len(),
+                    "coverage_certified": false,
+                })
+            } else { Value::Null },
+            "adaptive_lunar_check": if let Some(depth) = options.adaptive_lunar_depth.filter(|_| !spans.is_empty()) {
+                json!({
+                    "mode": "phase_angle_midpoint",
                     "max_depth": depth,
                     "midpoint_probes": adaptive_midpoints,
                     "refined_segments": adaptive_refined,

@@ -116,6 +116,7 @@ struct Staging {
     cadence_check: Option<CadenceCheck>,
     adaptive_station_check: Option<AdaptiveRiskCheck>,
     adaptive_ingress_check: Option<AdaptiveRiskCheck>,
+    adaptive_lunar_check: Option<AdaptiveRiskCheck>,
     provider: Option<ProviderIdentity>,
     sparse_spans: Vec<StagedSpan>,
     candidates: Vec<StagedCandidate>,
@@ -217,6 +218,7 @@ fn check_staging(
                 || stage.cadence_check.is_some()
                 || stage.adaptive_station_check.is_some()
                 || stage.adaptive_ingress_check.is_some()
+                || stage.adaptive_lunar_check.is_some()
                 || !stage.candidates.is_empty()
             {
                 return Err("plan mode cannot contain provider, settings or candidates".into());
@@ -283,6 +285,24 @@ fn check_staging(
                     || stage.sparse_spans.is_empty()
                 {
                     return Err("invalid self-reported adaptive ingress metadata".into());
+                }
+            }
+            if let Some(adaptive) = stage.adaptive_lunar_check.as_ref() {
+                if family != EventFamily::Synod
+                    || stage.body != "Moon"
+                    || adaptive.mode != "phase_angle_midpoint"
+                    || adaptive.coverage_certified
+                    || !(1..=8).contains(&adaptive.max_depth)
+                    || (settings.step_us as i128) / (1_i128 << adaptive.max_depth)
+                        < settings.precision_us as i128
+                    || adaptive.midpoint_probes == 0
+                    || adaptive.leaf_segments <= adaptive.refined_segments
+                    || adaptive.midpoint_probes > settings.max_steps as usize
+                    || adaptive.refined_segments > adaptive.midpoint_probes
+                    || adaptive.matched_candidates != stage.candidates.len()
+                    || stage.sparse_spans.is_empty()
+                {
+                    return Err("invalid self-reported adaptive lunar metadata".into());
                 }
             }
             if !stage.sparse_spans.is_empty() {
@@ -550,6 +570,8 @@ fn run() -> Result<(), String> {
             "adaptive_station_check_independently_recomputed": false,
             "producer_claimed_adaptive_ingress_check": staging.adaptive_ingress_check.is_some(),
             "adaptive_ingress_check_independently_recomputed": false,
+            "producer_claimed_adaptive_lunar_check": staging.adaptive_lunar_check.is_some(),
+            "adaptive_lunar_check_independently_recomputed": false,
             "coverage_certified": false,
             "astronomical_accuracy_verified": false,
             "safe_to_import": false,

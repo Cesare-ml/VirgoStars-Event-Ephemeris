@@ -522,3 +522,66 @@ fn reviewer_checks_ingress_adaptive_claim_and_rejects_forged_metadata() {
     assert!(!rejected.status.success());
     assert!(rejected.stdout.is_empty());
 }
+
+#[test]
+fn reviewer_checks_lunar_adaptive_claim_without_claiming_scientific_completeness() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let end = (40 * DAY).to_string();
+    let step = (DAY / 4).to_string();
+    let generated = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args([
+            "--mode",
+            "calculate",
+            "--archive",
+            archive.to_str().unwrap(),
+            "--sha256",
+            SHA,
+            "--family",
+            "synods",
+            "--body",
+            "Moon",
+            "--start-us",
+            "0",
+            "--end-us",
+            &end,
+            "--threshold-us",
+            "1000000000",
+            "--step-us",
+            &step,
+            "--precision-us",
+            "1000000",
+            "--provider-program",
+            mock.to_str().unwrap(),
+            "--adaptive-lunar-depth",
+            "6",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        generated.status.success(),
+        "{}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
+    let doc: serde_json::Value = serde_json::from_slice(&generated.stdout).unwrap();
+    let reviewed = review(&archive, &doc, SHA);
+    assert!(
+        reviewed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reviewed.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&reviewed.stdout).unwrap();
+    assert_eq!(report["producer_claimed_adaptive_lunar_check"], true);
+    assert_eq!(
+        report["adaptive_lunar_check_independently_recomputed"],
+        false
+    );
+    assert_eq!(report["coverage_certified"], false);
+    assert_eq!(report["safe_to_import"], false);
+
+    let mut forged = doc;
+    forged["adaptive_lunar_check"]["matched_candidates"] = serde_json::json!(123);
+    let rejected = review(&archive, &forged, SHA);
+    assert!(!rejected.status.success());
+    assert!(rejected.stdout.is_empty());
+}

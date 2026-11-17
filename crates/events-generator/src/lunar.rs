@@ -50,19 +50,39 @@ pub struct LunarPhaseCandidate {
     pub bracket_end_us: i64,
 }
 
-fn phase_angle<P: LongitudeProvider>(
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PhaseState {
+    pub angle_degrees: f64,
+    pub speed_degrees_per_day: f64,
+}
+
+pub(crate) fn phase_state<P: LongitudeProvider>(
     provider: &P,
     sun: &BodyId,
     moon: &BodyId,
     at_us: i64,
-) -> Result<f64, GenerationError> {
+) -> Result<PhaseState, GenerationError> {
     let sun_position = checked_sample(provider, sun, at_us)?;
     let moon_position = checked_sample(provider, moon, at_us)?;
     if moon_position.longitude_speed_degrees_per_day <= sun_position.longitude_speed_degrees_per_day
     {
         return Err(GenerationError::AmbiguousLunarStep);
     }
-    Ok((moon_position.longitude_degrees - sun_position.longitude_degrees).rem_euclid(360.0))
+    Ok(PhaseState {
+        angle_degrees: (moon_position.longitude_degrees - sun_position.longitude_degrees)
+            .rem_euclid(360.0),
+        speed_degrees_per_day: moon_position.longitude_speed_degrees_per_day
+            - sun_position.longitude_speed_degrees_per_day,
+    })
+}
+
+fn phase_angle<P: LongitudeProvider>(
+    provider: &P,
+    sun: &BodyId,
+    moon: &BodyId,
+    at_us: i64,
+) -> Result<f64, GenerationError> {
+    Ok(phase_state(provider, sun, moon, at_us)?.angle_degrees)
 }
 
 /// Moon phases at 0°/90°/180°/270° of the Moon–Sun tropical longitude gap.
