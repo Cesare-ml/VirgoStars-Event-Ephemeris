@@ -26,7 +26,7 @@ def iso(us):
     return f"{day.year:04d}-{day.month:02d}-{day.day:02d} {hh:02d}:{mm:02d}:{ss:02d}"+(f".{micro:06d}" if micro else "")+"+00"
 
 
-def uvar(n):
+def encode_uvar(n):
     result=bytearray()
     while n>127:
         result.append((n&127)|128);n>>=7
@@ -70,13 +70,13 @@ class CsvP0ParityTest(unittest.TestCase):
                 binary=bytearray(struct.pack('<q',events[0][1]));last=events[0][1]
                 for item in events:
                     ident,at,*extra=item
-                    binary+=uvar(ident)+uvar(at-last)
+                    binary+=encode_uvar(ident)+encode_uvar(at-last)
                     if family=='synod':
                         phases=extra[0]
-                        binary+=uvar(0 if phases is None else len(phases)+1)
+                        binary+=encode_uvar(0 if phases is None else len(phases)+1)
                         last_phase=at
                         for phase in (phases or []):
-                            binary+=uvar(phase-last_phase);last_phase=phase
+                            binary+=encode_uvar(phase-last_phase);last_phase=phase
                     elif family=='motion':
                         sign,direction=extra
                         binary+=bytes([sign,1 if direction=='r' else 0])

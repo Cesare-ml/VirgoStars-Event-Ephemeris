@@ -180,11 +180,20 @@ class PythonApiTests(unittest.TestCase):
                     VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
 
         # A recorded cycle must come from an actual positive source row ID.
-        for source_id in (None, False, True, 0, -1, "27", 27.0, 1 << 64, 1 << 128):
+        for source_id in (None, False, True, 0, -1, "27", 27.0):
             with self.subTest(source_id=source_id):
                 raw = fake_response()
                 raw["synods"]["Mercury"]["source_id"] = source_id
                 with self.assertRaisesRegex(ValueError, "native synod source ID inconsistent"):
+                    VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
+
+        # Impossible Rust integer values are rejected by the JSON transport
+        # decoder before the facade inspects individual source row IDs.
+        for source_id in (1 << 64, 1 << 128):
+            with self.subTest(transport_overflow=source_id):
+                raw = fake_response()
+                raw["synods"]["Mercury"]["source_id"] = source_id
+                with self.assertRaisesRegex(ValueError, "integer outside Rust i64/u64 range"):
                     VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
 
         # Rust serializes source IDs as u64. Its maximum value remains a
@@ -313,6 +322,11 @@ class PythonApiTests(unittest.TestCase):
         missing["synods"]["Moon"]["source_id"] = None
         missing["synods"]["Moon"]["cycle_start_us"] = None
         missing["synods"]["Moon"]["next_cycle_start_us"] = None
+        missing["synods"]["Moon"]["phase"] = {
+            "code": None,
+            "started_at_us": None,
+            "status": "no_preceding_recorded_cycle",
+        }
         # NativeReader serializes null, not a Moon record, when no recorded
         # lunar anchor precedes the requested instant. Keep the fixture
         # consistent with the fail-closed transport contract.
@@ -652,6 +666,7 @@ class PythonApiTests(unittest.TestCase):
     def test_empty_extra_array_not_confused_with_sql_null(self):
         raw = fake_response()
         raw["synods"]["Moon"]["phase_thresholds_us"] = []
+        raw["synods"]["Moon"]["phase"]["status"] = "unknown_incomplete_phase_thresholds"
         data = VirgoStarsEvents(DummyNative(raw)).get_synods_at("1970-01-01T00:00:00Z")
         self.assertEqual(data["synods"]["Moon"]["phase_thresholds_utc"], [])
 
@@ -660,7 +675,7 @@ class PythonApiTests(unittest.TestCase):
         for invalid in (
             12, "100", {}, True, [True], [-100.0], ["-100"],
             [None], [-300], [-100, -100], [-100, -101],
-            [(1 << 63)], [-(1 << 63) - 1],
+            [(1 << 63)],
         ):
             with self.subTest(invalid=invalid):
                 broken = fake_response()
@@ -671,6 +686,15 @@ class PythonApiTests(unittest.TestCase):
                     VirgoStarsEvents(DummyNative(broken)).get_synods_at(
                         "1970-01-01T00:00:00Z"
                     )
+
+        # Rust represents negative timestamps as signed i64. A value
+        # below that boundary fails already in the strict JSON decoder.
+        outside_i64 = fake_response()
+        outside_i64["synods"]["Mercury"]["phase_thresholds_us"] = [-(1 << 63) - 1]
+        with self.assertRaisesRegex(ValueError, "integer outside Rust i64/u64 range"):
+            VirgoStarsEvents(DummyNative(outside_i64)).get_synods_at(
+                "1970-01-01T00:00:00Z"
+            )
 
         for omitted in ("missing field", "missing anchor"):
             with self.subTest(omitted=omitted):
@@ -933,6 +957,7 @@ class PythonApiTests(unittest.TestCase):
             "code": None, "started_at_us": None,
             "status": "unknown_discontinuous_moon_anchors",
         }
+        moon["coverage"]["warnings"].append("moon_recorded_cycle_gap_over_45_days")
         result = VirgoStarsEvents(DummyNative(valid_gap)).get_synods_at(
             "1970-01-01T00:00:00Z"
         )
@@ -972,6 +997,10 @@ class PythonApiTests(unittest.TestCase):
                     "code": phase_code, "started_at_us": phase_start,
                     "status": "derived_from_recorded_thresholds"
                 }
+                if body == "Moon" and next_start is not None:
+                    record["coverage"]["warnings"].append(
+                        "moon_recorded_cycle_gap_over_45_days"
+                    )
                 with self.assertRaisesRegex(ValueError, "native synod .*" + reason):
                     VirgoStarsEvents(DummyNative(invalid)).get_synods_at(
                         "1970-01-01T00:00:00Z"
