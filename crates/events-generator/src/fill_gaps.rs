@@ -12,15 +12,18 @@ use std::path::PathBuf;
 
 use serde_json::{json, Value};
 use virgostars_event_ephemeris::{BodyId, EventFamily, MotionDirection, VirgoStarsEventEphemeris};
+use virgostars_events_generator::adaptive::adaptive_station_scan;
 use virgostars_events_generator::gaps::detect_sparse_spans;
 use virgostars_events_generator::lunar::lunar_phase_candidates;
 use virgostars_events_generator::provider_process::ProcessLongitudeProvider;
-use virgostars_events_generator::{ingress_candidates, station_candidates, SearchWindow};
+use virgostars_events_generator::{
+    ingress_candidates, station_candidates, SearchWindow, StationCandidate,
+};
 
 const DEFAULT_CHUNK_US: i64 = 365 * 86_400_000_000;
 const DEFAULT_MAX_STEPS: u64 = 100_000;
 const HARD_MAX_STEPS: u64 = 1_000_000;
-const USAGE: &str = "Usage: vseph-fill-gaps --mode plan|calculate --archive P0 --sha256 TRUSTED_DIGEST --family synods|motions|ingresses --body NAME --start-us I64 --end-us I64 --threshold-us I64 [--provider-program EXEC --step-us I64 --precision-us I64] [--chunk-us I64] [--max-steps U64] [--cadence-check half|none]\nOnly synods/Moon, motions, ingresses can be calculated; others are report-only. Optional half-step rescan catches some missed events, NOT scientific completeness. Never writes P0, original IDs or database.";
+const USAGE: &str = "Usage: vseph-fill-gaps --mode plan|calculate --archive P0 --sha256 TRUSTED_DIGEST --family synods|motions|ingresses --body NAME --start-us I64 --end-us I64 --threshold-us I64 [--provider-program EXEC --step-us I64 --precision-us I64] [--chunk-us I64] [--max-steps U64] [--cadence-check half|none] [--adaptive-station-depth 1..8]\nMoon synods, stations and ingresses are candidate-only. Optional half-step or motion-only adaptive risk scans do NOT certify coverage. Never writes P0, original IDs or database.";
 
 struct Options {
     mode: String,
@@ -38,6 +41,7 @@ struct Options {
     chunk_us: i64,
     max_steps: u64,
     verify_half_step: bool,
+    adaptive_station_depth: Option<u8>,
 }
 
 fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
@@ -58,6 +62,7 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
         "--chunk-us",
         "--max-steps",
         "--cadence-check",
+        "--adaptive-station-depth",
     ];
     while let Some(key) = args.next() {
         if !NAMES.contains(&key.as_str()) || map.contains_key(&key) {
@@ -122,6 +127,17 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
         Some("half") => true,
         Some(_) => return Err("--cadence-check must be half or none".into()),
     };
+    let adaptive_station_depth = map
+        .get("--adaptive-station-depth")
+        .map(|value| {
+            value
+                .parse::<u8>()
+                .map_err(|_| "invalid adaptive depth".to_string())
+        })
+        .transpose()?;
+    if adaptive_station_depth.is_some_and(|depth| !(1..=8).contains(&depth)) {
+        return Err("--adaptive-station-depth must be 1..=8".into());
+    }
     let provider_program = map.get("--provider-program").map(PathBuf::from);
     let step_us = map
         .get("--step-us")
@@ -150,10 +166,24 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
         {
             return Err("half-step verification requires step_us / 2 >= precision_us".into());
         }
+        if let Some(depth) = adaptive_station_depth {
+            if family != EventFamily::Motion {
+                return Err(
+                    "adaptive risk scanning is implemented only for motion stations".into(),
+                );
+            }
+            if (step_us.expect("validated step") as i128) / (1_i128 << depth)
+                < precision_us.expect("validated precision") as i128
+            {
+                return Err("adaptive depth requires step_us / 2^depth >= precision_us".into());
+            }
+        }
     } else if provider_program.is_some() || step_us.is_some() || precision_us.is_some() {
         return Err("plan does not invoke a provider; remove calculation options".into());
     } else if verify_half_step {
         return Err("half-step verification requires calculate mode".into());
+    } else if adaptive_station_depth.is_some() {
+        return Err("adaptive station scanning requires calculate mode".into());
     }
     Ok(Options {
         mode,
@@ -171,7 +201,27 @@ fn parse_options(args: impl IntoIterator<Item = String>) -> Result<Options, Stri
         chunk_us,
         max_steps,
         verify_half_step,
+        adaptive_station_depth,
     })
+}
+
+fn station_values(found: Vec<StationCandidate>, gap_index: usize) -> Vec<Value> {
+    found
+        .into_iter()
+        .map(|candidate| {
+            json!({
+                "gap_index": gap_index,
+                "family": "motions",
+                "body": candidate.body.as_str(),
+                "bracket_start_us": candidate.bracket_start_us,
+                "bracket_end_us": candidate.bracket_end_us,
+                "direction_after": match candidate.direction_after {
+                    MotionDirection::Direct => "direct",
+                    MotionDirection::Retrograde => "retrograde",
+                },
+            })
+        })
+        .collect()
 }
 
 fn generate_chunk(
@@ -184,24 +234,7 @@ fn generate_chunk(
     match family {
         EventFamily::Motion => station_candidates(provider, body, window)
             .map_err(|error| error.to_string())
-            .map(|found| {
-                found
-                    .into_iter()
-                    .map(|candidate| {
-                        json!({
-                            "gap_index": gap_index,
-                            "family": "motions",
-                            "body": candidate.body.as_str(),
-                            "bracket_start_us": candidate.bracket_start_us,
-                            "bracket_end_us": candidate.bracket_end_us,
-                            "direction_after": match candidate.direction_after {
-                                MotionDirection::Direct => "direct",
-                                MotionDirection::Retrograde => "retrograde",
-                            },
-                        })
-                    })
-                    .collect()
-            }),
+            .map(|found| station_values(found, gap_index)),
         EventFamily::Ingress => ingress_candidates(provider, body, window)
             .map_err(|error| error.to_string())
             .map(|found| {
@@ -240,10 +273,15 @@ fn generate_chunk(
     }
 }
 
-fn compare_half_step(coarse: &[Value], fine: &[Value], precision_us: i64) -> Result<(), String> {
+fn compare_rescans(
+    coarse: &[Value],
+    fine: &[Value],
+    precision_us: i64,
+    check_name: &str,
+) -> Result<(), String> {
     if coarse.len() != fine.len() {
         return Err(format!(
-            "half-step rescan found {} candidates, initial scan found {}; possible missed crossings",
+            "{check_name} rescan found {} candidates, initial scan found {}; possible missed crossings",
             fine.len(),
             coarse.len()
         ));
@@ -260,7 +298,7 @@ fn compare_half_step(coarse: &[Value], fine: &[Value], precision_us: i64) -> Res
         ] {
             if original.get(field) != checked.get(field) {
                 return Err(format!(
-                    "half-step candidate #{index} changed event identity at {field}"
+                    "{check_name} candidate #{index} changed event identity at {field}"
                 ));
             }
         }
@@ -275,7 +313,7 @@ fn compare_half_step(coarse: &[Value], fine: &[Value], precision_us: i64) -> Res
         };
         if (midpoint(original)? - midpoint(checked)?).abs() > precision_us as i128 {
             return Err(format!(
-                "half-step candidate #{index} moved by more than the requested precision"
+                "{check_name} candidate #{index} moved by more than the requested precision"
             ));
         }
     }
@@ -317,6 +355,9 @@ fn run() -> Result<(), String> {
         .collect();
     let mut candidates: Vec<Value> = Vec::new();
     let mut provider_identity = Value::Null;
+    let mut adaptive_midpoints = 0_usize;
+    let mut adaptive_refined = 0_usize;
+    let mut adaptive_leaves = 0_usize;
     if options.mode == "calculate" && !spans.is_empty() {
         let step = options.step_us.expect("validated step");
         let precision = options.precision_us.expect("validated precision");
@@ -349,6 +390,10 @@ fn run() -> Result<(), String> {
                 start = end;
             }
         }
+        let mut adaptive_budget = (options.max_steps as i128 - total_steps) as usize;
+        if options.adaptive_station_depth.is_some() && adaptive_budget == 0 {
+            return Err("adaptive midpoint probe budget exhausted before provider startup".into());
+        }
         // Open the separately licensed provider only *after* budget checks.
         let provider = ProcessLongitudeProvider::spawn(
             options
@@ -372,7 +417,26 @@ fn run() -> Result<(), String> {
                         ..window
                     },
                 )?;
-                compare_half_step(&found, &fine, precision)?;
+                compare_rescans(&found, &fine, precision, "half-step")?;
+            }
+            if let Some(depth) = options.adaptive_station_depth {
+                let adaptive = adaptive_station_scan(
+                    &provider,
+                    &options.body,
+                    window,
+                    depth,
+                    &mut adaptive_budget,
+                )
+                .map_err(|error| format!("adaptive station scan failed: {error}"))?;
+                adaptive_midpoints += adaptive.midpoint_probes;
+                adaptive_refined += adaptive.refined_segments;
+                adaptive_leaves += adaptive.leaf_segments;
+                compare_rescans(
+                    &found,
+                    &station_values(adaptive.candidates, gap_index),
+                    precision,
+                    "adaptive station",
+                )?;
             }
             candidates.extend(found);
         }
@@ -408,6 +472,17 @@ fn run() -> Result<(), String> {
                 json!({
                     "mode": "half_step",
                     "step_us": options.step_us.expect("validated step") / 2,
+                    "matched_candidates": candidates.len(),
+                    "coverage_certified": false,
+                })
+            } else { Value::Null },
+            "adaptive_station_check": if let Some(depth) = options.adaptive_station_depth.filter(|_| !spans.is_empty()) {
+                json!({
+                    "mode": "risk_midpoint",
+                    "max_depth": depth,
+                    "midpoint_probes": adaptive_midpoints,
+                    "refined_segments": adaptive_refined,
+                    "leaf_segments": adaptive_leaves,
                     "matched_candidates": candidates.len(),
                     "coverage_certified": false,
                 })

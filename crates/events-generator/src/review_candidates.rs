@@ -58,6 +58,18 @@ struct CadenceCheck {
     coverage_certified: bool,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AdaptiveStationCheck {
+    mode: String,
+    max_depth: u8,
+    midpoint_probes: usize,
+    refined_segments: usize,
+    leaf_segments: usize,
+    matched_candidates: usize,
+    coverage_certified: bool,
+}
+
 #[derive(Deserialize, PartialEq, Eq, Debug)]
 #[serde(deny_unknown_fields)]
 struct StagedSpan {
@@ -102,6 +114,7 @@ struct Staging {
     sparse_threshold_us: i64,
     calculation_settings: Option<CalculationSettings>,
     cadence_check: Option<CadenceCheck>,
+    adaptive_station_check: Option<AdaptiveStationCheck>,
     provider: Option<ProviderIdentity>,
     sparse_spans: Vec<StagedSpan>,
     candidates: Vec<StagedCandidate>,
@@ -201,6 +214,7 @@ fn check_staging(
             if stage.provider.is_some()
                 || stage.calculation_settings.is_some()
                 || stage.cadence_check.is_some()
+                || stage.adaptive_station_check.is_some()
                 || !stage.candidates.is_empty()
             {
                 return Err("plan mode cannot contain provider, settings or candidates".into());
@@ -233,6 +247,23 @@ fn check_staging(
                     || stage.sparse_spans.is_empty()
                 {
                     return Err("invalid self-reported half-step cadence metadata".into());
+                }
+            }
+            if let Some(adaptive) = stage.adaptive_station_check.as_ref() {
+                if family != EventFamily::Motion
+                    || adaptive.mode != "risk_midpoint"
+                    || adaptive.coverage_certified
+                    || !(1..=8).contains(&adaptive.max_depth)
+                    || (settings.step_us as i128) / (1_i128 << adaptive.max_depth)
+                        < settings.precision_us as i128
+                    || adaptive.midpoint_probes == 0
+                    || adaptive.leaf_segments <= adaptive.refined_segments
+                    || adaptive.midpoint_probes > settings.max_steps as usize
+                    || adaptive.refined_segments > adaptive.midpoint_probes
+                    || adaptive.matched_candidates != stage.candidates.len()
+                    || stage.sparse_spans.is_empty()
+                {
+                    return Err("invalid self-reported adaptive station metadata".into());
                 }
             }
             if !stage.sparse_spans.is_empty() {
@@ -496,6 +527,8 @@ fn run() -> Result<(), String> {
             "reference_independence_scientifically_established": false,
             "producer_claimed_half_step_check": staging.cadence_check.is_some(),
             "cadence_check_independently_recomputed": false,
+            "producer_claimed_adaptive_station_check": staging.adaptive_station_check.is_some(),
+            "adaptive_station_check_independently_recomputed": false,
             "coverage_certified": false,
             "astronomical_accuracy_verified": false,
             "safe_to_import": false,

@@ -268,3 +268,122 @@ fn half_step_calculation_budget_fails_before_provider_and_emits_no_partial_json(
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("needs 3 position steps"));
 }
+
+#[test]
+fn adaptive_station_rescan_detects_two_hidden_stations_and_emits_no_partial_json() {
+    let (_dir, archive) = fixture();
+    let (_program_dir, program) = compiled_provider();
+    let end = DAY.to_string();
+    let checked = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args([
+            "--mode",
+            "calculate",
+            "--archive",
+            archive.to_str().unwrap(),
+            "--sha256",
+            SHA,
+            "--family",
+            "motions",
+            "--body",
+            "Mars",
+            "--start-us",
+            "0",
+            "--end-us",
+            &end,
+            "--threshold-us",
+            "1000000000",
+            "--step-us",
+            &end,
+            "--precision-us",
+            "1000000",
+            "--provider-program",
+            program.to_str().unwrap(),
+            "--adaptive-station-depth",
+            "6",
+        ])
+        .env("MOCK_DOUBLE_STATION", "1")
+        .output()
+        .unwrap();
+    assert!(!checked.status.success());
+    assert!(checked.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&checked.stderr).contains("possible missed crossings"));
+}
+
+#[test]
+fn adaptive_station_rescan_stages_only_with_explicit_uncertified_metadata() {
+    let (_dir, archive) = fixture();
+    let (_program_dir, program) = compiled_provider();
+    let end = DAY.to_string();
+    let doc = call(&[
+        "--mode",
+        "calculate",
+        "--archive",
+        archive.to_str().unwrap(),
+        "--sha256",
+        SHA,
+        "--family",
+        "motions",
+        "--body",
+        "Mars",
+        "--start-us",
+        "0",
+        "--end-us",
+        &end,
+        "--threshold-us",
+        "1000000000",
+        "--step-us",
+        &end,
+        "--precision-us",
+        "1000000",
+        "--provider-program",
+        program.to_str().unwrap(),
+        "--adaptive-station-depth",
+        "6",
+    ]);
+    assert_eq!(doc["adaptive_station_check"]["mode"], "risk_midpoint");
+    assert_eq!(doc["adaptive_station_check"]["max_depth"], 6);
+    assert_eq!(doc["adaptive_station_check"]["refined_segments"], 0);
+    assert_eq!(doc["adaptive_station_check"]["coverage_certified"], false);
+    assert_eq!(doc["coverage_certified"], false);
+    assert_eq!(doc["generation_complete"], false);
+}
+
+#[test]
+fn adaptive_station_budget_exhaustion_rejects_before_provider_startup() {
+    let (_dir, archive) = fixture();
+    let end = DAY.to_string();
+    let output = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args([
+            "--mode",
+            "calculate",
+            "--archive",
+            archive.to_str().unwrap(),
+            "--sha256",
+            SHA,
+            "--family",
+            "motions",
+            "--body",
+            "Mars",
+            "--start-us",
+            "0",
+            "--end-us",
+            &end,
+            "--threshold-us",
+            "1000000000",
+            "--step-us",
+            &end,
+            "--precision-us",
+            "1000000",
+            "--max-steps",
+            "1",
+            "--provider-program",
+            "nonexistent-mock-provider",
+            "--adaptive-station-depth",
+            "6",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("budget exhausted"));
+}

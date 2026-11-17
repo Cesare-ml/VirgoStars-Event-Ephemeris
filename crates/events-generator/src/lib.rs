@@ -21,6 +21,7 @@ use std::error::Error;
 use std::fmt;
 use virgostars_events_core::{BodyId, MotionDirection, TimestampMicros, ZodiacSign};
 
+pub mod adaptive;
 pub mod gaps;
 pub mod lunar;
 pub mod provider_process;

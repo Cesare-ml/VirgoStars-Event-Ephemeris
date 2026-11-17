@@ -391,3 +391,65 @@ fn reviewer_checks_half_step_metadata_without_claiming_to_recompute_cadence() {
     assert!(!rejected.status.success());
     assert!(rejected.stdout.is_empty());
 }
+
+#[test]
+fn reviewer_validates_adaptive_station_claim_without_promoting_it_to_coverage() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let end = DAY.to_string();
+    let generated = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args([
+            "--mode",
+            "calculate",
+            "--archive",
+            archive.to_str().unwrap(),
+            "--sha256",
+            SHA,
+            "--family",
+            "motions",
+            "--body",
+            "Mars",
+            "--start-us",
+            "0",
+            "--end-us",
+            &end,
+            "--threshold-us",
+            "1000000000",
+            "--step-us",
+            &end,
+            "--precision-us",
+            "1000000",
+            "--provider-program",
+            mock.to_str().unwrap(),
+            "--adaptive-station-depth",
+            "6",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        generated.status.success(),
+        "{}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
+    let doc: serde_json::Value = serde_json::from_slice(&generated.stdout).unwrap();
+    let checked = review(&archive, &doc, SHA);
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&checked.stdout).unwrap();
+    assert_eq!(report["producer_claimed_adaptive_station_check"], true);
+    assert_eq!(
+        report["adaptive_station_check_independently_recomputed"],
+        false
+    );
+    assert_eq!(report["coverage_certified"], false);
+    assert_eq!(report["safe_to_import"], false);
+
+    let mut forged = doc;
+    forged["adaptive_station_check"]["matched_candidates"] = serde_json::json!(999);
+    let rejected = review(&archive, &forged, SHA);
+    assert!(!rejected.status.success());
+    assert!(rejected.stdout.is_empty());
+}

@@ -62,6 +62,18 @@ For `--mode calculate`, add `--cadence-check half` to rescan **every same chunk*
 
 This catches *some* missed pairs of closely spaced events. Synthetic regression: a daily scan with **two** hidden motion stations reports zero candidates; the half-day scan finds both and refuses to stage an apparently empty interval. **It does not prove absence of even faster multiple crossings or scientific correctness**. Repeating with another halved step, testing phases near a chunk edge and comparing genuine source records are still necessary. The separate `vseph-review-candidates` executable checks `cadence_check` metadata consistency but **does not recompute the half-step scan**; it reports `cadence_check_independently_recomputed: false`. Do not use this self-reported heuristic as certified coverage.
 
+### Optional adaptive station-risk scan (Rust-only development check)
+
+For `--mode calculate --family motions`, `--adaptive-station-depth N` with `N` from 1 to 8 probes the speed at the midpoint of **each coarse segment** and recursively subdivides segments when either half has a speed-sign change or when the midpoint speed magnitude is less than half the smaller endpoint magnitude. It then applies the existing zero-crossing bracketer to the resulting leaf segments. This can detect a **pair of stations concealed by same-sign coarse endpoints**, while spending fewer midpoint probes on apparently low-risk sections than indiscriminately halving every segment to maximum depth. Example appended to a motion calculation:
+
+```bash
+  --adaptive-station-depth 6
+```
+
+The CLI requires `step_us / 2^N >= precision_us`; the `--max-steps` preflight accounts for coarse grid steps and optional full half-step rescans, while **the remaining budget caps additional adaptive midpoint probes** across chunks. Exhaustion aborts without output. The budget is *not* a direct cap on every provider evaluation inside the already bounded root-refinement brackets. When a rescan differs in candidate count, event labels or bracket-midpoint precision, staging fails closed with no JSON output. Otherwise `adaptive_station_check` records `mode: risk_midpoint`, depth and the midpoint/refinement/leaf counts, `matched_candidates` and `coverage_certified: false`. The separate reviewer validates this object's structure and consistency, but reports `adaptive_station_check_independently_recomputed: false`.
+
+**Scientific limitation:** a flat or misleading same-sign speed curve may hide multiple roots without triggering this risk heuristic. It is **not interval arithmetic, not proof of complete coverage, not an independent ephemeris**, and not a substitute for a validated smaller uniform step or comparison with source events. This first adaptive implementation covers **motion stations only**, not lunar synods, ingresses, aspects or eclipses. It does not modify the P0 dataset or assign new source IDs. Synthetic tests cover missed double stations, probe budget exhaustion, and reviewer metadata rejection; real Swiss calculations and Windows runs have not been validated.
+
 ### Independent structural review before keeping staging JSON
 
 The separate `vseph-review-candidates` Rust executable takes an **existing** output file and reopens the original immutable P0 through the independently supplied trusted SHA-256. It re-audits all archive blocks, checks the staged dataset identity, **recalculates every sparse interval and source ID from recorded P0 rows**, and validates all proposed brackets against their claimed interval, family, body, phase/sign/direction fields and declared search precision. It rejects unexpected JSON keys (including forged `source_id` fields), invalid provider settings and duplicate/out-of-order brackets. The producer's SHA-256 field must never be used as the reviewer's trust anchor.
@@ -94,7 +106,7 @@ The reference must announce a **different** provider identity/settings from the 
 
 ### Windows batch script for known gaps and resumable intervals
 
-`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. Optional `-VerifyHalfStep` in `-Mode calculate` enables the producer's finer-cadence scan; optional `-ReferenceProviderProgram` additionally requires numerical crossing agreement before saving new outputs. **Separate `_halfstep` / `_reference` filenames** distinguish these check modes from ordinary staging, without overwriting existing artifacts. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs either a compatible independent `-ProviderProgram` executable, **or** an authorized private backend checkout with its existing Node dependencies and Swiss license configured for the default legacy adapter. For instance:
+`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. Optional `-VerifyHalfStep` in `-Mode calculate` enables the producer's finer-cadence scan; `-AdaptiveStationDepth 1..8` additionally enables the **motion-only** speed-risk check; optional `-ReferenceProviderProgram` additionally requires numerical crossing agreement before saving new outputs. **Separate `_halfstep` / `_adaptiveN` / `_reference` filenames** distinguish these check modes from ordinary staging, without overwriting existing artifacts. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs either a compatible independent `-ProviderProgram` executable, **or** an authorized private backend checkout with its existing Node dependencies and Swiss license configured for the default legacy adapter. For instance:
 
 ```powershell
 # Analyze the two known Moon source discontinuities (1918–1920, 2017–2019).
@@ -114,6 +126,14 @@ The reference must announce a **different** provider identity/settings from the 
   -TrustedSha256 "<trusted 64-char lowercase digest>" -OutputDir "D:\vseph-staging" `
   -Family ingresses -Body Moon -FromUtc "2099-01-01T00:00:00Z" `
   -ToUtc "4836-01-01T00:00:00Z" -ThresholdDays 8 -SliceYears 1 -MaxJobs 10 -Mode plan
+
+# Motion-station calculation: adaptive probe check in addition to half-step.
+# This is still unverified staging; choose an appropriate source and interval.
+.\tools\compute-missing-intervals.ps1 -Archive "D:\data\authorized.p0" `
+  -TrustedSha256 "<trusted 64-char lowercase digest>" -OutputDir "D:\vseph-staging" `
+  -Family motions -Body Mars -FromUtc "2020-01-01T00:00:00Z" `
+  -ToUtc "2021-01-01T00:00:00Z" -ThresholdDays 45 -Mode calculate `
+  -BackendRoot "D:\GitHub\virgo-stars" -VerifyHalfStep -AdaptiveStationDepth 6
 ```
 
 The script reads `backend/services/astrology/func.js` through `-BackendRoot` only for calculation, and assigns the private Git revision to `VSEPH_LEGACY_COMMIT`; it does not copy or publish that code. Users who need a different provider can set `-ProviderProgram` and the compatible provider's environment. The script generates no astronomical records until `-Mode calculate` is selected. Existing JSON artifacts are skipped, **not** re-verified or overwritten; handle them as untrusted staging and review them before reuse. For large multi-century gaps, work in small year slices rather than launching one giant Swiss scan. The Windows PowerShell integration has **not yet been executed** on a Windows host.
