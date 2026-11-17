@@ -2,6 +2,10 @@
 
 Applies to all human contributors and AI agents in the entire repository. The goal is **concrete, small, verified progress** on a standalone open-source event-ephemeris library. An agent should always be able to find the current state and next safe task without private chat history.
 
+## VirgoStars agent fleet (owner authorization 2026-11-14)
+
+Chats started with the VirgoStars fleet prompt follow [`AGENT_START.md`](https://github.com/Cesare-ml/virgostars-development-orchestrator/blob/main/AGENT_START.md) and the entry for `Cesare-ml/VirgoStars-Event-Ephemeris` in [`config/agent-fleet.json`](https://github.com/Cesare-ml/virgostars-development-orchestrator/blob/main/config/agent-fleet.json). For those agents, the runbook's merge gate is the owner's authorization to merge qualifying PRs, and `ci_allowed` there governs adding read-only CI. Every other rule in this file still applies.
+
 ## Current maintainer priority — 2026-11-17
 
 The owner explicitly changed the first deliverable from **Python-first** to a **Rust-only consumer MVP** usable by `virgostars-desktop` and `virgostars-mobile-app`, followed by a separate scientific regeneration facility. This supersedes the older “Python FIRST” section below; that section remains as history and as a future optional binding plan. Read [RUST_CONSUMER_MVP.md](docs/RUST_CONSUMER_MVP.md) and [REGENERATION_PIPELINE.md](docs/REGENERATION_PIPELINE.md). No app should depend on Python/Swiss/Node/PostgreSQL at runtime. Both app teams must pin a reviewed Rust commit and independently verify their target builds.
