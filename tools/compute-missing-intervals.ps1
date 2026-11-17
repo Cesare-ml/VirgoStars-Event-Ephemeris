@@ -23,7 +23,8 @@ param(
     [string]$ProviderProgram,
     [string]$ReferenceProviderProgram,
     [switch]$VerifyHalfStep,
-    [int]$AdaptiveStationDepth = 0
+    [int]$AdaptiveStationDepth = 0,
+    [int]$AdaptiveIngressDepth = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,6 +47,10 @@ if ($VerifyHalfStep -and $Mode -ne 'calculate') {
 if ($AdaptiveStationDepth -ne 0 -and ($Mode -ne 'calculate' -or $Family -ne 'motions' -or
     $AdaptiveStationDepth -lt 1 -or $AdaptiveStationDepth -gt 8)) {
     throw '-AdaptiveStationDepth must be 1..8 and requires -Mode calculate -Family motions.'
+}
+if ($AdaptiveIngressDepth -ne 0 -and ($Mode -ne 'calculate' -or $Family -ne 'ingresses' -or
+    $AdaptiveIngressDepth -lt 1 -or $AdaptiveIngressDepth -gt 8)) {
+    throw '-AdaptiveIngressDepth must be 1..8 and requires -Mode calculate -Family ingresses.'
 }
 if ($ReferenceProviderProgram) {
     if ($Mode -ne 'calculate') {
@@ -118,6 +123,7 @@ foreach ($range in $ranges) {
         $modeLabel = $Mode
         if ($VerifyHalfStep) { $modeLabel += '_halfstep' }
         if ($AdaptiveStationDepth -gt 0) { $modeLabel += '_adaptive' + $AdaptiveStationDepth }
+        if ($AdaptiveIngressDepth -gt 0) { $modeLabel += '_ingressAdaptive' + $AdaptiveIngressDepth }
         if ($ReferenceProviderProgram) { $modeLabel += '_reference' }
         $filename = '{0}_{1}_{2}_{3}_{4}_{5}.json' -f $Family, $safeBody, $fromUs, $toUs, $modeLabel, $TrustedSha256.Substring(0, 12)
         $destination = Join-Path $outputRoot $filename
@@ -143,6 +149,7 @@ foreach ($range in $ranges) {
                 '--precision-us', '1000000', '--max-steps', [string]$MaxSteps)
             if ($VerifyHalfStep) { $argsForCargo += @('--cadence-check', 'half') }
             if ($AdaptiveStationDepth -gt 0) { $argsForCargo += @('--adaptive-station-depth', [string]$AdaptiveStationDepth) }
+            if ($AdaptiveIngressDepth -gt 0) { $argsForCargo += @('--adaptive-ingress-depth', [string]$AdaptiveIngressDepth) }
         }
         Write-Host "Processing $Family/$Body $($cursor.ToString('u')) → $($next.ToString('u')) ($Mode)"
         $jsonLines = & cargo @argsForCargo
@@ -166,6 +173,13 @@ foreach ($range in $ranges) {
              $report.adaptive_station_check.coverage_certified -ne $false -or
              $report.adaptive_station_check.matched_candidates -ne $report.candidates.Count)) {
             throw "Rust adaptive station check metadata missing or inconsistent for $filename"
+        }
+        if ($AdaptiveIngressDepth -gt 0 -and $report.sparse_spans.Count -gt 0 -and
+            ($report.adaptive_ingress_check.mode -ne 'zodiac_boundary_midpoint' -or
+             $report.adaptive_ingress_check.max_depth -ne $AdaptiveIngressDepth -or
+             $report.adaptive_ingress_check.coverage_certified -ne $false -or
+             $report.adaptive_ingress_check.matched_candidates -ne $report.candidates.Count)) {
+            throw "Rust adaptive ingress check metadata missing or inconsistent for $filename"
         }
         $temporary = Join-Path $outputRoot ('.' + $filename + '.' + [Guid]::NewGuid().ToString('N') + '.tmp')
         [IO.File]::WriteAllText($temporary, $jsonText, (New-Object Text.UTF8Encoding($false)))
@@ -199,6 +213,11 @@ foreach ($range in $ranges) {
                 ($review.producer_claimed_adaptive_station_check -ne $true -or
                  $review.adaptive_station_check_independently_recomputed -ne $false)) {
                 throw "Independent Rust review rejected adaptive station metadata for $filename"
+            }
+            if ($AdaptiveIngressDepth -gt 0 -and $report.sparse_spans.Count -gt 0 -and
+                ($review.producer_claimed_adaptive_ingress_check -ne $true -or
+                 $review.adaptive_ingress_check_independently_recomputed -ne $false)) {
+                throw "Independent Rust review rejected adaptive ingress metadata for $filename"
             }
             Move-Item -LiteralPath $temporary -Destination $destination -ErrorAction Stop
         } finally {

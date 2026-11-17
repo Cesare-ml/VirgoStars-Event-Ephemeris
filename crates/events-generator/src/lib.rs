@@ -191,7 +191,7 @@ pub fn station_candidates<P: LongitudeProvider>(
     Ok(result)
 }
 
-fn zodiac_sign(longitude: f64) -> u8 {
+pub(crate) fn zodiac_sign(longitude: f64) -> u8 {
     (longitude.rem_euclid(360.0) / 30.0).floor() as u8
 }
 

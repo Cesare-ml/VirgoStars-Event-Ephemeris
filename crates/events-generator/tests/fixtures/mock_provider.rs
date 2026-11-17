@@ -33,6 +33,18 @@ fn main() {
             "Moon" => (10.0 + 13.0 * days, 13.0),
             _ => (29.0 + days * 2.0, 2.0),
         };
+        // Synthetic forward Taurus ingress followed by retrograde Aries
+        // re-entry, both concealed by the same Aries longitude at day edges.
+        let (longitude, speed) = if requested_body == "Mars"
+            && std::env::var_os("MOCK_DOUBLE_INGRESS").is_some()
+        {
+            (
+                29.0 + 8.0 * (0.25 - (days - 0.5).powi(2)),
+                -16.0 * (days - 0.5),
+            )
+        } else {
+            (longitude, speed)
+        };
         // Two stations strictly inside a daily scan step: the daily endpoints
         // have equal speed sign, but a half-day sample exposes both crossings.
         let speed = if requested_body == "Mars"

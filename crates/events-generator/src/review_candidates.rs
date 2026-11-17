@@ -60,7 +60,7 @@ struct CadenceCheck {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct AdaptiveStationCheck {
+struct AdaptiveRiskCheck {
     mode: String,
     max_depth: u8,
     midpoint_probes: usize,
@@ -114,7 +114,8 @@ struct Staging {
     sparse_threshold_us: i64,
     calculation_settings: Option<CalculationSettings>,
     cadence_check: Option<CadenceCheck>,
-    adaptive_station_check: Option<AdaptiveStationCheck>,
+    adaptive_station_check: Option<AdaptiveRiskCheck>,
+    adaptive_ingress_check: Option<AdaptiveRiskCheck>,
     provider: Option<ProviderIdentity>,
     sparse_spans: Vec<StagedSpan>,
     candidates: Vec<StagedCandidate>,
@@ -215,6 +216,7 @@ fn check_staging(
                 || stage.calculation_settings.is_some()
                 || stage.cadence_check.is_some()
                 || stage.adaptive_station_check.is_some()
+                || stage.adaptive_ingress_check.is_some()
                 || !stage.candidates.is_empty()
             {
                 return Err("plan mode cannot contain provider, settings or candidates".into());
@@ -264,6 +266,23 @@ fn check_staging(
                     || stage.sparse_spans.is_empty()
                 {
                     return Err("invalid self-reported adaptive station metadata".into());
+                }
+            }
+            if let Some(adaptive) = stage.adaptive_ingress_check.as_ref() {
+                if family != EventFamily::Ingress
+                    || adaptive.mode != "zodiac_boundary_midpoint"
+                    || adaptive.coverage_certified
+                    || !(1..=8).contains(&adaptive.max_depth)
+                    || (settings.step_us as i128) / (1_i128 << adaptive.max_depth)
+                        < settings.precision_us as i128
+                    || adaptive.midpoint_probes == 0
+                    || adaptive.leaf_segments <= adaptive.refined_segments
+                    || adaptive.midpoint_probes > settings.max_steps as usize
+                    || adaptive.refined_segments > adaptive.midpoint_probes
+                    || adaptive.matched_candidates != stage.candidates.len()
+                    || stage.sparse_spans.is_empty()
+                {
+                    return Err("invalid self-reported adaptive ingress metadata".into());
                 }
             }
             if !stage.sparse_spans.is_empty() {
@@ -529,6 +548,8 @@ fn run() -> Result<(), String> {
             "cadence_check_independently_recomputed": false,
             "producer_claimed_adaptive_station_check": staging.adaptive_station_check.is_some(),
             "adaptive_station_check_independently_recomputed": false,
+            "producer_claimed_adaptive_ingress_check": staging.adaptive_ingress_check.is_some(),
+            "adaptive_ingress_check_independently_recomputed": false,
             "coverage_certified": false,
             "astronomical_accuracy_verified": false,
             "safe_to_import": false,

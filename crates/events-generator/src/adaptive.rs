@@ -11,8 +11,9 @@
 use virgostars_events_core::BodyId;
 
 use crate::{
-    checked_sample, midpoint, next_time, station_candidates, GenerationError, LongitudeProvider,
-    SearchWindow, StationCandidate,
+    checked_sample, ingress_candidates, midpoint, next_time, station_candidates, zodiac_sign,
+    GenerationError, IngressCandidate, LongitudeProvider, LongitudeSample, SearchWindow,
+    StationCandidate,
 };
 
 #[derive(Default, Debug)]
@@ -23,8 +24,22 @@ pub struct AdaptiveStationReport {
     pub leaf_segments: usize,
 }
 
+/// Results from an *uncertified* tropical-ingress risk rescan.
+#[derive(Default, Debug)]
+pub struct AdaptiveIngressReport {
+    pub candidates: Vec<IngressCandidate>,
+    pub midpoint_probes: usize,
+    pub refined_segments: usize,
+    pub leaf_segments: usize,
+}
+
 fn opposite_speed_signs(a: f64, b: f64) -> bool {
     (a < 0.0) != (b < 0.0)
+}
+
+fn nearest_tropical_boundary(longitude: f64) -> f64 {
+    let within_sign = longitude.rem_euclid(30.0);
+    within_sign.min(30.0 - within_sign)
 }
 
 struct AdaptiveScan<'a, P> {
@@ -135,6 +150,120 @@ pub fn adaptive_station_scan<P: LongitudeProvider>(
     Ok(scan.report)
 }
 
+struct AdaptiveIngressScan<'a, P> {
+    provider: &'a P,
+    body: &'a BodyId,
+    precision_us: i64,
+    remaining_probes: &'a mut usize,
+    report: AdaptiveIngressReport,
+}
+
+impl<P: LongitudeProvider> AdaptiveIngressScan<'_, P> {
+    fn segment(
+        &mut self,
+        start_us: i64,
+        end_us: i64,
+        start: LongitudeSample,
+        end: LongitudeSample,
+        depth_remaining: u8,
+    ) -> Result<(), GenerationError> {
+        if depth_remaining > 0 && end_us as i128 - start_us as i128 > self.precision_us as i128 {
+            let mid_us = midpoint(start_us, end_us);
+            if mid_us > start_us && mid_us < end_us {
+                if *self.remaining_probes == 0 {
+                    return Err(GenerationError::TooManySteps);
+                }
+                *self.remaining_probes -= 1;
+                self.report.midpoint_probes += 1;
+                let mid = checked_sample(self.provider, self.body, mid_us)?;
+
+                let boundary_start = nearest_tropical_boundary(start.longitude_degrees);
+                let boundary_end = nearest_tropical_boundary(end.longitude_degrees);
+                let boundary_mid = nearest_tropical_boundary(mid.longitude_degrees);
+                // A return to the starting sign can hide a forward ingress
+                // and retrograde re-entry. Refine if the midpoint changes
+                // sign, speed reverses, or the midpoint nears a boundary.
+                let risky = zodiac_sign(start.longitude_degrees)
+                    != zodiac_sign(mid.longitude_degrees)
+                    || zodiac_sign(mid.longitude_degrees) != zodiac_sign(end.longitude_degrees)
+                    || opposite_speed_signs(
+                        start.longitude_speed_degrees_per_day,
+                        mid.longitude_speed_degrees_per_day,
+                    )
+                    || opposite_speed_signs(
+                        mid.longitude_speed_degrees_per_day,
+                        end.longitude_speed_degrees_per_day,
+                    )
+                    || boundary_mid * 2.0 < boundary_start.min(boundary_end);
+                if risky {
+                    self.report.refined_segments += 1;
+                    self.segment(start_us, mid_us, start, mid, depth_remaining - 1)?;
+                    self.segment(mid_us, end_us, mid, end, depth_remaining - 1)?;
+                    return Ok(());
+                }
+            }
+        }
+
+        self.report.leaf_segments += 1;
+        let span_us = (end_us as i128 - start_us as i128) as i64;
+        self.report.candidates.extend(ingress_candidates(
+            self.provider,
+            self.body,
+            SearchWindow {
+                start_us,
+                end_us,
+                step_us: span_us,
+                precision_us: self.precision_us.min(span_us),
+            },
+        )?);
+        Ok(())
+    }
+}
+
+/// Midpoint-risk rescanning for tropical sign ingress/re-entry candidates.
+///
+/// All coarse segments receive one midpoint probe. Suspicious segments are
+/// recursively bisected, sharing the remaining-probe budget across chunks.
+/// The sign and speed criteria are *heuristics*: a smooth same-sign curve can
+/// conceal two crossings between any three samples. No scientific coverage
+/// certificate is implied by a successful comparison.
+pub fn adaptive_ingress_scan<P: LongitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    window: SearchWindow,
+    max_depth: u8,
+    remaining_probes: &mut usize,
+) -> Result<AdaptiveIngressReport, GenerationError> {
+    window.validate()?;
+    if max_depth == 0 || max_depth > 8 || *remaining_probes == 0 {
+        return Err(GenerationError::InvalidWindow);
+    }
+    if (window.step_us as i128) / (1_i128 << max_depth) < window.precision_us as i128 {
+        return Err(GenerationError::InvalidWindow);
+    }
+
+    let mut scan = AdaptiveIngressScan {
+        provider,
+        body,
+        precision_us: window.precision_us,
+        remaining_probes,
+        report: AdaptiveIngressReport::default(),
+    };
+    let mut start_us = window.start_us;
+    let mut start = checked_sample(provider, body, start_us)?;
+    while start_us < window.end_us {
+        let end_us = next_time(start_us, window);
+        let end = checked_sample(provider, body, end_us)?;
+        scan.segment(start_us, end_us, start, end, max_depth)?;
+        start_us = end_us;
+        start = end;
+    }
+    scan.report
+        .candidates
+        .sort_by_key(|event| event.bracket_start_us);
+    Ok(scan.report)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,6 +279,26 @@ mod tests {
                 longitude_degrees: 0.0,
                 longitude_speed_degrees_per_day: (days - 0.25) * (days - 0.75),
             })
+        }
+    }
+
+    struct DoubleIngress;
+    impl LongitudeProvider for DoubleIngress {
+        fn sample(&self, _body: &BodyId, at: TimestampMicros) -> Result<LongitudeSample, String> {
+            let days = at.as_i64() as f64 / DAY as f64;
+            Ok(LongitudeSample {
+                longitude_degrees: 29.0 + 8.0 * (0.25 - (days - 0.5).powi(2)),
+                longitude_speed_degrees_per_day: -16.0 * (days - 0.5),
+            })
+        }
+    }
+
+    struct WraparoundIngress;
+    impl LongitudeProvider for WraparoundIngress {
+        fn sample(&self, body: &BodyId, at: TimestampMicros) -> Result<LongitudeSample, String> {
+            let mut sample = DoubleIngress.sample(body, at)?;
+            sample.longitude_degrees += 330.0;
+            Ok(sample)
         }
     }
 
@@ -185,5 +334,46 @@ mod tests {
             adaptive_station_scan(&DoubleStation, &mars, window(), 6, &mut budget).unwrap_err(),
             GenerationError::TooManySteps
         );
+    }
+
+    #[test]
+    fn finds_direct_ingress_and_retrograde_reentry_hidden_in_one_coarse_step() {
+        let mars = BodyId::try_from("Mars").unwrap();
+        assert!(ingress_candidates(&DoubleIngress, &mars, window())
+            .unwrap()
+            .is_empty());
+        let mut budget = 100;
+        let report =
+            adaptive_ingress_scan(&DoubleIngress, &mars, window(), 6, &mut budget).unwrap();
+        assert_eq!(report.candidates.len(), 2);
+        assert_eq!(report.candidates[0].sign_after.index(), 1);
+        assert!(!report.candidates[0].retrograde);
+        assert_eq!(report.candidates[1].sign_after.index(), 0);
+        assert!(report.candidates[1].retrograde);
+        assert!(report.refined_segments > 0);
+        assert!(report.leaf_segments < 64);
+    }
+
+    #[test]
+    fn ingress_midpoint_budget_is_shared_and_fail_closed() {
+        let mars = BodyId::try_from("Mars").unwrap();
+        let mut budget = 1;
+        assert_eq!(
+            adaptive_ingress_scan(&DoubleIngress, &mars, window(), 6, &mut budget).unwrap_err(),
+            GenerationError::TooManySteps
+        );
+    }
+
+    #[test]
+    fn detects_pisces_to_aries_and_reentry_across_zodiac_wrap() {
+        let mars = BodyId::try_from("Mars").unwrap();
+        let mut budget = 100;
+        let report =
+            adaptive_ingress_scan(&WraparoundIngress, &mars, window(), 6, &mut budget).unwrap();
+        assert_eq!(report.candidates.len(), 2);
+        assert_eq!(report.candidates[0].sign_after.index(), 0);
+        assert!(!report.candidates[0].retrograde);
+        assert_eq!(report.candidates[1].sign_after.index(), 11);
+        assert!(report.candidates[1].retrograde);
     }
 }

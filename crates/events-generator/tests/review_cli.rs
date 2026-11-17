@@ -453,3 +453,72 @@ fn reviewer_validates_adaptive_station_claim_without_promoting_it_to_coverage() 
     assert!(!rejected.status.success());
     assert!(rejected.stdout.is_empty());
 }
+
+#[test]
+fn reviewer_checks_ingress_adaptive_claim_and_rejects_forged_metadata() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let end = (2 * DAY).to_string();
+    let step = DAY.to_string();
+    let generated = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args([
+            "--mode",
+            "calculate",
+            "--archive",
+            archive.to_str().unwrap(),
+            "--sha256",
+            SHA,
+            "--family",
+            "ingresses",
+            "--body",
+            "Mars",
+            "--start-us",
+            "0",
+            "--end-us",
+            &end,
+            "--threshold-us",
+            "1000000000",
+            "--step-us",
+            &step,
+            "--precision-us",
+            "1000000",
+            "--provider-program",
+            mock.to_str().unwrap(),
+            "--adaptive-ingress-depth",
+            "6",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        generated.status.success(),
+        "{}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
+    let doc: serde_json::Value = serde_json::from_slice(&generated.stdout).unwrap();
+    let reviewed = review(&archive, &doc, SHA);
+    assert!(
+        reviewed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reviewed.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&reviewed.stdout).unwrap();
+    assert_eq!(report["producer_claimed_adaptive_ingress_check"], true);
+    assert_eq!(
+        report["adaptive_ingress_check_independently_recomputed"],
+        false
+    );
+    assert_eq!(report["coverage_certified"], false);
+    assert_eq!(report["safe_to_import"], false);
+
+    let mut forged = doc.clone();
+    forged["adaptive_ingress_check"]["max_depth"] = serde_json::json!(9);
+    let rejected = review(&archive, &forged, SHA);
+    assert!(!rejected.status.success());
+    assert!(rejected.stdout.is_empty());
+
+    let mut wrong_mode = doc;
+    wrong_mode["adaptive_ingress_check"]["mode"] = serde_json::json!("risk_midpoint");
+    let rejected = review(&archive, &wrong_mode, SHA);
+    assert!(!rejected.status.success());
+    assert!(rejected.stdout.is_empty());
+}
