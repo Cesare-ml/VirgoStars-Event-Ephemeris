@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 virgostars-events-core = { path = "../events-core" }
 virgostars-events-p0 = { path = "../events-p0" }
+tempfile = "3"
 
 [dev-dependencies]
 base64 = "0.22"

@@ -13,6 +13,7 @@
 //! whole-file SHA-256. The Rust core is shared by both application targets.
 
 use std::collections::BTreeMap;
+use std::fs;
 use std::path::Path;
 
 pub use virgostars_events_core::{
@@ -29,22 +30,69 @@ pub struct VirgoStarsEventEphemeris {
     archive: P0Archive,
     sha256: String,
     audit: P0AuditSummary,
+    // Keep the private, digest-authenticated file alive for all subsequent
+    // queries and delete it when the final Rust owner is dropped.
+    _snapshot_dir: tempfile::TempDir,
 }
 
 impl VirgoStarsEventEphemeris {
-    /// Open a local file and independently verify its SHA-256 and *all* blocks.
+    /// Open a private snapshot and independently verify its SHA-256 and *all* blocks.
     ///
     /// The expected digest must come from a trusted manifest, never from the
-    /// same untrusted file. Keep the asset immutable during subsequent queries:
-    /// the experimental P0 reader reopens compressed blocks on demand.
+    /// same untrusted file. The original file can be replaced or deleted
+    /// after opening: all subsequent queries use the authenticated copy.
+    /// Uses the OS default temporary directory; on Android, prefer
+    /// `open_verified_in` with a writable app-private cache directory.
     pub fn open_verified(path: impl AsRef<Path>, expected_sha256: &str) -> Result<Self, P0Error> {
-        let archive = P0Archive::open(path)?;
+        Self::open_snapshot(path.as_ref(), expected_sha256, None)
+    }
+
+    /// As `open_verified`, but place the authenticated copy in `cache_root`.
+    ///
+    /// The caller must choose an existing writable and private directory.
+    /// It must not be an untrusted shared folder: the archive reader uses its
+    /// stable private path without rehashing all bytes on every query.
+    pub fn open_verified_in(
+        path: impl AsRef<Path>,
+        expected_sha256: &str,
+        cache_root: impl AsRef<Path>,
+    ) -> Result<Self, P0Error> {
+        Self::open_snapshot(path.as_ref(), expected_sha256, Some(cache_root.as_ref()))
+    }
+
+    fn open_snapshot(
+        source: &Path,
+        expected_sha256: &str,
+        cache_root: Option<&Path>,
+    ) -> Result<Self, P0Error> {
+        if expected_sha256.len() != 64
+            || !expected_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(P0Error::Invalid(
+                "expected archive SHA-256 must be 64 lower-case hex characters".into(),
+            ));
+        }
+        // Reject malformed framing before allocating cache space. A mutated
+        // source between this probe and the copy cannot pass the copied-byte
+        // SHA gate unless it reproduces the separately trusted exact bytes.
+        P0Archive::open(source)?;
+        let snapshot_dir = match cache_root {
+            Some(root) => tempfile::tempdir_in(root)?,
+            None => tempfile::tempdir()?,
+        };
+        let snapshot = snapshot_dir.path().join("verified-archive.vseph-p0");
+        fs::copy(source, &snapshot)?;
+
+        let archive = P0Archive::open(&snapshot)?;
         let sha256 = archive.verify_archive_sha256(expected_sha256)?;
         let audit = archive.verify_all()?;
         Ok(Self {
             archive,
             sha256,
             audit,
+            _snapshot_dir: snapshot_dir,
         })
     }
 
