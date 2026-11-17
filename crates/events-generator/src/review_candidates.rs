@@ -159,6 +159,16 @@ struct GoldenReference {
     events: Vec<GoldenEvent>,
 }
 
+/// Differences between reference event instants and staged bracket geometry.
+/// Descriptive measurements only; not an uncertainty estimate or scientific verdict.
+#[derive(Default)]
+struct GoldenComparison {
+    matched: usize,
+    max_abs_midpoint_offset_us: u64,
+    max_outside_bracket_us: u64,
+    events_requiring_tolerance: usize,
+}
+
 struct ReviewOptions {
     archive: PathBuf,
     digest: String,
@@ -600,7 +610,7 @@ fn check_reference_events(
     path: &std::path::Path,
     trusted_digest: &str,
     tolerance_us: i64,
-) -> Result<usize, String> {
+) -> Result<GoldenComparison, String> {
     if stage.mode != "calculate" {
         return Err("reference events require calculated staging".into());
     }
@@ -665,6 +675,7 @@ fn check_reference_events(
         return Err("reference/staging event count mismatch (missing or extra event)".into());
     }
     let mut previous = None;
+    let mut comparison = GoldenComparison::default();
     for (index, (reference, staged)) in golden.events.iter().zip(&stage.candidates).enumerate() {
         let span = stage
             .sparse_spans
@@ -691,16 +702,37 @@ fn check_reference_events(
             ));
         }
         let at = reference.at_us as i128;
+        let bracket_start = staged.bracket_start_us as i128;
+        let bracket_end = staged.bracket_end_us as i128;
         let tolerance = tolerance_us as i128;
-        if at < staged.bracket_start_us as i128 - tolerance
-            || at > staged.bracket_end_us as i128 + tolerance
-        {
+        if at < bracket_start - tolerance || at > bracket_end + tolerance {
             return Err(format!(
                 "reference event #{index} UTC timestamp is outside bracket tolerance"
             ));
         }
+        // i128 avoids overflow even across the full signed i64 UTC domain.
+        let midpoint = bracket_start + (bracket_end - bracket_start) / 2;
+        let midpoint_offset = u64::try_from((at - midpoint).abs())
+            .map_err(|_| "reference midpoint difference exceeds u64".to_string())?;
+        let excess = if at < bracket_start {
+            bracket_start - at
+        } else if at > bracket_end {
+            at - bracket_end
+        } else {
+            0
+        };
+        comparison.max_abs_midpoint_offset_us =
+            comparison.max_abs_midpoint_offset_us.max(midpoint_offset);
+        comparison.max_outside_bracket_us = comparison.max_outside_bracket_us.max(
+            u64::try_from(excess)
+                .map_err(|_| "reference bracket excess exceeds u64".to_string())?,
+        );
+        if excess > 0 {
+            comparison.events_requiring_tolerance += 1;
+        }
     }
-    Ok(golden.events.len())
+    comparison.matched = golden.events.len();
+    Ok(comparison)
 }
 
 fn run() -> Result<(), String> {
@@ -760,9 +792,13 @@ fn run() -> Result<(), String> {
             "reference_crossings_consistent": crosschecked,
             "reference_independence_scientifically_established": false,
             "reference_event_digest_authenticated": golden_checked.is_some(),
-            "reference_event_timestamps_matched": golden_checked.unwrap_or(0),
+            "reference_event_timestamps_matched": golden_checked.as_ref().map_or(0, |result| result.matched),
             "reference_events_correspondence_consistent": golden_checked.is_some(),
             "reference_events_scientifically_independent": false,
+            "reference_timestamp_tolerance_us": golden_checked.as_ref().map(|_| opts.reference_tolerance_us.unwrap_or(0)),
+            "reference_max_abs_midpoint_offset_us": golden_checked.as_ref().map(|result| result.max_abs_midpoint_offset_us),
+            "reference_max_outside_bracket_us": golden_checked.as_ref().map(|result| result.max_outside_bracket_us),
+            "reference_events_requiring_tolerance": golden_checked.as_ref().map(|result| result.events_requiring_tolerance),
             "producer_claimed_half_step_check": staging.cadence_check.is_some(),
             "cadence_check_independently_recomputed": false,
             "producer_claimed_adaptive_station_check": staging.adaptive_station_check.is_some(),

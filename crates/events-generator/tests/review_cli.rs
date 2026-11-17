@@ -317,6 +317,10 @@ fn authenticated_reference_events_compare_all_supported_event_families() {
         );
         assert_eq!(report["reference_events_correspondence_consistent"], true);
         assert_eq!(report["reference_events_scientifically_independent"], false);
+        assert_eq!(report["reference_timestamp_tolerance_us"], 0);
+        assert_eq!(report["reference_max_abs_midpoint_offset_us"], 0);
+        assert_eq!(report["reference_max_outside_bracket_us"], 0);
+        assert_eq!(report["reference_events_requiring_tolerance"], 0);
         assert_eq!(report["astronomical_accuracy_verified"], false);
         assert_eq!(report["safe_to_import"], false);
     }
@@ -409,6 +413,37 @@ fn reference_time_tolerance_has_an_explicit_precision_cap() {
         "{}",
         String::from_utf8_lossy(&relaxed.stderr)
     );
+    let report: serde_json::Value = serde_json::from_slice(&relaxed.stdout).unwrap();
+    assert_eq!(report["reference_timestamp_tolerance_us"], 50);
+    assert_eq!(report["reference_max_outside_bracket_us"], 50);
+    assert_eq!(report["reference_events_requiring_tolerance"], 1);
+    let start = stage["candidates"][0]["bracket_start_us"].as_i64().unwrap();
+    let middle = start + (end - start) / 2;
+    assert_eq!(
+        report["reference_max_abs_midpoint_offset_us"],
+        (end + 50 - middle) as u64
+    );
+}
+
+#[test]
+fn reference_metric_is_measured_even_when_no_tolerance_is_needed() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let stage = generate(&archive, Some(&mock));
+    let mut golden = independent_event_fixture(&stage);
+    let bracket = &stage["candidates"][0];
+    let end = bracket["bracket_end_us"].as_i64().unwrap();
+    let start = bracket["bracket_start_us"].as_i64().unwrap();
+    golden["events"][0]["at_us"] = serde_json::json!(end);
+    let result = review_event_fixture(&archive, &stage, &golden, None, false);
+    assert!(result.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(
+        report["reference_max_abs_midpoint_offset_us"],
+        (end - start + 1) / 2
+    );
+    assert_eq!(report["reference_max_outside_bracket_us"], 0);
+    assert_eq!(report["reference_events_requiring_tolerance"], 0);
 }
 
 #[test]
@@ -428,6 +463,10 @@ fn independently_recalculates_original_gaps_for_plan_and_calculation() {
         assert_eq!(report["coverage_certified"], false);
         assert_eq!(report["astronomical_accuracy_verified"], false);
         assert_eq!(report["safe_to_import"], false);
+        assert!(report["reference_timestamp_tolerance_us"].is_null());
+        assert!(report["reference_max_abs_midpoint_offset_us"].is_null());
+        assert!(report["reference_max_outside_bracket_us"].is_null());
+        assert!(report["reference_events_requiring_tolerance"].is_null());
         assert_eq!(
             report["candidate_brackets_checked"],
             doc["candidates"].as_array().unwrap().len()

@@ -1,6 +1,6 @@
 # VirgoStars Event Ephemeris
 
-**Developer-only reference timestamp parity:** `vseph-review-candidates` can additionally compare every staged event to a separately authored, SHA-256-authenticated JSON reference list, checking exact UTC brackets, labels, missed and extra events. Agreement does **not** prove astronomical independence, scientifically complete coverage or permission to import. See [reference timestamp comparison](docs/REGENERATION_PIPELINE.md#optional-sha-256-bound-reference-timestamp-comparison).
+**Developer-only reference timestamp parity:** `vseph-review-candidates` can additionally compare every staged event to a separately authored, SHA-256-authenticated JSON reference list, checking exact UTC brackets, labels, missed and extra events. Its report also quantifies UTC microsecond offsets relative to bracket midpoints and any bounded tolerance used. Agreement does **not** prove astronomical independence, scientifically complete coverage or permission to import. See [reference timestamp comparison](docs/REGENERATION_PIPELINE.md#optional-sha-256-bound-reference-timestamp-comparison).
 
 **Independent, free/open-source, offline-first event ephemerides for astrology.**
 
