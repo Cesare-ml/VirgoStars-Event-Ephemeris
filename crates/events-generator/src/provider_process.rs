@@ -30,11 +30,12 @@ pub struct ProviderIdentity {
     pub input_time_scale: String,
     pub flags: String,
     pub kernel_digest: Option<String>,
+    pub source_digest: Option<String>,
 }
 
 impl ProviderIdentity {
     fn validate(&self) -> Result<(), String> {
-        if self.protocol != "virgostars.longitude.v1"
+        if self.protocol != "virgostars.longitude.v2"
             || self.frame != "geocentric-tropical-ecliptic-degrees"
             || self.input_time_scale != "utc-posix-microseconds"
             || self.provider.trim().is_empty()
@@ -70,14 +71,14 @@ pub struct ProcessLongitudeProvider {
 #[derive(Serialize)]
 struct PositionRequest<'a> {
     body: &'a str,
-    utc_microseconds: i64,
+    utc_microseconds: &'a str,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PositionResponse {
     body: String,
-    utc_microseconds: i64,
+    utc_microseconds: String,
     longitude_degrees: f64,
     longitude_speed_degrees_per_day: f64,
 }
@@ -126,6 +127,9 @@ impl ProcessLongitudeProvider {
 
 impl LongitudeProvider for ProcessLongitudeProvider {
     fn sample(&self, body: &BodyId, at: TimestampMicros) -> Result<LongitudeSample, String> {
+        // Decimal strings preserve the exact i64 microsecond input for Node
+        // adapters even outside JavaScript's 2^53 integer-safe range.
+        let at_text = at.as_i64().to_string();
         let mut session = self
             .session
             .lock()
@@ -134,7 +138,7 @@ impl LongitudeProvider for ProcessLongitudeProvider {
             &mut session.input,
             &PositionRequest {
                 body: body.as_str(),
-                utc_microseconds: at.as_i64(),
+                utc_microseconds: &at_text,
             },
         )
         .map_err(|error| format!("provider request encoding failed: {error}"))?;
@@ -146,7 +150,7 @@ impl LongitudeProvider for ProcessLongitudeProvider {
         let response = read_bounded_line(&mut session.output)?;
         let parsed: PositionResponse = serde_json::from_str(&response)
             .map_err(|error| format!("invalid provider position: {error}"))?;
-        if parsed.body != body.as_str() || parsed.utc_microseconds != at.as_i64() {
+        if parsed.body != body.as_str() || parsed.utc_microseconds != at_text {
             return Err("provider returned position for a different body or instant".into());
         }
         Ok(LongitudeSample {
@@ -163,13 +167,14 @@ mod tests {
     #[test]
     fn rejects_mismatched_coordinate_system() {
         let identity = ProviderIdentity {
-            protocol: "virgostars.longitude.v1".into(),
+            protocol: "virgostars.longitude.v2".into(),
             provider: "test".into(),
             version: "1".into(),
             frame: "sidereal".into(),
             input_time_scale: "utc-posix-microseconds".into(),
             flags: "test".into(),
             kernel_digest: None,
+            source_digest: None,
         };
         assert!(identity.validate().is_err());
     }

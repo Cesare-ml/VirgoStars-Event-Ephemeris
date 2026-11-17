@@ -21,6 +21,8 @@ use std::error::Error;
 use std::fmt;
 use virgostars_events_core::{BodyId, MotionDirection, TimestampMicros, ZodiacSign};
 
+pub mod gaps;
+pub mod lunar;
 pub mod provider_process;
 
 const MAX_SCAN_STEPS: i128 = 100_000;
@@ -48,7 +50,7 @@ pub struct SearchWindow {
 }
 
 impl SearchWindow {
-    fn validate(self) -> Result<(), GenerationError> {
+    pub(crate) fn validate(self) -> Result<(), GenerationError> {
         if self.end_us <= self.start_us
             || self.step_us <= 0
             || self.precision_us <= 0
@@ -71,6 +73,7 @@ pub enum GenerationError {
     TooManySteps,
     InvalidSample,
     AmbiguousIngressStep,
+    AmbiguousLunarStep,
     Provider(String),
 }
 
@@ -81,6 +84,7 @@ impl fmt::Display for GenerationError {
             Self::TooManySteps => f.write_str("generation window exceeds sample budget"),
             Self::InvalidSample => f.write_str("non-finite ephemeris position or speed"),
             Self::AmbiguousIngressStep => f.write_str("ambiguous ingress; reduce scan step"),
+            Self::AmbiguousLunarStep => f.write_str("ambiguous lunar phase; reduce scan step"),
             Self::Provider(message) => write!(f, "ephemeris provider error: {message}"),
         }
     }
@@ -107,7 +111,7 @@ pub struct IngressCandidate {
     pub retrograde: bool,
 }
 
-fn checked_sample<P: LongitudeProvider>(
+pub(crate) fn checked_sample<P: LongitudeProvider>(
     provider: &P,
     body: &BodyId,
     at_us: i64,
@@ -122,15 +126,15 @@ fn checked_sample<P: LongitudeProvider>(
     Ok(sample)
 }
 
-fn next_time(t: i64, window: SearchWindow) -> i64 {
+pub(crate) fn next_time(t: i64, window: SearchWindow) -> i64 {
     (t as i128 + window.step_us as i128).min(window.end_us as i128) as i64
 }
 
-fn midpoint(left: i64, right: i64) -> i64 {
+pub(crate) fn midpoint(left: i64, right: i64) -> i64 {
     (left as i128 + (right as i128 - left as i128) / 2) as i64
 }
 
-fn needs_refinement(left: i64, right: i64, precision_us: i64) -> bool {
+pub(crate) fn needs_refinement(left: i64, right: i64, precision_us: i64) -> bool {
     right as i128 - left as i128 > precision_us as i128
 }
 

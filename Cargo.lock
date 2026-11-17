@@ -452,10 +452,13 @@ version = "0.1.0"
 name = "virgostars-events-generator"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "serde",
  "serde_json",
  "tempfile",
+ "virgostars-event-ephemeris",
  "virgostars-events-core",
+ "virgostars-events-p0",
 ]
 
 [[package]]

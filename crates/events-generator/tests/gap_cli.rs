@@ -1,0 +1,177 @@
+/*
+ * Common Public Attribution License Version 1.0 (CPAL-1.0).
+ * Original Developer: Cesare-ml (VirgoStars project).
+ * Copyright (c) 2026 Cesare-ml. All Rights Reserved.
+ * See LICENSE, Exhibits A/B and NOTICE; provided AS IS.
+ */
+use base64::{engine::general_purpose::STANDARD, Engine};
+use std::ffi::OsString;
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+
+const SHA: &str = "4b7dbe3171633402b76565df79a31066f58913b52b2839c735ea3e68cb413499";
+const DAY: i64 = 86_400_000_000;
+
+fn fixture() -> (tempfile::TempDir, PathBuf) {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("test.vseph-p0");
+    let bytes = STANDARD
+        .decode(include_str!("../../events-p0/tests/fixtures/synthetic.p0.base64").trim())
+        .unwrap();
+    fs::write(&path, bytes).unwrap();
+    (temp, path)
+}
+
+fn compiled_provider() -> (tempfile::TempDir, PathBuf) {
+    let temp = tempfile::tempdir().unwrap();
+    let executable = temp.path().join(if cfg!(windows) {
+        "mock-provider.exe"
+    } else {
+        "mock-provider"
+    });
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mock_provider.rs");
+    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc"));
+    let result = Command::new(rustc)
+        .arg(source)
+        .arg("-o")
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    (temp, executable)
+}
+
+fn call(args: &[&str]) -> serde_json::Value {
+    let result = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    serde_json::from_slice(&result.stdout).unwrap()
+}
+
+#[test]
+fn plan_identifies_original_moon_synod_ids_without_inventing_rows() {
+    let (_dir, archive) = fixture();
+    let doc = call(&[
+        "--mode",
+        "plan",
+        "--archive",
+        archive.to_str().unwrap(),
+        "--sha256",
+        SHA,
+        "--family",
+        "synods",
+        "--body",
+        "Moon",
+        "--start-us",
+        "-876544",
+        "--end-us",
+        "1500000",
+        "--threshold-us",
+        "1000",
+    ]);
+    assert_eq!(doc["coverage_certified"], false);
+    assert_eq!(doc["dataset"]["records_verified"], 8);
+    let spans = doc["sparse_spans"].as_array().unwrap();
+    assert!(spans.iter().any(|span| {
+        span["kind"] == "between_recorded_anchors"
+            && span["previous_original_source_id"] == 10
+            && span["next_original_source_id"] == 12
+    }));
+    assert_eq!(doc["candidates"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn calculate_fills_staging_only_and_preserves_provenance_for_ingresses() {
+    let (_dir, archive) = fixture();
+    let (_program_dir, program) = compiled_provider();
+    let end = (2 * DAY).to_string();
+    let step = DAY.to_string();
+    let doc = call(&[
+        "--mode",
+        "calculate",
+        "--archive",
+        archive.to_str().unwrap(),
+        "--sha256",
+        SHA,
+        "--family",
+        "ingresses",
+        "--body",
+        "Mars",
+        "--start-us",
+        "0",
+        "--end-us",
+        &end,
+        "--threshold-us",
+        "1000000000",
+        "--step-us",
+        &step,
+        "--precision-us",
+        "1000000",
+        "--provider-program",
+        program.to_str().unwrap(),
+    ]);
+    assert_eq!(doc["generation_complete"], false);
+    assert_eq!(
+        doc["sparse_spans"][0]["kind"],
+        "no_recorded_anchors_in_window"
+    );
+    assert_eq!(doc["provider"]["provider"], "synthetic-test");
+    assert_eq!(doc["candidates"].as_array().unwrap().len(), 1);
+    assert_eq!(doc["candidates"][0]["sign_after_index"], 1);
+    assert!(doc["candidates"][0]["source_id"].is_null());
+}
+
+#[test]
+fn moon_phase_staging_produces_four_review_only_phase_brackets() {
+    let (_dir, archive) = fixture();
+    let (_program_dir, program) = compiled_provider();
+    let end = (40 * DAY).to_string();
+    let step = (DAY / 4).to_string();
+    let doc = call(&[
+        "--mode",
+        "calculate",
+        "--archive",
+        archive.to_str().unwrap(),
+        "--sha256",
+        SHA,
+        "--family",
+        "synods",
+        "--body",
+        "Moon",
+        "--start-us",
+        "0",
+        "--end-us",
+        &end,
+        "--threshold-us",
+        "1000000000",
+        "--step-us",
+        &step,
+        "--precision-us",
+        "1000000",
+        "--provider-program",
+        program.to_str().unwrap(),
+    ]);
+    let phases: Vec<_> = doc["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| value["phase"].as_str().unwrap())
+        .collect();
+    assert!(phases.contains(&"new_moon"));
+    assert!(phases.contains(&"first_quarter"));
+    assert!(phases.contains(&"full_moon"));
+    assert!(phases.contains(&"last_quarter"));
+    assert!(!phases.is_empty());
+    assert_eq!(doc["generation_complete"], false);
+}
