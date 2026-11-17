@@ -2,7 +2,12 @@
 use std::io::{self, BufRead, Write};
 
 fn main() {
-    println!("{{\"protocol\":\"virgostars.longitude.v2\",\"provider\":\"synthetic-test\",\"version\":\"1\",\"frame\":\"geocentric-tropical-ecliptic-degrees\",\"input_time_scale\":\"utc-posix-microseconds\",\"flags\":\"fake-linear\",\"kernel_digest\":null}}");
+    let name = std::env::var("MOCK_PROVIDER_NAME").unwrap_or_else(|_| "synthetic-test".into());
+    let offset = std::env::var("MOCK_LONGITUDE_OFFSET")
+        .ok()
+        .and_then(|value| value.parse::<f64>().ok())
+        .unwrap_or(0.0);
+    println!("{{\"protocol\":\"virgostars.longitude.v2\",\"provider\":\"{name}\",\"version\":\"1\",\"frame\":\"geocentric-tropical-ecliptic-degrees\",\"input_time_scale\":\"utc-posix-microseconds\",\"flags\":\"fake-linear\",\"kernel_digest\":null}}");
     io::stdout().flush().unwrap();
     for line in io::stdin().lock().lines() {
         let request = line.unwrap();
@@ -34,7 +39,8 @@ fn main() {
             requested_body
         };
         println!(
-            "{{\"body\":\"{body}\",\"utc_microseconds\":\"{at}\",\"longitude_degrees\":{longitude},\"longitude_speed_degrees_per_day\":{speed}}}"
+            "{{\"body\":\"{body}\",\"utc_microseconds\":\"{at}\",\"longitude_degrees\":{},\"longitude_speed_degrees_per_day\":{speed}}}",
+            longitude + if body == "Mars" { offset } else { 0.0 }
         );
         io::stdout().flush().unwrap();
     }

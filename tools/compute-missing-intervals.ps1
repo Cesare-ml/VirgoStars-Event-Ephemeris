@@ -20,7 +20,8 @@ param(
     [int]$MaxJobs = 10,
     [int]$MaxSteps = 100000,
     [string]$BackendRoot,
-    [string]$ProviderProgram
+    [string]$ProviderProgram,
+    [string]$ReferenceProviderProgram
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,6 +37,12 @@ if ($ThresholdDays -le 0 -or $StepHours -le 0 -or $SliceYears -le 0 -or $MaxJobs
 }
 if ($KnownMoonGaps -and ($Family -ne 'synods' -or $Body -ne 'Moon')) {
     throw '-KnownMoonGaps only applies to synods/Moon.'
+}
+if ($ReferenceProviderProgram) {
+    if ($Mode -ne 'calculate') {
+        throw '-ReferenceProviderProgram requires -Mode calculate.'
+    }
+    $ReferenceProviderProgram = (Resolve-Path -LiteralPath $ReferenceProviderProgram).Path
 }
 
 if ($Mode -eq 'calculate') {
@@ -56,10 +63,10 @@ if ($Mode -eq 'calculate') {
         }
         $env:VSEPH_LEGACY_COMMIT = $sourceCommit
     }
-    if (-not $env:VSEPH_LEGACY_FUNC_MODULE -or -not $env:VSEPH_LEGACY_COMMIT) {
-        throw 'Set -BackendRoot or VSEPH_LEGACY_FUNC_MODULE and VSEPH_LEGACY_COMMIT.'
-    }
     if (-not $ProviderProgram) {
+        if (-not $env:VSEPH_LEGACY_FUNC_MODULE -or -not $env:VSEPH_LEGACY_COMMIT) {
+            throw 'Using legacy Swiss requires -BackendRoot or VSEPH_LEGACY_FUNC_MODULE and VSEPH_LEGACY_COMMIT; alternatively specify -ProviderProgram.'
+        }
         $ProviderProgram = Join-Path $repoRoot 'tools/providers/legacy-swiss-position.cmd'
     }
     $ProviderProgram = (Resolve-Path -LiteralPath $ProviderProgram).Path
@@ -142,6 +149,9 @@ foreach ($range in $ranges) {
             $reviewArgs = @('run', '--quiet', '--locked', '--manifest-path', $manifest,
                 '-p', 'virgostars-events-generator', '--bin', 'vseph-review-candidates', '--',
                 '--archive', $archivePath, '--sha256', $TrustedSha256, '--staging', $temporary)
+            if ($ReferenceProviderProgram) {
+                $reviewArgs += @('--reference-provider-program', $ReferenceProviderProgram)
+            }
             $reviewLines = & cargo @reviewArgs
             if ($LASTEXITCODE -ne 0) {
                 throw "Independent Rust staging review failed; no artifact saved for $filename"
@@ -152,6 +162,11 @@ foreach ($range in $ranges) {
                 $review.safe_to_import -ne $false -or
                 $review.coverage_certified -ne $false) {
                 throw "Independent Rust review rejected the staging-only contract for $filename"
+            }
+            if ($ReferenceProviderProgram -and
+                ($review.reference_crossings_consistent -ne $true -or
+                 $review.numerical_crossings_checked -ne $report.candidates.Count)) {
+                throw "Reference provider did not verify all candidate crossing brackets for $filename"
             }
             Move-Item -LiteralPath $temporary -Destination $destination -ErrorAction Stop
         } finally {

@@ -91,20 +91,77 @@ fn generate(archive: &Path, provider: Option<&Path>) -> serde_json::Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn review(archive: &Path, stage: &serde_json::Value, digest: &str) -> Output {
-    let staging = tempfile::NamedTempFile::new().unwrap();
-    fs::write(staging.path(), serde_json::to_vec(stage).unwrap()).unwrap();
-    Command::new(env!("CARGO_BIN_EXE_vseph-review-candidates"))
+fn generate_lunar(archive: &Path, provider: &Path) -> serde_json::Value {
+    let end = (40 * DAY).to_string();
+    let step = (DAY / 4).to_string();
+    let output = Command::new(env!("CARGO_BIN_EXE_vseph-fill-gaps"))
         .args([
+            "--mode",
+            "calculate",
             "--archive",
             archive.to_str().unwrap(),
             "--sha256",
-            digest,
-            "--staging",
-            staging.path().to_str().unwrap(),
+            SHA,
+            "--family",
+            "synods",
+            "--body",
+            "Moon",
+            "--start-us",
+            "0",
+            "--end-us",
+            &end,
+            "--threshold-us",
+            "1000000000",
+            "--step-us",
+            &step,
+            "--precision-us",
+            "1000000",
+            "--provider-program",
+            provider.to_str().unwrap(),
         ])
         .output()
-        .unwrap()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+
+fn review(archive: &Path, stage: &serde_json::Value, digest: &str) -> Output {
+    review_with_reference(archive, stage, digest, None, None, None)
+}
+
+fn review_with_reference(
+    archive: &Path,
+    stage: &serde_json::Value,
+    digest: &str,
+    provider: Option<&Path>,
+    name: Option<&str>,
+    offset: Option<&str>,
+) -> Output {
+    let staging = tempfile::NamedTempFile::new().unwrap();
+    fs::write(staging.path(), serde_json::to_vec(stage).unwrap()).unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_vseph-review-candidates"));
+    command.args([
+        "--archive",
+        archive.to_str().unwrap(),
+        "--sha256",
+        digest,
+        "--staging",
+        staging.path().to_str().unwrap(),
+    ]);
+    if let Some(provider) = provider {
+        command.args(["--reference-provider-program", provider.to_str().unwrap()]);
+    }
+    if let Some(name) = name {
+        command.env("MOCK_PROVIDER_NAME", name);
+    }
+    if let Some(offset) = offset {
+        command.env("MOCK_LONGITUDE_OFFSET", offset);
+    }
+    command.output().unwrap()
 }
 
 #[test]
@@ -180,4 +237,121 @@ fn rejects_self_asserted_dataset_digest_and_untrusted_input_archive() {
             .status
             .success()
     );
+}
+
+#[test]
+fn independent_numeric_crossing_check_accepts_matching_synthetic_ingress() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let doc = generate(&archive, Some(&mock));
+    let reviewed = review_with_reference(
+        &archive,
+        &doc,
+        SHA,
+        Some(&mock),
+        Some("synthetic-reference"),
+        None,
+    );
+    assert!(
+        reviewed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&reviewed.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&reviewed.stdout).unwrap();
+    assert_eq!(report["reference_crossings_consistent"], true);
+    assert_eq!(report["numerical_crossings_checked"], 1);
+    assert_eq!(
+        report["reference_provider"]["provider"],
+        "synthetic-reference"
+    );
+    assert_eq!(report["astronomical_accuracy_verified"], false);
+    assert_eq!(
+        report["reference_independence_scientifically_established"],
+        false
+    );
+    assert_eq!(report["safe_to_import"], false);
+}
+
+#[test]
+fn numerical_crossing_review_rejects_wrong_sign_or_reference_positions() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let doc = generate(&archive, Some(&mock));
+    let mut forged = doc.clone();
+    forged["candidates"][0]["sign_after_index"] = serde_json::json!(2);
+    let mismatched = review_with_reference(
+        &archive,
+        &forged,
+        SHA,
+        Some(&mock),
+        Some("synthetic-reference"),
+        None,
+    );
+    assert!(!mismatched.status.success());
+    assert!(mismatched.stdout.is_empty());
+
+    let shifted = review_with_reference(
+        &archive,
+        &doc,
+        SHA,
+        Some(&mock),
+        Some("synthetic-reference"),
+        Some("10"),
+    );
+    assert!(!shifted.status.success());
+    assert!(String::from_utf8_lossy(&shifted.stderr).contains("reference numerical check failed"));
+    assert!(shifted.stdout.is_empty());
+}
+
+#[test]
+fn self_declared_same_provider_is_rejected_as_independent_reference() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let doc = generate(&archive, Some(&mock));
+    let output = review_with_reference(&archive, &doc, SHA, Some(&mock), None, None);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("SAME identity"));
+
+    let planned = generate(&archive, None);
+    assert!(
+        !review_with_reference(&archive, &planned, SHA, Some(&mock), None, None)
+            .status
+            .success()
+    );
+}
+
+#[test]
+fn numerical_reference_checks_all_four_lunar_phase_types() {
+    let (_original, archive) = fixture();
+    let (_mock_dir, mock) = provider();
+    let doc = generate_lunar(&archive, &mock);
+    assert_eq!(doc["candidates"].as_array().unwrap().len(), 5);
+    let checked = review_with_reference(
+        &archive,
+        &doc,
+        SHA,
+        Some(&mock),
+        Some("synthetic-reference"),
+        None,
+    );
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&checked.stdout).unwrap();
+    assert_eq!(report["numerical_crossings_checked"], 5);
+
+    let mut false_phase = doc;
+    false_phase["candidates"][0]["phase"] = serde_json::json!("new_moon");
+    let rejected = review_with_reference(
+        &archive,
+        &false_phase,
+        SHA,
+        Some(&mock),
+        Some("synthetic-reference"),
+        None,
+    );
+    assert!(!rejected.status.success());
+    assert!(rejected.stdout.is_empty());
 }

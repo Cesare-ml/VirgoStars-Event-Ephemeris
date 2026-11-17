@@ -20,7 +20,7 @@ use crate::{LongitudeProvider, LongitudeSample};
 
 const MAX_LINE_BYTES: u64 = 8_192;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ProviderIdentity {
     pub protocol: String,

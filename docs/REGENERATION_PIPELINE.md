@@ -65,9 +65,26 @@ cargo run --locked -p virgostars-events-generator --bin vseph-review-candidates 
 
 Success emits a small report with `staging_structure_verified: true`, `source_archive_authenticated: true`, `brackets_touching_recorded_anchors` and **still** `coverage_certified: false`, `astronomical_accuracy_verified: false`, `safe_to_import: false`. Such a check catches altered reports and structural contradictions but **cannot independently confirm the astronomy, the original source's legacy grouping, correct scan cadence or genuine absence of events**. It neither assigns source IDs nor builds a revised archive. The producer now includes `calculation_settings` (step, precision, chunk and budget) to make bracket-width checks possible; older staging files without these settings require regeneration to pass the strict schema. Structurally reviewed staging is **not** publishable event data. A separate scientist/source-parity review and owner approval remain mandatory.
 
+### Optional second-provider numerical crossing check
+
+For a calculated staging file containing candidates, `vseph-review-candidates` additionally accepts `--reference-provider-program EXEC`, a **separately installed** JSONL-v2 longitude provider (the same interface as the generator). It evaluates the endpoints of every candidate against this provider, independently of the original calculation process:
+
+- **Motions:** checks an actual longitude-speed sign change in the stated direct/retrograde direction.
+- **Ingresses:** checks a single adjacent tropical-sign boundary crossing, sign after the crossing, and direct/retrograde sense, including the 0°/360° wrap.
+- **Moon phases:** checks an advancing Moon–Sun relative longitude crossing of the declared 0°/90°/180°/270° target, with an under-30° local angle progression.
+
+```bash
+cargo run --locked -p virgostars-events-generator --bin vseph-review-candidates -- \
+  --archive /path/to/authorized.p0 --sha256 YOUR_TRUSTED_64_HEX_DIGEST \
+  --staging /path/to/previously-generated-staging.json \
+  --reference-provider-program /path/to/separate-reference-provider
+```
+
+The reference must announce a **different** provider identity/settings from the source-stage metadata; an exact match aborts. The calculation is limited to **10,000 brackets per invocation**. Any inconsistent crossing aborts with no JSON stdout. A successful report adds `numerical_crossings_checked`, `reference_crossings_consistent: true` and the declared `reference_provider` identity, while retaining `reference_independence_scientifically_established: false`, `astronomical_accuracy_verified: false` and `safe_to_import: false`. **Crucial:** distinct self-declared identities do not prove actual independence, reference-provider authenticity, sub-second accuracy, missed events between samples, or historical source parity. A real independent implementation, signed/pinned software and golden source comparisons remain prerequisites for scientific release. In particular, the legacy Swiss adapter rounds positions to whole UTC seconds; a one-second candidate bracket may fail against a differently rounded reference even when both calculations are reasonable, requiring a documented tolerance/precision policy before promotion.
+
 ### Windows batch script for known gaps and resumable intervals
 
-`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs an authorized private backend checkout with its existing Node dependencies and Swiss license configured. For instance:
+`tools/compute-missing-intervals.ps1` (PowerShell 5.1+/7) runs these **two** Rust commands in **small UTC slices**. It first generates the report to a temporary file, then calls the independent structural reviewer; only if both succeed is the UTF-8 JSON moved to its final staging location. An optional `-ReferenceProviderProgram` in `-Mode calculate` additionally requires numerical crossing agreement before saving new outputs. Previously present artifacts are never overwritten **and are skipped without re-review**. By default only 10 new yearly slices are attempted per invocation; rerun to continue, or adjust `-MaxJobs`. `-Mode plan` needs no Swiss installation; `-Mode calculate` needs either a compatible independent `-ProviderProgram` executable, **or** an authorized private backend checkout with its existing Node dependencies and Swiss license configured for the default legacy adapter. For instance:
 
 ```powershell
 # Analyze the two known Moon source discontinuities (1918–1920, 2017–2019).

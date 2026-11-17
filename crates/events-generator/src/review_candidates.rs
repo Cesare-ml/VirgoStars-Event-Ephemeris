@@ -14,13 +14,15 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde_json::json;
-use virgostars_event_ephemeris::{BodyId, EventFamily, VirgoStarsEventEphemeris};
+use virgostars_event_ephemeris::{BodyId, EventFamily, TimestampMicros, VirgoStarsEventEphemeris};
 use virgostars_events_generator::gaps::detect_sparse_spans;
-use virgostars_events_generator::provider_process::ProviderIdentity;
+use virgostars_events_generator::provider_process::{ProcessLongitudeProvider, ProviderIdentity};
+use virgostars_events_generator::{LongitudeProvider, LongitudeSample};
 
 const MAX_STAGING_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_CANDIDATES: usize = 100_000;
-const USAGE: &str = "Usage: vseph-review-candidates --archive P0 --sha256 INDEPENDENT_TRUSTED_DIGEST --staging GENERATED_JSON\nRead-only: checks provenance, exact original sparse spans and candidate bracket structure. Does NOT verify astronomical events or certify coverage.";
+const MAX_REFERENCE_CANDIDATES: usize = 10_000;
+const USAGE: &str = "Usage: vseph-review-candidates --archive P0 --sha256 INDEPENDENT_TRUSTED_DIGEST --staging GENERATED_JSON [--reference-provider-program EXEC]\nRead-only: authenticates source/structural provenance. Optional separately identified provider checks bracket crossings; neither mode verifies astronomical accuracy or certifies coverage.";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -95,10 +97,13 @@ struct Staging {
     candidates: Vec<StagedCandidate>,
 }
 
-fn options(args: impl IntoIterator<Item = String>) -> Result<(PathBuf, String, PathBuf), String> {
+fn options(
+    args: impl IntoIterator<Item = String>,
+) -> Result<(PathBuf, String, PathBuf, Option<PathBuf>), String> {
     let mut archive = None;
     let mut sha256 = None;
     let mut staging = None;
+    let mut reference_provider = None;
     let mut args = args.into_iter();
     while let Some(key) = args.next() {
         let value = args.next().ok_or(format!("missing value for {key}"))?;
@@ -106,6 +111,7 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<(PathBuf, String, P
             "--archive" => &mut archive,
             "--sha256" => &mut sha256,
             "--staging" => &mut staging,
+            "--reference-provider-program" => &mut reference_provider,
             _ => return Err(format!("unrecognized option {key}")),
         };
         if slot.replace(value).is_some() {
@@ -116,6 +122,7 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<(PathBuf, String, P
         PathBuf::from(archive.ok_or("missing --archive")?),
         sha256.ok_or("missing --sha256")?,
         PathBuf::from(staging.ok_or("missing --staging")?),
+        reference_provider.map(PathBuf::from),
     ))
 }
 
@@ -304,13 +311,133 @@ fn check_staging(
     Ok((stage.candidates.len(), touching_original))
 }
 
+fn checked_sample<P: LongitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    utc_us: i64,
+) -> Result<LongitudeSample, String> {
+    let sample = provider.sample(body, TimestampMicros::new(utc_us))?;
+    if !sample.longitude_degrees.is_finite() || !sample.longitude_speed_degrees_per_day.is_finite()
+    {
+        return Err("nonfinite reference longitude or speed".into());
+    }
+    Ok(sample)
+}
+
+fn normalized_sign(longitude: f64) -> u8 {
+    (longitude.rem_euclid(360.0) / 30.0).floor() as u8
+}
+
+/// A separately supplied provider reports the declared crossing inside this
+/// bracket. This does NOT prove that no other crossings were missed.
+fn check_numerical_bracket<P: LongitudeProvider>(
+    provider: &P,
+    candidate: &StagedCandidate,
+    body: &BodyId,
+    family: EventFamily,
+) -> Result<(), String> {
+    let left = checked_sample(provider, body, candidate.bracket_start_us)?;
+    let right = checked_sample(provider, body, candidate.bracket_end_us)?;
+    let consistent = match family {
+        EventFamily::Motion => match candidate.direction_after.as_deref() {
+            Some("direct") => {
+                left.longitude_speed_degrees_per_day < 0.0
+                    && right.longitude_speed_degrees_per_day >= 0.0
+            }
+            Some("retrograde") => {
+                left.longitude_speed_degrees_per_day >= 0.0
+                    && right.longitude_speed_degrees_per_day < 0.0
+            }
+            _ => false,
+        },
+        EventFamily::Ingress => {
+            let from = normalized_sign(left.longitude_degrees);
+            let to = normalized_sign(right.longitude_degrees);
+            let mut delta = (right.longitude_degrees - left.longitude_degrees).rem_euclid(360.0);
+            if delta > 180.0 {
+                delta -= 360.0;
+            }
+            let retrograde = delta < 0.0;
+            delta.abs() < 30.0
+                && delta != 0.0
+                && Some(to) == candidate.sign_after_index
+                && Some(retrograde) == candidate.retrograde
+                && if retrograde {
+                    to == (from + 11) % 12
+                } else {
+                    to == (from + 1) % 12
+                }
+        }
+        EventFamily::Synod => {
+            let sun = BodyId::try_from("Sun").expect("built-in Sun body");
+            let left_sun = checked_sample(provider, &sun, candidate.bracket_start_us)?;
+            let right_sun = checked_sample(provider, &sun, candidate.bracket_end_us)?;
+            let advancing = left.longitude_speed_degrees_per_day
+                > left_sun.longitude_speed_degrees_per_day
+                && right.longitude_speed_degrees_per_day
+                    > right_sun.longitude_speed_degrees_per_day;
+            let before = (left.longitude_degrees - left_sun.longitude_degrees).rem_euclid(360.0);
+            let after = (right.longitude_degrees - right_sun.longitude_degrees).rem_euclid(360.0);
+            let progress = (after - before).rem_euclid(360.0);
+            let target: f64 = match candidate.phase.as_deref() {
+                Some("new_moon") => 0.0,
+                Some("first_quarter") => 90.0,
+                Some("full_moon") => 180.0,
+                Some("last_quarter") => 270.0,
+                _ => return Err("unsupported lunar phase".into()),
+            };
+            let offset = (target - before).rem_euclid(360.0);
+            advancing && progress > 0.0 && progress < 30.0 && offset > 0.0 && offset <= progress
+        }
+    };
+    if consistent {
+        Ok(())
+    } else {
+        Err("candidate does not contain the declared crossing under the reference provider".into())
+    }
+}
+
+fn check_reference_provider(
+    stage: &Staging,
+    program: &std::path::Path,
+) -> Result<ProviderIdentity, String> {
+    if stage.mode != "calculate" || stage.candidates.is_empty() {
+        return Err("reference checks require a calculated staging file with candidates".into());
+    }
+    if stage.candidates.len() > MAX_REFERENCE_CANDIDATES {
+        return Err(format!(
+            "reference checks limited to {MAX_REFERENCE_CANDIDATES} candidates; split the generation window"
+        ));
+    }
+    let provider = ProcessLongitudeProvider::spawn(program)?;
+    let identity = provider.identity().clone();
+    if stage.provider.as_ref() == Some(&identity) {
+        return Err(
+            "reference provider declares the SAME identity/settings as the generator".into(),
+        );
+    }
+    let family = match stage.family.as_str() {
+        "synods" => EventFamily::Synod,
+        "motions" => EventFamily::Motion,
+        "ingresses" => EventFamily::Ingress,
+        _ => return Err("unsupported reference family".into()),
+    };
+    let body = BodyId::try_from(stage.body.as_str()).map_err(|_| "invalid body".to_string())?;
+    for (index, candidate) in stage.candidates.iter().enumerate() {
+        check_numerical_bracket(&provider, candidate, &body, family).map_err(|error| {
+            format!("reference numerical check failed for candidate #{index}: {error}")
+        })?;
+    }
+    Ok(identity)
+}
+
 fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args == ["--help"] {
         println!("{USAGE}");
         return Ok(());
     }
-    let (archive_path, digest, staging_path) = options(args)?;
+    let (archive_path, digest, staging_path, reference_program) = options(args)?;
     let archive = VirgoStarsEventEphemeris::open_verified(&archive_path, &digest)
         .map_err(|error| error.to_string())?;
     let meta =
@@ -325,6 +452,12 @@ fn run() -> Result<(), String> {
     let staging: Staging = serde_json::from_slice(&raw)
         .map_err(|error| format!("invalid staging JSON schema: {error}"))?;
     let (count, touching) = check_staging(&staging, &archive)?;
+    // Structural validation always precedes external process launch.
+    let reference = reference_program
+        .as_deref()
+        .map(|program| check_reference_provider(&staging, program))
+        .transpose()?;
+    let crosschecked = reference.is_some();
     println!(
         "{}",
         json!({
@@ -335,6 +468,10 @@ fn run() -> Result<(), String> {
             "original_sparse_spans_recomputed": staging.sparse_spans.len(),
             "candidate_brackets_checked": count,
             "brackets_touching_recorded_anchors": touching,
+            "reference_provider": reference,
+            "numerical_crossings_checked": if crosschecked { count } else { 0 },
+            "reference_crossings_consistent": crosschecked,
+            "reference_independence_scientifically_established": false,
             "coverage_certified": false,
             "astronomical_accuracy_verified": false,
             "safe_to_import": false,
@@ -348,5 +485,99 @@ fn main() {
     if let Err(error) = run() {
         eprintln!("{error}\n{USAGE}");
         std::process::exit(2);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct LinearReference {
+        retrograde: bool,
+    }
+
+    impl LongitudeProvider for LinearReference {
+        fn sample(&self, _body: &BodyId, at: TimestampMicros) -> Result<LongitudeSample, String> {
+            let time = at.as_i64() as f64;
+            Ok(LongitudeSample {
+                longitude_degrees: if self.retrograde {
+                    0.2 - time * 0.2
+                } else {
+                    29.8 + time * 0.2
+                },
+                longitude_speed_degrees_per_day: if self.retrograde {
+                    1.0 - time
+                } else {
+                    time - 1.0
+                },
+            })
+        }
+    }
+
+    fn candidate() -> StagedCandidate {
+        StagedCandidate {
+            gap_index: 0,
+            family: "motions".into(),
+            body: "Mars".into(),
+            bracket_start_us: 0,
+            bracket_end_us: 2,
+            direction_after: Some("direct".into()),
+            sign_after_index: None,
+            retrograde: None,
+            phase: None,
+        }
+    }
+
+    #[test]
+    fn rejects_wrong_station_direction_and_recognizes_retrograde_station() {
+        let body = BodyId::try_from("Mars").unwrap();
+        let mut bracket = candidate();
+        assert!(check_numerical_bracket(
+            &LinearReference { retrograde: false },
+            &bracket,
+            &body,
+            EventFamily::Motion
+        )
+        .is_ok());
+        assert!(check_numerical_bracket(
+            &LinearReference { retrograde: true },
+            &bracket,
+            &body,
+            EventFamily::Motion
+        )
+        .is_err());
+        bracket.direction_after = Some("retrograde".into());
+        assert!(check_numerical_bracket(
+            &LinearReference { retrograde: true },
+            &bracket,
+            &body,
+            EventFamily::Motion
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn checks_backward_pisces_reentry_across_zero_longitude() {
+        let body = BodyId::try_from("Mars").unwrap();
+        let mut bracket = candidate();
+        bracket.family = "ingresses".into();
+        bracket.direction_after = None;
+        bracket.sign_after_index = Some(11);
+        bracket.retrograde = Some(true);
+        assert!(check_numerical_bracket(
+            &LinearReference { retrograde: true },
+            &bracket,
+            &body,
+            EventFamily::Ingress
+        )
+        .is_ok());
+        bracket.retrograde = Some(false);
+        assert!(check_numerical_bracket(
+            &LinearReference { retrograde: true },
+            &bracket,
+            &body,
+            EventFamily::Ingress
+        )
+        .is_err());
     }
 }
