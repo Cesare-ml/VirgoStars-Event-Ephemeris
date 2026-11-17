@@ -312,6 +312,11 @@ class PythonApiTests(unittest.TestCase):
         missing["synods"]["Moon"]["source_id"] = None
         missing["synods"]["Moon"]["cycle_start_us"] = None
         missing["synods"]["Moon"]["next_cycle_start_us"] = None
+        missing["synods"]["Moon"]["phase"] = {
+            "code": None,
+            "started_at_us": None,
+            "status": "no_preceding_recorded_cycle",
+        }
         # NativeReader serializes null, not a Moon record, when no recorded
         # lunar anchor precedes the requested instant. Keep the fixture
         # consistent with the fail-closed transport contract.
@@ -608,6 +613,7 @@ class PythonApiTests(unittest.TestCase):
     def test_empty_extra_array_not_confused_with_sql_null(self):
         raw = fake_response()
         raw["synods"]["Moon"]["phase_thresholds_us"] = []
+        raw["synods"]["Moon"]["phase"]["status"] = "unknown_incomplete_phase_thresholds"
         data = VirgoStarsEvents(DummyNative(raw)).get_synods_at("1970-01-01T00:00:00Z")
         self.assertEqual(data["synods"]["Moon"]["phase_thresholds_utc"], [])
 
@@ -889,6 +895,7 @@ class PythonApiTests(unittest.TestCase):
             "code": None, "started_at_us": None,
             "status": "unknown_discontinuous_moon_anchors",
         }
+        moon["coverage"]["warnings"].append("moon_recorded_cycle_gap_over_45_days")
         result = VirgoStarsEvents(DummyNative(valid_gap)).get_synods_at(
             "1970-01-01T00:00:00Z"
         )
@@ -924,6 +931,8 @@ class PythonApiTests(unittest.TestCase):
                 record = invalid["synods"][body]
                 record["phase_thresholds_us"] = thresholds
                 record["next_cycle_start_us"] = next_start
+                if body == "Moon":
+                    record["coverage"]["warnings"].append("moon_recorded_cycle_gap_over_45_days")
                 record["phase"] = {
                     "code": phase_code, "started_at_us": phase_start,
                     "status": "derived_from_recorded_thresholds"

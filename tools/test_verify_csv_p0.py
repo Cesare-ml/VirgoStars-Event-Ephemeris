@@ -11,7 +11,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
-from verify_csv_p0 import decoded_block, normalized_row, utc_microseconds, verify, uvar
+from verify_csv_p0 import decoded_block, normalized_row, utc_microseconds, verify, uvar as decode_uvar
 
 DAY_US=86_400_000_000
 EPOCH=dt.date(1970,1,1)
@@ -118,7 +118,7 @@ class CsvP0ParityTest(unittest.TestCase):
             (b"\xff" * 9 + b"\x01", (1 << 64) - 1),
         ):
             with self.subTest(valid=encoded):
-                self.assertEqual(uvar(encoded, 0), (number, len(encoded)))
+                self.assertEqual(decode_uvar(encoded, 0), (number, len(encoded)))
         for encoded in (
             b"\x80\x00", b"\x81\x00", b"\xff\x00",
             b"\x80\x80\x00", b"\x80" * 9 + b"\x00",
@@ -128,7 +128,7 @@ class CsvP0ParityTest(unittest.TestCase):
                 with self.assertRaisesRegex(
                     ValueError, "non-canonical|truncated|unsigned 64-bit"
                 ):
-                    uvar(encoded, 0)
+                    decode_uvar(encoded, 0)
 
     def test_csv_timestamps_require_ascii_decimal_digits(self):
         # Python \d and int() accept Unicode numerals, but a normalized
