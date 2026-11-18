@@ -67,12 +67,14 @@ fn body(name: &str) -> BodyId {
 
 fn selected(page: &[virgostars_events_p0::P0Record]) -> Vec<(i64, EventFamily, String, u64)> {
     page.iter()
-        .map(|record| (
-            record.at().as_i64(),
-            record.event.family(),
-            record.event.body().as_str().to_owned(),
-            record.source_id,
-        ))
+        .map(|record| {
+            (
+                record.at().as_i64(),
+                record.event.family(),
+                record.event.body().as_str().to_owned(),
+                record.source_id,
+            )
+        })
         .collect()
 }
 
@@ -80,7 +82,9 @@ fn selected(page: &[virgostars_events_p0::P0Record]) -> Vec<(i64, EventFamily, S
 fn golden_p0_merges_all_three_families_and_breaks_same_time_ties() {
     let fixture = FixtureFile::new();
     let archive = P0Archive::open(&fixture.0).unwrap();
-    let page = archive.chronological_between(time(-876_545), time(5_000_001), 100, None).unwrap();
+    let page = archive
+        .chronological_between(time(-876_545), time(5_000_001), 100, None)
+        .unwrap();
     assert!(page.next_cursor.is_none());
     assert_eq!(
         selected(&page.events),
@@ -101,19 +105,16 @@ fn golden_p0_merges_all_three_families_and_breaks_same_time_ties() {
 fn paginated_file_queries_reproduce_the_unpaginated_result_exactly() {
     let fixture = FixtureFile::new();
     let archive = P0Archive::open(&fixture.0).unwrap();
-    let direct = archive.chronological_between(time(-876_545), time(5_000_001), 100, None).unwrap();
+    let direct = archive
+        .chronological_between(time(-876_545), time(5_000_001), 100, None)
+        .unwrap();
     let expected = selected(&direct.events);
     for page_size in [1, 2, 3, 5, 7, 8, MAX_CHRONOLOGICAL_PAGE_SIZE] {
         let mut cursor = None;
         let mut records = Vec::new();
         for _ in 0..9 {
             let page = archive
-                .chronological_between(
-                    time(-876_545),
-                    time(5_000_001),
-                    page_size,
-                    cursor.as_ref(),
-                )
+                .chronological_between(time(-876_545), time(5_000_001), page_size, cursor.as_ref())
                 .unwrap();
             assert!(!page.events.is_empty());
             assert!(page.events.len() <= page_size);
@@ -156,12 +157,26 @@ fn compressed_archive_and_in_memory_core_have_identical_chronology() {
         (3_000_000, 3_000_000),
         (5_000_000, 5_000_001),
     ] {
-        let file_page = archive.chronological_between(time(start), time(end), 100, None).unwrap();
-        let memory_page = index.chronological_between(time(start), time(end), 100, None).unwrap();
-        let file_keys: Vec<_> = file_page.events.iter()
-            .map(|record| (record.at(), record.event.family(), record.event.body().clone()))
+        let file_page = archive
+            .chronological_between(time(start), time(end), 100, None)
+            .unwrap();
+        let memory_page = index
+            .chronological_between(time(start), time(end), 100, None)
+            .unwrap();
+        let file_keys: Vec<_> = file_page
+            .events
+            .iter()
+            .map(|record| {
+                (
+                    record.at(),
+                    record.event.family(),
+                    record.event.body().clone(),
+                )
+            })
             .collect();
-        let memory_keys: Vec<_> = memory_page.events.iter()
+        let memory_keys: Vec<_> = memory_page
+            .events
+            .iter()
             .map(|event| (event.at(), event.family(), event.body().clone()))
             .collect();
         assert_eq!(file_keys, memory_keys, "range {start}..{end}");
@@ -172,15 +187,26 @@ fn compressed_archive_and_in_memory_core_have_identical_chronology() {
 fn exact_boundaries_and_missing_periods_never_invent_new_events() {
     let fixture = FixtureFile::new();
     let archive = P0Archive::open(&fixture.0).unwrap();
-    let negative = archive.chronological_between(time(-876_544), time(0), 10, None).unwrap();
+    let negative = archive
+        .chronological_between(time(-876_544), time(0), 10, None)
+        .unwrap();
     assert_eq!(negative.events.len(), 2);
-    assert!(negative.events.iter().all(|event| event.at() == time(-876_544)));
-    let gap = archive.chronological_between(time(1), time(1_000), 10, None).unwrap();
+    assert!(negative
+        .events
+        .iter()
+        .all(|event| event.at() == time(-876_544)));
+    let gap = archive
+        .chronological_between(time(1), time(1_000), 10, None)
+        .unwrap();
     assert!(gap.events.is_empty());
     assert!(gap.next_cursor.is_none());
-    let empty = archive.chronological_between(time(0), time(0), 10, None).unwrap();
+    let empty = archive
+        .chronological_between(time(0), time(0), 10, None)
+        .unwrap();
     assert!(empty.events.is_empty());
-    let last_excluded = archive.chronological_between(time(3_000_000), time(5_000_000), 10, None).unwrap();
+    let last_excluded = archive
+        .chronological_between(time(3_000_000), time(5_000_000), 10, None)
+        .unwrap();
     assert_eq!(last_excluded.events.len(), 1);
     assert_eq!(last_excluded.events[0].source_id, 42);
 }
@@ -189,12 +215,18 @@ fn exact_boundaries_and_missing_periods_never_invent_new_events() {
 fn invalid_query_limits_and_cursor_ranges_fail_closed() {
     let fixture = FixtureFile::new();
     let archive = P0Archive::open(&fixture.0).unwrap();
-    assert!(archive.chronological_between(time(10), time(0), 10, None).is_err());
-    assert!(archive.chronological_between(time(0), time(10), 0, None).is_err());
+    assert!(archive
+        .chronological_between(time(10), time(0), 10, None)
+        .is_err());
+    assert!(archive
+        .chronological_between(time(0), time(10), 0, None)
+        .is_err());
     assert!(archive
         .chronological_between(time(0), time(10), MAX_CHRONOLOGICAL_PAGE_SIZE + 1, None)
         .is_err());
-    let page = archive.chronological_between(time(-876_545), time(5_000_001), 1, None).unwrap();
+    let page = archive
+        .chronological_between(time(-876_545), time(5_000_001), 1, None)
+        .unwrap();
     let cursor = page.next_cursor.as_ref().unwrap();
     assert_eq!(cursor.source_id(), 10);
     assert_eq!(cursor.family(), EventFamily::Synod);
@@ -287,10 +319,14 @@ fn pages_advance_across_compressed_blocks_and_interleaved_families() {
     archive_bytes.extend_from_slice(&payload);
 
     let file = {
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let id = NEXT_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "virgostars-interleaved-{}-{nanos}-{id}.p0", std::process::id()
+            "virgostars-interleaved-{}-{nanos}-{id}.p0",
+            std::process::id()
         ));
         let mut output = OpenOptions::new()
             .write(true)
@@ -303,7 +339,9 @@ fn pages_advance_across_compressed_blocks_and_interleaved_families() {
     let archive = P0Archive::open(&file.0).unwrap();
     assert_eq!(archive.verify_all().unwrap().records, 3);
 
-    let first = archive.chronological_between(time(0), time(11), 1, None).unwrap();
+    let first = archive
+        .chronological_between(time(0), time(11), 1, None)
+        .unwrap();
     assert_eq!(selected(&first.events)[0].3, 51);
     let second = archive
         .chronological_between(time(0), time(11), 1, first.next_cursor.as_ref())
@@ -315,7 +353,9 @@ fn pages_advance_across_compressed_blocks_and_interleaved_families() {
     assert_eq!(selected(&third.events)[0].3, 52);
     assert!(third.next_cursor.is_none());
 
-    let last_only = archive.chronological_between(time(6), time(11), 2, None).unwrap();
+    let last_only = archive
+        .chronological_between(time(6), time(11), 2, None)
+        .unwrap();
     assert_eq!(selected(&last_only.events)[0].3, 52);
     assert!(last_only.next_cursor.is_none());
 }
@@ -324,10 +364,14 @@ fn pages_advance_across_compressed_blocks_and_interleaved_families() {
 fn fully_consumed_page_does_not_expose_a_spurious_next_cursor() {
     let fixture = FixtureFile::new();
     let archive = P0Archive::open(&fixture.0).unwrap();
-    let page = archive.chronological_between(time(-876_545), time(5_000_001), 8, None).unwrap();
+    let page = archive
+        .chronological_between(time(-876_545), time(5_000_001), 8, None)
+        .unwrap();
     assert_eq!(page.events.len(), 8);
     assert!(page.next_cursor.is_none());
-    let after_last = archive.chronological_between(time(5_000_001), time(5_000_010), 2, None).unwrap();
+    let after_last = archive
+        .chronological_between(time(5_000_001), time(5_000_010), 2, None)
+        .unwrap();
     assert!(after_last.events.is_empty());
     assert!(after_last.next_cursor.is_none());
 }

@@ -50,8 +50,7 @@ impl<'de> Visitor<'de> for UniqueValueVisitor {
     }
 
     fn visit_f64<E: de::Error>(self, value: f64) -> Result<Self::Value, E> {
-        let number =
-            Number::from_f64(value).ok_or_else(|| E::custom("non-finite JSON number"))?;
+        let number = Number::from_f64(value).ok_or_else(|| E::custom("non-finite JSON number"))?;
         Ok(UniqueValue(Value::Number(number)))
     }
 
@@ -87,7 +86,9 @@ impl<'de> Visitor<'de> for UniqueValueVisitor {
         let mut values = Map::new();
         while let Some(key) = access.next_key::<String>()? {
             if values.contains_key(&key) {
-                return Err(de::Error::custom(format!("duplicate JSON object key: {key:?}")));
+                return Err(de::Error::custom(format!(
+                    "duplicate JSON object key: {key:?}"
+                )));
             }
             let value = access.next_value::<UniqueValue>()?;
             values.insert(key, value.0);
@@ -115,7 +116,10 @@ mod tests {
             r#"{"sections":{},"\u0073ections":{}}"#,
         ] {
             let error = parse_header(payload.as_bytes()).unwrap_err();
-            assert!(error.to_string().contains("duplicate JSON object key"), "{error}");
+            assert!(
+                error.to_string().contains("duplicate JSON object key"),
+                "{error}"
+            );
         }
     }
 

@@ -1,3 +1,17 @@
+## 2026-11-18 — Windows Rust workspace formatting validation
+
+- Applied `cargo fmt --all` to the existing workspace so the documented
+  whole-workspace formatting gate passes with Rust 1.99.1 on Windows. This is
+  a formatting-only change; no dataset or coverage policy was modified.
+- `py -3.12 tools/validate_rust.py --archive <reconstructed-P0> --sha256
+  c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e`
+  passed format, locked Clippy, workspace tests, release build, and
+  Python/Rust P0 byte-audit parity (761 blocks, 380,844 records). The
+  separately ignored real-snapshot test was not part of this invocation.
+- The snapshot and hash derive from PR #6's manifest, not independently
+  authenticated original exports. This result does not certify astronomy,
+  source provenance, completeness, or data distribution rights.
+
 ## 2026-11-17 — Event-family audit: planet-pair aspects, stations and speed extrema (draft)
 
 - Owner requests all pairwise exact conjunctions 0°, sextiles 60°, squares 90°, trines 120°; ingress into signs; station/return-to-direct moments; and maximum apparent longitude speed, with missing algorithms explicitly tracked.

@@ -19,8 +19,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use virgostars_events_core::{BodyId, Event, EventFamily, TimestampMicros};
 use virgostars_events_p0::P0Archive;
 
-const GOLDEN_SHA256: &str =
-    "4b7dbe3171633402b76565df79a31066f58913b52b2839c735ea3e68cb413499";
+const GOLDEN_SHA256: &str = "4b7dbe3171633402b76565df79a31066f58913b52b2839c735ea3e68cb413499";
 static NEXT_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
 struct FixtureFile(PathBuf);
@@ -70,7 +69,10 @@ fn before_first_anchor_preserves_all_known_bodies_with_no_fictitious_cycle() {
     let archive = P0Archive::open(&fixture.0).unwrap();
     let snapshots = archive.synods_at(t(-876_545)).unwrap();
     assert_eq!(
-        snapshots.keys().map(|body| body.as_str()).collect::<Vec<_>>(),
+        snapshots
+            .keys()
+            .map(|body| body.as_str())
+            .collect::<Vec<_>>(),
         vec!["Mercury", "Moon"]
     );
     for snapshot in snapshots.values() {
