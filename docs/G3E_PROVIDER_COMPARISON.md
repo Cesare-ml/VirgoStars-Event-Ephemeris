@@ -26,6 +26,12 @@ error. This preserves symmetric smooth peaks under the existing unimodal
 assumption while rejecting observed flat tops. Unsampled plateaus or other
 extrema can still be missed; this is not a completeness guarantee.
 
+For latitude and latitude-speed roots, an observed exact zero with opposite
+surrounding signs is now checked at the adjacent representable microseconds
+before a singleton is returned. A zero or incompatible sign there is
+ambiguous; the two additional provider calls consume the shared budget.
+Sub-microsecond plateaus and other behaviour between samples remain unknown.
+
 `latitude_provider_compare::compare_latitude_event_providers` accepts two separately supplied implementations of `LatitudeProvider`, the same `BodyId`, a half-open UTC `SearchWindow`, an adaptive depth and separate probe budgets. The function never opens or modifies the original source data, P0 archive, database or offline consumer.
 
 ## What is actually compared

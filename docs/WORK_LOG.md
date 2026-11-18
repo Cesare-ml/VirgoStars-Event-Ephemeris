@@ -1,3 +1,17 @@
+## 2026-11-18 — Check adjacent microseconds at exact latitude zeros
+
+- Invented zero plateaus revealed that both latitude-root and latitude-speed
+  station scans could emit a singleton at a zero within a sampled flat region.
+  Before emitting an exact-zero singleton, base and adaptive scanners now
+  check the immediately adjacent representable microseconds for opposing
+  signs. A zero or inconsistent sign produces an ambiguity error; the
+  additional probes consume the shared budget.
+- Synthetic tests cover both signs and both root types, grid and refined
+  zeros, isolated crossings and budget exhaustion. This finite sampling
+  cannot establish the absence of narrower plateaus or hidden crossings.
+- The full locked Rust validator passed locally on Windows, with one optional
+  snapshot test ignored. No real ephemeris provider was run.
+
 ## 2026-11-18 — Synthetic provider comparison symmetry
 
 - Swapping two invented periodic latitude providers preserves event pairs,

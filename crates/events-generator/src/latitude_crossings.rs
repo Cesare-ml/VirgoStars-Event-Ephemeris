@@ -138,6 +138,36 @@ pub(crate) fn checked_latitude_speed<P: LatitudeProvider>(
     )
 }
 
+// A sampled zero can lie inside a flat region. Inspect the adjacent
+// representable instants before emitting a singleton, charging both probes
+// to the shared budget. This cannot rule out unsampled sub-microsecond
+// plateaus or other crossings between any of the sampled instants.
+fn verify_isolated_zero<P: LatitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    at_us: i64,
+    positive_before: bool,
+    root: RootOf,
+    remaining_probes: &mut usize,
+) -> Result<(), GenerationError> {
+    let before_at = at_us
+        .checked_sub(1)
+        .ok_or(GenerationError::AmbiguousLatitudeCrossing)?;
+    let after_at = at_us
+        .checked_add(1)
+        .ok_or(GenerationError::AmbiguousLatitudeCrossing)?;
+    let before = checked_value(provider, body, before_at, root, remaining_probes)?;
+    let after = checked_value(provider, body, after_at, root, remaining_probes)?;
+    if before == 0.0
+        || after == 0.0
+        || before.is_sign_positive() != positive_before
+        || after.is_sign_positive() == positive_before
+    {
+        return Err(GenerationError::AmbiguousLatitudeCrossing);
+    }
+    Ok(())
+}
+
 fn refine_opposite_signs<P: LatitudeProvider>(
     provider: &P,
     body: &BodyId,
@@ -155,8 +185,7 @@ fn refine_opposite_signs<P: LatitudeProvider>(
         }
         let value = checked_value(provider, body, mid, root, remaining_probes)?;
         if value == 0.0 {
-            // Exact synthetic or provider-reported zero; a singleton bracket
-            // is valid, but its numerical/scientific accuracy is not proven.
+            verify_isolated_zero(provider, body, mid, sign_before, root, remaining_probes)?;
             return Ok((mid, mid));
         }
         if value.is_sign_positive() == sign_before {
@@ -203,6 +232,14 @@ fn signed_zero_candidates<P: LatitudeProvider>(
                 return Err(GenerationError::AmbiguousLatitudeCrossing);
             };
             if positive_before != after.is_sign_positive() {
+                verify_isolated_zero(
+                    provider,
+                    body,
+                    zero_at,
+                    positive_before,
+                    root,
+                    remaining_probes,
+                )?;
                 result.push(SignedZeroBracket {
                     start_us: zero_at,
                     end_us: zero_at,
@@ -410,6 +447,14 @@ fn roots_from_ordered_samples<P: LatitudeProvider>(
                 return Err(GenerationError::AmbiguousLatitudeCrossing);
             }
             if ordered[i - 1].1.is_sign_positive() != ordered[i + 1].1.is_sign_positive() {
+                verify_isolated_zero(
+                    provider,
+                    body,
+                    at,
+                    ordered[i - 1].1.is_sign_positive(),
+                    root,
+                    remaining_probes,
+                )?;
                 result.push(SignedZeroBracket {
                     start_us: at,
                     end_us: at,
