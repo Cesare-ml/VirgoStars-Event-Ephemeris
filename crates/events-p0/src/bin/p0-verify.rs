@@ -68,7 +68,10 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
 
     let path = std::path::Path::new(&path);
-    let digest = expected.as_ref().map(|value| value.to_str().ok_or_else(usage)).transpose()?;
+    let digest = expected
+        .as_ref()
+        .map(|value| value.to_str().ok_or_else(usage))
+        .transpose()?;
     let report = verify_archive(path, digest)?;
     println!("{report}");
     Ok(())
@@ -85,10 +88,14 @@ fn main() {
 mod tests {
     use super::verify_archive;
     use base64::Engine as _;
+    use std::fs::OpenOptions;
+    use std::io::Write;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     const FIXTURE_SHA: &str = "4b7dbe3171633402b76565df79a31066f58913b52b2839c735ea3e68cb413499";
+    static NEXT_TEMP_FILE_ID: AtomicU64 = AtomicU64::new(0);
 
     struct TemporaryArchive(PathBuf);
 
@@ -109,12 +116,29 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("valid system clock")
             .as_nanos();
+        let sequence = NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "virgostars-p0-verify-{}-{nonce}.p0",
+            "virgostars-p0-verify-{}-{nonce}-{sequence}.p0",
             std::process::id()
         ));
-        std::fs::write(&path, bytes).expect("write temporary synthetic archive");
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .expect("create unique temporary synthetic archive");
+        file.write_all(bytes)
+            .expect("write temporary synthetic archive");
         TemporaryArchive(path)
+    }
+
+    #[test]
+    fn simultaneous_test_archives_are_distinct_and_unchanged() {
+        let archives: Vec<_> = (0..64).map(|n| write_archive(&[n])).collect();
+        let paths: std::collections::HashSet<_> = archives.iter().map(|a| &a.0).collect();
+        assert_eq!(paths.len(), archives.len());
+        for (n, archive) in archives.iter().enumerate() {
+            assert_eq!(std::fs::read(&archive.0).unwrap(), [n as u8]);
+        }
     }
 
     #[test]
@@ -144,7 +168,9 @@ mod tests {
         let error = verify_archive(&input.0, Some(FIXTURE_SHA))
             .expect_err("wrong trusted archive must fail");
         assert!(
-            error.to_string().contains("whole-file archive SHA-256 mismatch"),
+            error
+                .to_string()
+                .contains("whole-file archive SHA-256 mismatch"),
             "identity verification must precede block decode: {error}"
         );
     }

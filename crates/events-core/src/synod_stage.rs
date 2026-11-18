@@ -117,9 +117,7 @@ pub fn assess_synod_stage(
             return SynodStageAssessment::unknown(SynodStageStatus::InvalidCycleBounds);
         }
         if requested_at >= next {
-            return SynodStageAssessment::unknown(
-                SynodStageStatus::AtOrAfterNextRecordedAnchor,
-            );
+            return SynodStageAssessment::unknown(SynodStageStatus::AtOrAfterNextRecordedAnchor);
         }
     }
 
@@ -169,17 +167,13 @@ pub fn assess_synod_stage(
             return SynodStageAssessment::unknown(SynodStageStatus::UnknownOpenEndedCycle);
         };
         if moon
-            && next
-                .as_i64()
-                .saturating_sub(event.start().as_i64())
+            && next.as_i64().saturating_sub(event.start().as_i64())
                 > MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_MICROS
         {
             // Do not call 1919/2018 "CAL2" for many months because the
             // source omits intervening Moon cycles. The recorded anchor is
             // still returned independently by the file-backed reader.
-            return SynodStageAssessment::unknown(
-                SynodStageStatus::DiscontinuousMoonAnchors,
-            );
+            return SynodStageAssessment::unknown(SynodStageStatus::DiscontinuousMoonAnchors);
         }
         (3, boundaries[2])
     };
@@ -252,7 +246,10 @@ mod tests {
             let result = assess("Mercury", Some(vec![110, 120, 130]), Some(200), t);
             assert_eq!(result.stage, Some(code), "at {t}");
             assert_eq!(result.started_at, Some(TimestampMicros::new(begin)));
-            assert_eq!(result.status, SynodStageStatus::DerivedFromRecordedThresholds);
+            assert_eq!(
+                result.status,
+                SynodStageStatus::DerivedFromRecordedThresholds
+            );
             assert_eq!(result.stage.unwrap().code(), code.code());
         }
         assert_eq!(

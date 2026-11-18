@@ -28,6 +28,58 @@
 - Three synthetic regressions cover initial endpoints, leaf resampling and
   root refinement; all pass on Windows alongside 13 aspect tests. No real
   astronomical provider, coverage claim or event import is involved.
+- Reconciled with main at `54bed09`. Windows `tools/validate_rust.py`
+  passed all locked Rust gates (one optional real-snapshot test ignored),
+  and all 64 existing Node fixture/link tests passed. Scientific reference
+  and coverage review remain outstanding.
+
+## 2026-11-18 — Non-hour IANA fixture integration review
+
+- Reconciled PR #26 with current main and preserved both historical log and
+  validation entries. On Windows, 47 Node tests across IANA, Rome, UTC and
+  Markdown fixtures passed; the link checker and Rust fmt gate passed.
+- Node 22.18.0 / ICU 77.1 / tzdb 2025b independently checked all five
+  local-date boundary pairs and durations, including Lord Howe's half-hour
+  transitions. These are fixture checks, not a shipped `onDate` adapter.
+
+## 2026-11-18 — Rome event-membership fixture integration review
+
+- Reconciled PR #27 with main, preserving both historical log and validation
+  entries. Its six UTC day boundaries match the date-only Rome fixture already
+  on main. Synthetic event IDs test half-open membership at microsecond
+  boundaries; they do not prove an actual `onDate` implementation exists.
+
+## 2026-11-18 — Combined Python gate and Windows temporary-fixture audit
+
+- Reconciled PR #14 and dependent PR #31 with main. Removed a duplicated Moon
+  gap warning from a test fixture: main and the older PR had each added it.
+  No phase, coverage or scientific data semantics were relaxed.
+- The first full Windows Rust run exposed a pre-existing race: parallel
+  `p0-verify` unit tests could obtain the same clock tick and silently
+  overwrite each other's temporary file. Added an atomic suffix, exclusive
+  file creation and a 64-live-archive isolation regression.
+- Windows/Python 3.12: 42/42 source tests, 9 focused Unicode tests, 16
+  synthetic CSV/P0 tests and runner regressions 11/11 and 14/14 passed.
+  The official Rust validator passed fmt, locked Clippy, workspace tests
+  (one separately handled optional snapshot test ignored) and release build.
+  A freshly built Windows wheel installed offline in a clean venv passed
+  51/51 mandatory cases and 3/3 snapshot smoke cases; 5,115 synod probes
+  matched the reconstructed PR #6 CSV. Its manifest is not an independent
+  trust anchor. No astronomical coverage was certified.
+
+## 2026-11-18 — Windows Rust workspace formatting validation
+
+- Applied `cargo fmt --all` to the existing workspace so the documented
+  whole-workspace formatting gate passes with Rust 1.99.1 on Windows. This is
+  a formatting-only change; no dataset or coverage policy was modified.
+- `py -3.12 tools/validate_rust.py --archive <reconstructed-P0> --sha256
+  c7746927f9132aea8fc338524d4bc6927010229e1589ff6f1bff5e4f8f6d8c2e`
+  passed format, locked Clippy, workspace tests, release build, and
+  Python/Rust P0 byte-audit parity (761 blocks, 380,844 records). The
+  separately ignored real-snapshot test was not part of this invocation.
+- The snapshot and hash derive from PR #6's manifest, not independently
+  authenticated original exports. This result does not certify astronomy,
+  source provenance, completeness, or data distribution rights.
 
 ## 2026-11-17 — Event-family audit: planet-pair aspects, stations and speed extrema (draft)
 
@@ -50,6 +102,23 @@
 - **Regression:** extended the existing `test_case_insensitive_windows_wheel_paths_must_not_collide` method in `tools/test_wheel_contents_policy.py` with composed/decomposed accented names, both traversal orders of a file/implicit-directory alias, and a safe distinct-name positive case. Test method count remains **16**; no change to the existing **54-test** packaging preflight minimum.
 - **Actually checked:** 5/5 focused Python 3.13.5 ZIP cases **PASS** in a local isolated reproduction of the exact normalization and path-collision logic, with real `zipfile.ZipFile` member names. GitHub connector readback confirms the committed code and test additions. **Not run:** the full committed `tools/test_wheel_contents_policy.py` suite, all 54 packaging preflight tests, Python 42 source tests, 51 installed-wheel tests, Rust/Cargo/PyO3, or authorized owner-data parity.
 - **Next:** on a full branch checkout run `python -m unittest discover -s tools -p test_wheel_contents_policy.py -v`, `python tools/validate_wheel_preflight.py`, then the locked Rust/wheel and independent original CSV/P0 gates. Keep PR **draft**; no GitHub Actions, release, merge, dataset edits or scientific-completeness claim.
+
+## 2026-11-18 — Windows Python discovery roots
+
+On Windows/Python 3.12, the source preflight stopped after 26 tests because
+`unittest.defaultTestLoader` retained the first discovery root and refused
+the separate `tools` directory. The wheel gate used the same shared loader.
+Both now instantiate a fresh loader per suite; real sequential discovery in
+distinct temporary directories is covered for each gate.
+
+With the local fix, source preflight passed 42/42; gate regressions passed
+11/11 and 14/14, and the synthetic CSV/P0 suite passed 16/16. The original
+branch lockfile was stale; a Cargo-generated offline lockfile in the isolated
+checkout allowed maturin 1.16.0 to build a Windows abi3 wheel. Offline
+installation in a clean venv passed 51/51 mandatory tests, including 9
+compiled-native fixture tests. The generated lockfile has not been reviewed
+for integration. This does not establish real-source CSV/P0 parity or
+astronomical coverage. The global Rust fmt gate remains outstanding.
 
 ## 2026-11-14 — Reject Win32 superscript COM/LPT device names in Python wheels (draft PR #5)
 
@@ -886,7 +955,68 @@
 
 # Agent work log and handoffs
 
+## 2026-11-18 — Apia skipped-date fixture integration review
+
+- Reconciled this branch with main, preserving both conflicting work-log
+  entries. The Apia and Markdown checker suites passed 25/25 on Windows; the
+  repository link check and Rust formatting gate passed.
+- Node 22.18.0 / ICU 77.1 / tzdb 2025b confirmed both neighboring date
+  boundaries and the instant where Apia jumped from December 29 to 31.
+  An hourly scan is a sampled check, not proof of continuous completeness.
+  The typed error and the `onDate` API remain proposed.
+
+## 2026-11-15 — Entirely skipped local calendar day: proposed API error contract
+
+- **Issue / branch:** [#21](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/21); `agent/chat-45a0e580/21-skipped-local-day-contract`, agent `chat-45a0e580`. Draft PR will remain unmerged.
+- **Observed fact:** Python 3 stdlib `zoneinfo` with system IANA tzdb **2025b** independently confirms that `Pacific/Apia` skipped `2011-12-30` entirely when its UTC offset shifted from −10 to +14 hours. Normal neighboring days have UTC ranges `[2011-12-29T10:00Z, 2011-12-30T10:00Z)` and `[2011-12-30T10:00Z, 2011-12-31T10:00Z)`; they join without overlap.
+- **Changes:** Explicit proposed `NonexistentLocalDate { localDate, timeZone }` error in `docs/API_CONTRACTS.md`, synthetic hand-reviewed JSON fixture `test/fixtures/skipped-local-day.json`, eight standard-library-only Node contract regressions `test/skipped-local-day.test.mjs`, validation gate in `docs/VALIDATION.md`. No timezone converter or event reader was implemented.
+- **Verification:** Python 3 stdlib `zoneinfo` conversion and round trips **PASS**, system tzdb **2025b** from `/usr/share/zoneinfo/tzdata.zi`. **Node v22.16.0 PASS:** `node --check test/skipped-local-day.test.mjs` (exit 0); `node --test test/skipped-local-day.test.mjs` (8 passed / 0 failed, exit 0) in a local offline two-file reconstruction whose actual Git blob SHA-1 values **exactly match** the committed GitHub fixture `b8826057234a8a8d3b73dfcba3078a45f67ae1d0` and test `5a6bebc6dd54f875295f882b3ff08a58d37af992`. Full-checkout integration and real Rust/WASM/Python timezone/query implementation are **not run / not implemented**.
+- **Risks / next:** Keep project implementation status *proposed*; reconcile with separate Europe/Rome contract PR #22 after it lands, run actual standard-library fixture tests and then cross-language Rust/WASM/Python boundary parity when implementations exist. No proprietary astronomical data, production integration, publication, release or merge.
+
+
+## 2026-11-18 — Rome local-day fixture integration review
+
+- Reconciled this branch with current main, preserving both work-log entries.
+  The Rome and Markdown checker suites passed 25/25 combined on Windows, the
+  repository-local link check and Rust format gate passed, and Node 22.18.0
+  ICU 77.1 / tzdb 2025b independently confirmed all seven UTC date boundaries.
+- These checks validate fixture boundaries only. The `onDate` adapter is
+  still proposed; no event data or astronomical coverage is implied.
+
+## 2026-11-18 — Synthetic fixtures and UTC microsecond integration
+
+- Reconciled PR #4 with main and incorporated the dependent PR #16 without
+  rewriting history. Conflicting documentation retains current Rust status
+  and the earlier fixture handoff.
+- Windows `core.autocrlf=true` changed checked-out JSON to CRLF, causing
+  the byte-for-byte generator check to fail. `.gitattributes` now fixes
+  the synthetic v0 JSON fixtures to LF. A fresh Windows worktree passed
+  all 6 fixture tests and the repository-local link check. The 7 additional
+  microsecond tests passed on their original branch and are retained here.
+- These are fabricated fixtures and do not establish scientific accuracy,
+  event coverage, or the availability of a timezone adapter.
+
+## 2026-11-18 — Windows cross-volume link containment
+
+- A real Windows symlink from a temporary checkout on C: to a directory on
+  D: was incorrectly accepted: `path.relative` returns an absolute path for
+  different volumes. The checker now rejects that result before resolving it.
+- Added a portable `path.win32` regression for a different drive, an outside
+  sibling and a valid descendant. All 17 Node tests pass on Windows, the
+  checker passes on this checkout, and the real C:-to-D: symlink probe now
+  rejects the outside target. This is an offline checker change only.
+
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
+
+## 2026-11-10 — P0.1 synthetic fixture contract (in review)
+
+- **Issue/PR/branch:** [#1](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/1) / [draft PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4) / `feat/p0-1-synthetic-fixtures`.
+- **Facts:** seven test-only fabricated fixtures (five valid, two deliberately invalid), no real astronomical dataset, no production DB access.
+- **Files:** `tools/generate-synthetic-fixtures.mjs`, `test/fixtures/schema-v0.json`, `test/fixtures/v0/*.json`, `test/fixtures/README.md`, `test/synthetic-fixtures.test.mjs`, roadmap and README.
+- **Checks performed:** fetched the exact generator, test module and committed JSON via GitHub; executed six test callbacks against fetched contents using a V8 JavaScript harness: **6/6 PASS**. These checks exercise deterministic byte generation, validation of valid/invalid records, signed microsecond timestamps, lunar phases, retrograde ingress repetition and UTC instants at a DST transition.
+- **Checks NOT RUN:** `node --test test/synthetic-fixtures.test.mjs` in a checked-out repository (local environment cannot access GitHub); Cargo checks (Rust workspace not implemented). GitHub Actions not used.
+- **Remaining:** run the exact Node test command in a normal checkout before merging. No phase/body coverage claims or binary decoding yet.
+- **Next smallest task:** issue #2 minimal Rust core/format workspace; #3 byte-level VSEPH golden header afterward. Do not mark P0.1 merged/done while PR #4 is draft.
 
 ## 2026-11-10 — Original PostgreSQL row-ID uniqueness enforced throughout experimental VSEPH-P0 (draft PR #5)
 
@@ -1002,6 +1132,42 @@ This is the shared state for agents. Add a dated brief entry **in each working d
 - **Next recommended task:** P0.1 synthetic fixture contract, then P0.2 minimal Rust workspace. Keep dataset unpublished pending owner choice of license.
 - **Open question for maintainer:** what separate open-data license should govern published dataset binaries? Decision is required before first data release, **not** before local code work.
 
+## 2026-11-15 — P1 local-day UTC/DST golden fixtures (issue #20)
+
+- **Issue/PR/branch:** [#20](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/20), [PR #22](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/22), `agent/chat-8f2d9c4a/20-dst-local-day-goldens`, base `main`; agent session `chat-8f2d9c4a`.
+- **Scope:** `test/fixtures/local-day-utc-boundaries.json` (seven independently sourced UTC intervals), `test/local-day-utc-boundaries.test.mjs` (eight offline deterministic tests), and concise updates to the proposed API/validation contracts.
+- **Evidence:** Independently calculated each bound with Python 3 `zoneinfo` and the environment's system IANA timezone database: Europe/Rome spring-forward 2026-03-29 is 82,800 seconds; fall-back 2026-10-25 is 90,000 seconds. Source data are *calendar-time fixtures only*, not released astronomical events or a new timezone algorithm.
+- **Executed:** Node.js v22.16.0 local mirror: `node --check test/local-day-utc-boundaries.test.mjs` **PASS**; `node --test test/local-day-utc-boundaries.test.mjs` **8 passed, 0 failed**. Test logic and seven fixture records were copied into the GitHub branch via the GitHub connector. A full checkout command was **not** run; independent review remains required.
+- **Risk/blocker:** UTC bounds reflect current 2026 IANA rules and may need refresh if jurisdictional policies change. No `onDate` implementation, VSEPH dataset, native Rust engine, event query parity or production integration is claimed.
+- **Next:** independent exact-head reviewer validates source/fixture readback; a future actual `onDate` adapter must be tested against these golden values; owner decides integration.
+
+## 2026-11-15 — offline Markdown link validator (agent chat-78b40c6e)
+
+- **Issue/PR/branch:** [issue #17](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/17), [draft PR #18](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/18), `agent/chat-78b40c6e/17-check-markdown-links` → `main`.
+- **Facts observed:** Gate A in [VALIDATION.md](VALIDATION.md) requires consistent local links; `main` has no dedicated offline Markdown-link checker (checked before implementing). No network or source dataset access needed.
+- **Code/tests:** Added `tools/check-local-markdown-links.mjs` (root/doc tree, local references, missing targets, line numbers) and `test/doc-links.test.mjs` (seven isolated synthetic fixture cases). No astronomical or VSEPH-format changes.
+- **Executed locally:** Node.js `v22.16.0`; `node --test test/doc-links.test.mjs` → 7 passed, 0 failed; `node tools/check-local-markdown-links.mjs` → exit 0, `Repository-local Markdown links: OK`. Both ran against a **self-contained local mirror of the new files**, not a complete GitHub repository checkout. The latter result does **not** establish that all existing repository documentation links are valid.
+- **Additional verification (2026-11-15, session chat-78b40c6e):** locally re-ran `node --check tools/check-local-markdown-links.mjs`, `node --check test/doc-links.test.mjs`, `node --test test/doc-links.test.mjs` (7 passed, 0 failed) and `node tools/check-local-markdown-links.mjs` (exit 0) on the self-contained mirror. Independently fetched the PR-head GitHub tree and all **17** root/docs Markdown files, checked resolved local target paths against that tree: **zero missing targets detected**. This was a separate remote tree/content audit, **not** the CLI against a complete checkout.
+- **Not run:** CLI across the complete repository checkout (outbound GitHub host unavailable in local container); no Rust, GitHub Actions or cross-language checks.
+- **Risks and next:** This is not a CommonMark AST/fragment validator. In a full checkout of draft PR #18, rerun both Node commands and fix any reported links before final review. No merge or deploy.
+
+### 2026-11-15 — reviewer-requested quoted/indented code regression fix
+
+- **Reviewer finding:** Independent PR #18 review at head `2718d0527e6e803fc63ffeb1445a6d8e8f25ea2d` reported `AGENT-REVIEW ... verdict=changes`: the existing scanner treats Markdown links in blockquoted fenced code and 4-space-indented code as real references.
+- **Change on the same agent-owned branch:** `stripBlockquoteMarkers` now normalizes `> ` containers before fence parsing, tracks fence-container depth, and skips 4+-space or tab-indented code lines while preserving real links and original file line numbers. No new dependencies or astronomical behavior. Three focused regressions added to `test/doc-links.test.mjs` (now **10 authored test cases**).
+- **Post-fix exact-blob validation:** Recreated the **complete committed** `tools/check-local-markdown-links.mjs` and `test/doc-links.test.mjs` in an isolated local mirror; `git hash-object` outputs **`233cb86eab4cd23a283ba57fc66e7785b2f198ac`** and **`13a726bda03ac5aa26995090c8b312f4152b0a11`**, matching the GitHub blob SHAs on this PR. On Node v22.16.0, `node --check` on both exact files **passed**, `node --test test/doc-links.test.mjs` **10/10 passed, 0 failed** (including CLI exit-code fixtures), and `node tools/check-local-markdown-links.mjs` **exited 0** on the two-file mirror.
+- **Post-fix remote repository audit:** Independently fetched the latest PR-head tree and all **17** root/`docs/**` Markdown files via GitHub. The updated quoted-fence/indented-code parsing and tree-path audit examined **38** relative link targets and found **0** missing targets. This is a tree/content link audit, **not** execution of the CLI on the complete checkout.
+- **Still not run:** Full-checkout `node tools/check-local-markdown-links.mjs` or real symlink-target checks; the local execution container cannot resolve GitHub. The previous independent `verdict=changes` applies only to the prior commit, and a fresh independent review is still needed.
+- **Separate follow-up:** [issue #19](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/19) tracks symlink-escape hardening, which is intentionally not bundled in this small quoted-code regression fix. No data, production, workflow, release or merge changes.
+
+### 2026-11-15 — security follow-up for symlink escapes (#19)
+
+- **Issue/review:** [#19](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/19) and independent `AGENT-REVIEW verdict=changes` at historical PR #18 heads `ed03b3253d7eabdb3c5bce6e035db7f67e65d302` and `3ebd9edea662ae0d373246d7be61fb80b430df17` identified a lexical-root/symlink traversal bypass. The owner of this same PR/issue-17 claim implemented the correction on the already-owned feature branch, avoiding a competing feature branch.
+- **Files:** `tools/check-local-markdown-links.mjs` now canonicalizes the repo root and each existing target through `realpath`, rejects any resolved target outside the canonical root, fails closed on dangling/looped links, and prevents following a `docs` root symlink that escapes the checkout or dangles. Markdown scanning still skips nested directory symlinks; ordinary in-repo file/directory link targets and compatible internal symlinks are valid. `test/doc-links.test.mjs` adds six synthetic offline cases (16 total), including Windows privilege-aware skipping and a separate dangling-`docs`-root regression.
+- **Exact-blob test evidence:** Recreated the complete committed checker and test files in `/mnt/data/vseph_agent17`. Local `git hash-object` results for them: `3b5d68479608ffa588c66ae3de192a7df6cb6cd8` and `c3b5a3c76500c0ea52775e5404e6ffdbff1dcb8e`, **both identical to the corresponding GitHub content SHA** on this PR. Node v22.16.0: `node --check` on each full file passed, `node --test test/doc-links.test.mjs` **16 passed, 0 failed, 0 skipped** (Linux, including file/directory symlinks and CLI nonzero), `node tools/check-local-markdown-links.mjs` exited 0 on the isolated two-file mirror.
+- **Limits:** No real out-of-repository attack was observed in checked-in documentation; synthetic fixture tests demonstrate fail-closed resolution only. This checker is not an OS sandbox against concurrent hostile filesystem mutation or a full CommonMark parser. The CLI has **not** been executed against a complete GitHub checkout (local container cannot resolve GitHub DNS); prior GitHub tree audit saw 17 Markdown files/38 local links but did not perform a real filesystem symlink walk. GitHub Actions, astronomical code/data, production and deployment remain untouched.
+- **Next:** Request independent exact-head review of [PR #18](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/18); owner handles integration of this code PR under the fleet's docs-only merge restriction.
+
 ## Template for future entries
 
 ### YYYY-MM-DD — <short task>
@@ -1011,6 +1177,24 @@ This is the shared state for agents. Add a dated brief entry **in each working d
 - **Commands run and results (or not run):**
 - **Unresolved risks / blockers:**
 - **Next smallest safe task:**
+
+## 2026-11-15 — fixed non-hour IANA and 30-minute DST local-day fixtures (agent chat-7b2d91ea)
+
+- **Issue/branch:** [#23](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/23), [PR #26](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/26), `agent/chat-7b2d91ea/23-nonhour-local-days` → `main`; independent review pending.
+- **Facts:** `docs/API_CONTRACTS.md` proposes half-open UTC intervals for local `onDate` queries, but `main` has no callable `onDate` implementation. Existing parallel PR #22 covers Rome 23/25-hour days; this work does not touch its files.
+- **Added:** `test/fixtures/non-hour-zone-local-days.json` (five independent reference cases: Kathmandu, two Chatham dates, Lord Howe autumn/spring), `test/non-hour-zone-local-days.test.mjs` (nine deterministic Node golden/mutation checks), and this validation documentation.
+- **Executed:** Python 3 `zoneinfo` independently checked all five specified zone/day UTC intervals on 2026-11-15. On Node.js v22.16.0, `node --check test/non-hour-zone-local-days.test.mjs` → exit 0; `node --test test/non-hour-zone-local-days.test.mjs` → **9 passed, 0 failed, exit 0** in an isolated exact-blob mirror. Exact Git blob IDs: test `ad1e23558873edbd5d550d4c56a1133f594909c3`; fixture `4e8a6b8bcef7c188e9182b0040381ec786d7130e`.
+- **Not run:** full repo/npm/Cargo tests; actual runtime `onDate` (not implemented), device, database or production checks.
+- **Next:** independent PR review, then compare eventual timezone wrapper outputs against these fixed references; never derive the test oracle using the same wrapper.
+
+## 2026-11-15 — synthetic onDate microsecond membership around Rome DST
+
+- **Issue / branch:** [#24](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/24) · `agent/chat-c4d91e7a/24-rome-dst-microsecond-membership` · session `chat-c4d91e7a`; draft PR linked in issue/PR once opened.
+- **Source facts:** [API contract](API_CONTRACTS.md) defines `onDate` on a local IANA calendar date as a UTC half-open range. Separate [PR #22](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/22) provides independent Europe/Rome 2026 UTC bounds. No real `onDate` adapter is shipped on `main` in this work.
+- **Changed:** new synthetic `test/fixtures/local-day-event-membership.json` (20 invented motion/ingress instants across 6 local dates), `test/local-day-event-membership.test.mjs` (9 Node tests), and this validation/work log. Checks include inclusive starts, exclusive ends, adjacent-day uniqueness, 23h/25h intervals, exact ±1 µs neighbors and malformed fixture rejection; timestamps are represented with integer `BigInt` microseconds.
+- **Executed on Node.js v22.16.0:** `node --check test/local-day-event-membership.test.mjs` **passed**; `node --test test/local-day-event-membership.test.mjs` **9 passed, 0 failed** in an isolated local directory. Exact Git blob SHAs of fixture and test were compared against the GitHub branch. **Not run:** complete repository test suite, Cargo/Rust, WASM/Python, an actual `onDate` wrapper or any real/private dataset.
+- **Open risks:** historic/future IANA timezone rules may change; tzdb version was not pinned. Same-instant cross-family event ordering remains a separate contract decision and is intentionally omitted from this fixture. Reconcile shared docs with PR #22 before any integration.
+- **Next:** execute the real adapter on the fixture when its UTC-range/IANA wrapper exists, compare IDs exactly and rerun native cross-language acceptance tests. No dataset license, merge, publication, GitHub Actions or production deployment here.
 
 ### 2026-11-14 — Pre-install Python wheel data-exclusion gate (draft PR #5)
 
@@ -1056,6 +1240,41 @@ The existing Python wrapper only checked that every record claimed unreviewed co
 ### 2026-11-14 — First Python wheel: reject unready Cargo/PyO3 environments before tests (draft PR #5)
 
 Reviewed `pyproject.toml`, Rust binding manifest, `Cargo.lock`, existing `check_m0_build_env.py`, the build orchestrator and its required wheel preflight. **Confirmed blocker:** tracked `Cargo.lock` has no package sections for `pyo3`, `tempfile` or `virgostars-events-python` even though the binding manifest requires them. A `cargo --locked` build cannot yet succeed. The separate read-only checker already reports these issues, but the main builder previously launched the 42 source tests, P0 audit tests and wheel suite before recognizing its missing prerequisites. Connected the existing `check_m0_build_env.problems(ROOT)` at the start of `build_python_mvp.main`, fail-closed before invoking maturin, any test subprocess or creating a local wheel. Added a new mocked regression for stale-lock/missing-Cargo early failure; existing 17 mocked builder methods share a controlled no-issues readiness seam. Updated `validate_wheel_preflight.py` 17→18 method minimum and matching self-tests. **Actual execution:** four locally isolated Python simulations of this new decision flow **4/4 PASS**, bytecode compilation PASS. The full *exact repository* 18-method builder test module and 4-suite preflight **not run**; the simulations do not prove native-wheel readiness. Cargo/rustc unavailable locally, no genuine lockfile regeneration, 42-case source/51-case native acceptance, wheel installation or owner-scientific parity. **No merge, Github Actions, dataset changes or release.**
+
+## 2026-11-14 — PR #14 integrated into mandatory 42-case Python source gate
+
+- **Scope / branch:** Added the positive paired-Unicode and three negative surrogate wire mutations to the existing `test_response_is_json_serializable_and_new_moon_same_object` method in `python/tests/test_python_api.py`. `tools/validate_python_sources.py` already discovers this module, requiring exactly 18 tests; the method count remains 18 and the configured combined 18+8+16 source gate remains **42**. The standalone `test_native_json_unicode.py` remains as a focused five-case check.
+- **Conflict resolution:** Read the latest upstream draft #5 and reconciled the branch using a two-parent Git commit with the latest Rust/Python source tree as the base; retained upstream additions to `test_python_api.py`, wheel-preflight gates and work log. Changed only four feature files relative to that upstream snapshot: `_wire.py`, `test_python_api.py`, `test_native_json_unicode.py`, `docs/WORK_LOG.md`. No force updates.
+- **Actually executed (Python 3.13.5, exact GitHub-blob-matching helper and standalone test):** `PYTHONPATH=python python -m unittest discover -s python/tests -p test_native_json_unicode.py -v` → **5/5 PASS**; `python -m py_compile python/virgostars_events/_wire.py python/tests/test_native_json_unicode.py` → **PASS**. Separately ran one valid-escape and three mutated canonical JSON decode checks locally → **4/4 PASS**; these **do not** substitute for the full facade suite. Exact Git blob SHA verified: `_wire.py` `7bd9aa9a0fb5d2aa92b7eb26dd77742c4a6d6d17`, standalone test `c48f33e9bdfd3de00bad27576d47ed173b705754`.
+- **Not executed / next:** run the full `python tools/validate_python_sources.py` **42-case** gate from a proper checkout, the native 51-case wheel suite and Cargo fmt/Clippy/test/release, and authorized original-data audit. Neither full Python gate nor scientific parity is claimed to pass. No dataset, astronomical core, GitHub Actions, main merge, deployment or release changes.
+- **Review:** https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/14 (stacked draft against PR #5).
+
+## 2026-11-14 — Reject lone Unicode surrogates in native synod JSON (stacked draft PR #14)
+
+- **Task / PR:** Isolated transport-hardening patch on `fix/python-native-json-unicode-scalars-20261114`, stacked on Rust/Python draft PR #5 at base commit `471a7dafe7e7dbc9ff8a9287aed6cf6f657e2899`; review at https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/14. Does not claim pilot issue #13.
+- **Reproduced defect:** Python `json.loads` accepts a lone `\\ud800` escaped surrogate in a nested synod response, even though it cannot be encoded as Unicode scalar UTF-8. The pre-fix source matched Git blob `f34f8c5ab8bf0b1de0cfe2489010f423eee09398`.
+- **Fix:** `python/virgostars_events/_wire.py` now rejects any unpaired surrogate within JSON keys/values using a nonrecursive traversal, while retaining the strict duplicate-key and nonfinite-number parser. Adds `python/tests/test_native_json_unicode.py` for valid paired characters, invalid high/low surrogates, raw Python surrogate text, and previous guardrails.
+- **Actually executed:** isolated Python `PYTHONPATH=python python3 -m unittest discover -s python/tests -p test_native_json_unicode.py -v` **5/5 PASS** and `python3 -m py_compile python/virgostars_events/_wire.py python/tests/test_native_json_unicode.py` **PASS**. Local mirror contained the exact source helper and test plus a stub package initializer, **not** the full repository checkout. GitHub byte identity confirmed by blob SHA-1: helper `7bd9aa9a0fb5d2aa92b7eb26dd77742c4a6d6d17`, test `c48f33e9bdfd3de00bad27576d47ed173b705754`.
+- **Not run / blockers:** complete Python source suite, compiled PyO3 wheel and Rust Cargo checks, original owner data parity. `cargo`/`rustc` unavailable in local runtime; no scientific accuracy or release claim.
+- **Next:** run full Python tests and native acceptance on a clean checkout; review and incorporate this stacked PR into #5 only after CI-equivalent checks. No production, dataset, GitHub Actions, merge or release changes.
+
+## 2026-11-14 — Replace recursive new_moon JSON alias comparison (stacked draft PR #14)
+
+- **Confirmed bug:** `same_json_value` recursively invoked itself on nested native JSON dictionaries and lists. On Python 3.13.5 with standard recursion limit 1000, two identical ~650-level nested structures raised `RecursionError` (reproduced with the previous algorithm). The helper is used to validate the Rust `new_moon` alias against the Moon record, before the Python facade projects the data.
+- **Fix:** `python/virgostars_events/_wire.py` now compares pairs iteratively with an explicit stack; validates exact scalar types at every level and checks dictionary keys / list lengths. It continues rejecting `True` vs `1` and `1` vs `1.0`, preserves order-insensitive JSON objects, and handles deeply nested valid values without recursive Python calls.
+- **Tests:** extended `python/tests/test_native_json_unicode.py` from 5 to **8** methods for type-exact nested aliases, equality through 700 list levels and unequal leaf after 700 dictionary levels; embedded deep/type assertions inside an existing `python/tests/test_python_api.py` method, keeping that mandatory suite's **18** declared methods. Source gate remains configured at **42** cases; this gate was **not run**.
+- **Actually run:** CPython **3.13.5** `PYTHONPATH=. python -m unittest discover -s tests -p 'test_native_json_unicode.py' -v` **8/8 PASS** in an isolated directory with exact GitHub source blobs and stub package initializer; `python -m compileall -q virgostars_events/_wire.py tests/test_native_json_unicode.py` **PASS**. `git hash-object` matched GitHub blobs: `_wire.py` **bb0ae72b2dce2d677300cd98a638aeb3a6f3befe**, test **944ea650fd36728bd83531ed5ff513887debb8b6**.
+- **Remaining:** full 42-case source gate, 51-case native wheel, Cargo fmt/Clippy/build/tests and original owner-data parity **not run**. No Rust algorithm/astronomy, dataset, packaging policy, GitHub Actions, release, deploy or main merge modified. Review: https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/14.
+
+## 2026-11-14 — Fail closed on native JSON integers beyond Rust bounds (draft PR #14)
+
+- **Scope:** Python-only strict transport hardening for the experimental P0 Rust-backed synod facade. Python `json.loads` ordinarily accepts arbitrary-precision JSON integer literals; Rust event transport uses `i64` timestamps and `u64` source identifiers. The `decode_native_json` parser now uses `parse_int=_bounded_json_int` and rejects any integer outside signed i64 minimum through unsigned u64 maximum. This does not infer astronomy or mutate archived events.
+- **Boundaries:** exact signed minimum `-9223372036854775808` and unsigned maximum `18446744073709551615` preserved; lower/higher and very large decimal literals rejected without float conversion. Existing duplicate-key, surrogate and non-finite-number checks retained.
+- **Code/tests:** `python/virgostars_events/_wire.py`, `python/tests/test_native_json_unicode.py` (8 → **9** methods), plus integer boundary checks inside an **existing** `python/tests/test_python_api.py` method so the mandatory 18-method API suite and 42-test source gate retain their configured counts.
+- **Actually executed:** Python **3.13.5** `PYTHONPATH=. python -m unittest discover -s tests -p test_native_json_unicode.py -v` **9/9 PASS** in an isolated helper/test mirror; `python -m compileall -q virgostars_events/_wire.py tests/test_native_json_unicode.py` **PASS**. The tested local Git blobs match GitHub post-push: helper `6a8396b06b1947453ed5d07c3f0354754d91c5b1` and tests `b978b840cc4e0b08b4cd59d36660846369a3e03e`.
+- **Not run:** complete 42-case Python source suite, compiled 51-case PyO3 wheel suite, Cargo fmt/Clippy/build/tests, authorized original CSV/P0 archive parity. GitHub direct clone unavailable from local runtime (DNS). A helper-only pass is not proof of full native acceptance or astronomical coverage.
+- **Next:** execute complete Python source and native gates on a full checkout; inspect PR #5's latest updates before integration. No dataset changes, GitHub Actions, main merge, deployment or release. https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/14
+
 
 ## 2026-11-17 — Rust-first consumer and replaceable regeneration source ([draft PR #32](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/32))
 
@@ -1157,3 +1376,12 @@ Reviewed `pyproject.toml`, Rust binding manifest, `Cargo.lock`, existing `check_
 - **Windows operator integration:** `tools/compute-missing-intervals.ps1 -ReferenceProviderSha256` forwards the independently supplied hash, validates exact lowercase syntax and provider requirement, demands matching reviewer digest/report flags before saving and uses `_sha` plus its first 12 characters in the staging filename. A changed reference-file pin therefore cannot be accidentally skipped because an older unpinned/differently pinned report already exists. Added a native PowerShell `Get-FileHash` example and documented the requirement to lowercase the result.
 - **Regression:** the existing standalone synthetic Rust mock provider is hashed and checked with a finer rescan; wrong digest, invalid/uppercase digest, missing provider and symlinked executable (Unix) all fail closed. Prior unpinned behavior remains opt-in and reports null/no authenticated executable. End-to-end Rust `review_cli`: **24/24 PASS**. Linux Rust 1.90 `cargo fmt -p virgostars-events-generator -- --check`, `cargo test --locked --workspace --quiet` (all runnable tests PASS, 1 pre-existing ignored), `cargo clippy --locked --workspace --all-targets -- -D warnings` and `cargo build --locked --workspace --release --quiet` all **PASS**; `git diff --check` pending commit.
 - **Unverified limits:** the SHA only confirms local bytes *at check time*. It cannot authenticate wrapper dependencies/imports, dynamic libraries, NASA kernels, runtime flags, author signatures, genuine scientific independence, or prevent a file replacement between check and launch; no source data or astronomical accuracy can be certified. Real authorized Swiss/DE441 golden comparisons, original CSV/P0 parity, actual Windows PowerShell 5.1/7 syntax and end-to-end execution, mobile/desktop builds, source licensing and owner approval remain pending. No archive/DB write, source ID invention, GitHub Actions, merge, release or deployment; draft PR #32 stacked on #5.
+
+## 2026-11-17 — Complete-checkout Python gate repair (stacked on PR #14)
+
+- **Base and scope:** `fix/python-native-json-unicode-scalars-20261114` at `aede3f6`, stacked on draft PR #14 and draft PR #5; two test files only, plus this log. No Rust runtime, scientific dataset, archive encoding or public API changes.
+- **Reproduced on a fresh full Git checkout, Python 3.12.14:** `python tools/validate_python_sources.py` initially failed with two assertions and two errors in the 18-method API suite. `python -m unittest discover -s tools -p 'test_*.py' -q` initially failed with twelve subtest errors in the CSV/P0 varint regression (251 test methods discovered, one optional skip).
+- **Cause and fix:** the P0 parity fixture encoder shadowed the imported `verify_csv_p0.uvar` decoder, so canonical/invalid-varint tests called the wrong function. Renamed only the local encoder to `encode_uvar`. API fixtures were stale after stricter JSON integer, stage-reason and Moon gap-warning validation; retained the fail-closed production checks and corrected fixture status, coverage warnings and assertions of the earlier transport rejection layer. The fixed regression still verifies strict u64/i64 boundaries and exactly recorded Moon status/gap disclosures.
+- **Full-checkout commands passed:** `python tools/validate_python_sources.py` **42/42 PASS** (18 API + 8 CLI + 16 CSV oracle); `python -m unittest discover -s tools -p 'test_*.py' -q` **251 tests OK, one skipped optional case**; `python tools/validate_p0_synthetic.py` **15/15 PASS**; `PYTHONPATH=python python -m unittest discover -s python/tests -p 'test_native_json_unicode.py' -q` **9/9 PASS**; `python -m compileall -q python/virgostars_events python/tests tools` **PASS**; `git diff --check` **PASS**. All run without authentic owner archive or native Rust extension.
+- **Unverified:** this host has no `cargo`/`rustc`, so locked Rust fmt/Clippy/test/release, PyO3/maturin wheel installation and 51-case native acceptance are **not run**. The owner dataset's full CSV/P0 equality and astronomical coverage remain unverified here. One skipped tools case is not silently counted as a pass.
+- **Next:** regenerate/review the known-stale `Cargo.lock` with Rust installed, run `python tools/validate_rust.py` and native wheel acceptance against an explicitly trusted local P0 archive; independently review this stacked PR before integrating the draft chain. No main merge, release, dataset edits, GitHub Actions or production changes.

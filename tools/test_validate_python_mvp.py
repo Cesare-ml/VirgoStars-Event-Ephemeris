@@ -29,6 +29,19 @@ def fake_native_modules() -> dict[str, ModuleType]:
 
 
 class NativeMvpGatePreflightTests(unittest.TestCase):
+    def test_real_discovery_can_switch_between_distinct_directories(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for number in (1, 2):
+                directory = root / str(number)
+                directory.mkdir()
+                (directory / f"test_native_root_{number}.py").write_text(
+                    "import unittest\nclass Case(unittest.TestCase):\n"
+                    "    def test_pass(self): pass\n", encoding="utf-8",
+                )
+                with redirect_stderr(StringIO()):
+                    self.assertTrue(validator.run_tests(f"test_native_root_{number}.py", 1, directory))
+
     def test_missing_owner_pair_and_csv_without_archive_fail_before_tests(self):
         with tempfile.TemporaryDirectory() as temp:
             archive = Path(temp) / "events.p0"

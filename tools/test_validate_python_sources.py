@@ -40,7 +40,7 @@ class PythonSourceGateTests(unittest.TestCase):
         self.assertNotIn("test_native_fixture.py", str(gate.SOURCE_SUITES))
 
     def test_missing_suite_case_fails_before_running_tests(self):
-        with patch.object(gate.unittest.defaultTestLoader, "discover", return_value=fake_suite(14)), patch.object(
+        with patch.object(gate.unittest.TestLoader, "discover", return_value=fake_suite(14)), patch.object(
             gate.unittest, "TextTestRunner"
         ) as runner, redirect_stderr(StringIO()):
             self.assertFalse(gate.run_suite("test_python_api.py", 15, Path("fixture")))
@@ -48,7 +48,7 @@ class PythonSourceGateTests(unittest.TestCase):
 
     def test_exact_suite_without_skips_passes(self):
         fake = fake_result(ran=15)
-        with patch.object(gate.unittest.defaultTestLoader, "discover", return_value=fake_suite(15)), patch.object(
+        with patch.object(gate.unittest.TestLoader, "discover", return_value=fake_suite(15)), patch.object(
             gate.unittest, "TextTestRunner"
         ) as runner:
             runner.return_value.run.return_value = fake
@@ -57,7 +57,7 @@ class PythonSourceGateTests(unittest.TestCase):
 
     def test_silent_skip_is_rejected(self):
         fake = fake_result(skipped=[(None, "native dependency missing")], ran=15)
-        with patch.object(gate.unittest.defaultTestLoader, "discover", return_value=fake_suite(15)), patch.object(
+        with patch.object(gate.unittest.TestLoader, "discover", return_value=fake_suite(15)), patch.object(
             gate.unittest, "TextTestRunner"
         ) as runner, redirect_stderr(StringIO()):
             runner.return_value.run.return_value = fake
@@ -66,7 +66,7 @@ class PythonSourceGateTests(unittest.TestCase):
     def test_failure_or_incomplete_execution_is_rejected(self):
         for result in (fake_result(passed=False), fake_result(ran=14)):
             with self.subTest(result=result), patch.object(
-                gate.unittest.defaultTestLoader, "discover", return_value=fake_suite(15)
+                gate.unittest.TestLoader, "discover", return_value=fake_suite(15)
             ), patch.object(gate.unittest, "TextTestRunner") as runner, redirect_stderr(StringIO()):
                 runner.return_value.run.return_value = result
                 self.assertFalse(gate.run_suite("test_python_api.py", 15, Path("fixture")))
@@ -77,7 +77,7 @@ class PythonSourceGateTests(unittest.TestCase):
             {"unexpected_successes": [(None, "unexpected success")]},
         ):
             with self.subTest(kwargs=kwargs), patch.object(
-                gate.unittest.defaultTestLoader, "discover", return_value=fake_suite(15)
+                gate.unittest.TestLoader, "discover", return_value=fake_suite(15)
             ), patch.object(gate.unittest, "TextTestRunner") as runner, redirect_stderr(StringIO()):
                 runner.return_value.run.return_value = fake_result(**kwargs)
                 self.assertFalse(gate.run_suite("test_python_api.py", 15, Path("fixture")))
@@ -104,6 +104,19 @@ class PythonSourceGateTests(unittest.TestCase):
             gate, "ROOT", Path(temp)
         ), redirect_stderr(StringIO()):
             self.assertEqual(gate.main(), 1)
+
+    def test_real_discovery_can_switch_between_distinct_directories(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for number in (1, 2):
+                directory = root / str(number)
+                directory.mkdir()
+                (directory / f"test_source_root_{number}.py").write_text(
+                    "import unittest\nclass Case(unittest.TestCase):\n"
+                    "    def test_pass(self): pass\n", encoding="utf-8",
+                )
+                with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                    self.assertTrue(gate.run_suite(f"test_source_root_{number}.py", 1, directory))
 
     def test_local_source_import_and_all_suites_are_required(self):
         with patch.object(gate, "run_suite", return_value=True) as runner, redirect_stdout(StringIO()) as output:

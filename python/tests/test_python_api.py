@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone, tzinfo
 from unittest.mock import patch
 
 from virgostars_events import VirgoStarsEvents
+from virgostars_events._wire import decode_native_json, same_json_value
 from virgostars_events._time import (
     iso_utc_from_microseconds,
     to_utc_microseconds,
@@ -179,11 +180,20 @@ class PythonApiTests(unittest.TestCase):
                     VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
 
         # A recorded cycle must come from an actual positive source row ID.
-        for source_id in (None, False, True, 0, -1, "27", 27.0, 1 << 64, 1 << 128):
+        for source_id in (None, False, True, 0, -1, "27", 27.0):
             with self.subTest(source_id=source_id):
                 raw = fake_response()
                 raw["synods"]["Mercury"]["source_id"] = source_id
                 with self.assertRaisesRegex(ValueError, "native synod source ID inconsistent"):
+                    VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
+
+        # Impossible Rust integer values are rejected by the JSON transport
+        # decoder before the facade inspects individual source row IDs.
+        for source_id in (1 << 64, 1 << 128):
+            with self.subTest(transport_overflow=source_id):
+                raw = fake_response()
+                raw["synods"]["Mercury"]["source_id"] = source_id
+                with self.assertRaisesRegex(ValueError, "integer outside Rust i64/u64 range"):
                     VirgoStarsEvents(DummyNative(raw)).get_synods_at(instant)
 
         # Rust serializes source IDs as u64. Its maximum value remains a
@@ -378,6 +388,27 @@ class PythonApiTests(unittest.TestCase):
                 return self.payload
 
         canonical = json.dumps(fake_response())
+        # Rust JSON should retain valid supplementary code points represented
+        # by a paired UTF-16 escape; rejecting lone surrogates must not
+        # reject a valid character.
+        self.assertEqual(
+            decode_native_json('{"message":"\\ud83d\\ude00"}'),
+            {"message": "😀"},
+        )
+        # The same strict transport helper also checks the native
+        # new_moon alias; a deep but valid nested JSON structure must not
+        # exceed Python's recursion limit or coerce number/bool types.
+        nested_a, nested_b = 1, 1
+        for _ in range(700):
+            nested_a = [nested_a]
+            nested_b = [nested_b]
+        self.assertTrue(same_json_value(nested_a, nested_b))
+        self.assertFalse(same_json_value({"id": [1]}, {"id": [True]}))
+        self.assertFalse(same_json_value({"id": [1]}, {"id": [1.0]}))
+        self.assertEqual(
+            decode_native_json('{"min":-9223372036854775808,"max":18446744073709551615}'),
+            {"min": -(1 << 63), "max": (1 << 64) - 1},
+        )
         malformed_wire = (
             (
                 canonical.replace(
@@ -403,12 +434,34 @@ class PythonApiTests(unittest.TestCase):
                 ),
                 "duplicate JSON key",
             ),
+            # Python json.loads tolerates isolated surrogates (both escapes
+            # and literal code points), which Rust cannot emit as UTF-8.
+            (
+                canonical.replace('"source_id": 27', '"source_id": "\\ud800"', 1),
+                "unpaired Unicode surrogate",
+            ),
+            (
+                canonical.replace('"source_id": 27', '"\\udfff": 0, "source_id": 27', 1),
+                "unpaired Unicode surrogate",
+            ),
+            (
+                canonical.replace('"source_id": 27', '"source_id": "' + chr(0xD800) + '"', 1),
+                "unpaired Unicode surrogate",
+            ),
             *(
                 (
                     canonical.replace('"source_id": 27', f'"source_id": {token}', 1),
                     "non-finite JSON value",
                 )
                 for token in ("NaN", "Infinity", "-Infinity")
+            ),
+            # Rust serde_json cannot emit unbounded Python integers.
+            *(
+                (
+                    canonical.replace('"source_id": 27', f'"source_id": {token}', 1),
+                    "outside Rust i64/u64 range",
+                )
+                for token in ("-9223372036854775809", "18446744073709551616")
             ),
             # Python's default JSON decoder silently converts valid JSON
             # exponents beyond binary64 into infinity. Reject at parse time.
@@ -622,7 +675,7 @@ class PythonApiTests(unittest.TestCase):
         for invalid in (
             12, "100", {}, True, [True], [-100.0], ["-100"],
             [None], [-300], [-100, -100], [-100, -101],
-            [(1 << 63)], [-(1 << 63) - 1],
+            [(1 << 63)],
         ):
             with self.subTest(invalid=invalid):
                 broken = fake_response()
@@ -633,6 +686,15 @@ class PythonApiTests(unittest.TestCase):
                     VirgoStarsEvents(DummyNative(broken)).get_synods_at(
                         "1970-01-01T00:00:00Z"
                     )
+
+        # Rust represents negative timestamps as signed i64. A value
+        # below that boundary fails already in the strict JSON decoder.
+        outside_i64 = fake_response()
+        outside_i64["synods"]["Mercury"]["phase_thresholds_us"] = [-(1 << 63) - 1]
+        with self.assertRaisesRegex(ValueError, "integer outside Rust i64/u64 range"):
+            VirgoStarsEvents(DummyNative(outside_i64)).get_synods_at(
+                "1970-01-01T00:00:00Z"
+            )
 
         for omitted in ("missing field", "missing anchor"):
             with self.subTest(omitted=omitted):
