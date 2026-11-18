@@ -9,17 +9,25 @@ Contributors retain applicable rights in their own contributions under the terms
 SPDX-License-Identifier: CPAL-1.0
 */
 // Modification record (2026-11-15): synthetic offline local-link regressions.
+// Modification record (2026-11-18): Windows cross-volume containment regression.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, mkdir, rm, symlink, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {dirname, join} from 'node:path';
+import {dirname, join, win32} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {checkLocalMarkdownLinks} from '../tools/check-local-markdown-links.mjs';
+import {checkLocalMarkdownLinks, insideRoot} from '../tools/check-local-markdown-links.mjs';
 
 const cli = fileURLToPath(new URL('../tools/check-local-markdown-links.mjs', import.meta.url));
+
+test('Windows containment rejects a different drive while allowing descendants', () => {
+  const root = String.raw`C:\repository`;
+  assert.equal(insideRoot(root, String.raw`D:\outside\README.md`, win32), false);
+  assert.equal(insideRoot(root, String.raw`C:\outside\README.md`, win32), false);
+  assert.equal(insideRoot(root, String.raw`C:\repository\docs\README.md`, win32), true);
+});
 
 async function fixture(files, run) {
   const root = await mkdtemp(join(tmpdir(), 'vseph-links-'));

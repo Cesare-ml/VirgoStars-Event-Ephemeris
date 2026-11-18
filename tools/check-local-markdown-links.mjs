@@ -9,18 +9,21 @@ Contributors retain applicable rights in their own contributions under the terms
 SPDX-License-Identifier: CPAL-1.0
 */
 // Modification record (2026-11-15): offline repository-local Markdown link checks.
+// Modification record (2026-11-18): reject Windows cross-volume paths.
 
 import {readdir, readFile, realpath, stat} from 'node:fs/promises';
-import {dirname, extname, relative, resolve, sep} from 'node:path';
+import {dirname, extname, isAbsolute, relative, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 
 // Use the same containment rule for lexical paths and resolved symlink paths.
-function insideRoot(root, pathname) {
-  const candidate = relative(root, pathname);
-  return candidate !== '..' && !candidate.startsWith('..' + sep) &&
-    (!candidate || resolve(root, candidate) === pathname);
+export function insideRoot(root, pathname, paths = {relative, resolve, sep, isAbsolute}) {
+  const candidate = paths.relative(root, pathname);
+  // Windows returns an absolute path, not "..", when volumes differ.
+  return !paths.isAbsolute(candidate) && candidate !== '..' &&
+    !candidate.startsWith('..' + paths.sep) &&
+    (!candidate || paths.resolve(root, candidate) === pathname);
 }
 
 async function markdownFiles(root, canonicalRoot) {

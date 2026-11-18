@@ -1,5 +1,15 @@
 # Agent work log and handoffs
 
+## 2026-11-18 — Windows cross-volume link containment
+
+- A real Windows symlink from a temporary checkout on C: to a directory on
+  D: was incorrectly accepted: `path.relative` returns an absolute path for
+  different volumes. The checker now rejects that result before resolving it.
+- Added a portable `path.win32` regression for a different drive, an outside
+  sibling and a valid descendant. All 17 Node tests pass on Windows, the
+  checker passes on this checkout, and the real C:-to-D: symlink probe now
+  rejects the outside target. This is an offline checker change only.
+
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
 
 ## 2026-11-10 — repository initialization
