@@ -192,6 +192,19 @@ test('SHA pin failure, frame mismatch, malformed UTC, and nonpeak speed reject w
   }
 });
 
+test('pinned audit rejects nested duplicate candidate keys despite a matching hash', t => {
+  const f = fixture(t);
+  const pins = f.save();
+  const original = readFileSync(f.auditPath, 'utf8');
+  const ambiguous = original.replace('"bracket_start_us":',
+    String.raw`"\u0062racket_start_us":"999","bracket_start_us":`);
+  writeFileSync(f.auditPath, ambiguous);
+  const result = run(f, { ...pins, auditSha: hash(ambiguous) });
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /duplicate JSON object keys/);
+});
+
 test('empty candidate and golden sets are observational only, not certified completeness', t => {
   const f = fixture(t);
   f.audit.events.pairs = [];

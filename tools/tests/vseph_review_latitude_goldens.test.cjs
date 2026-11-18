@@ -129,6 +129,19 @@ test('wrong golden/kernel hash fails before report and leaves empty stdout', t =
   }
 });
 
+test('pinned golden JSON rejects an escaped duplicate schema key', t => {
+  const f = fixture(t);
+  f.save();
+  const original = readFileSync(f.goldens, 'utf8');
+  const ambiguous = original.replace('"schema":',
+    String.raw`"\u0073chema":"shadow","schema":`);
+  writeFileSync(f.goldens, ambiguous);
+  const result = run(f, sha(ambiguous));
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /duplicate JSON object keys/);
+});
+
 test('duplicate, outside supported UTC, malformed sign and nonfinite tolerance fail closed', t => {
   const f = fixture(t);
   for (const modifier of [

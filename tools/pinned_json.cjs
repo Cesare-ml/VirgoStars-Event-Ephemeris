@@ -13,6 +13,78 @@ const { createHash } = require('node:crypto');
 const { openSync, fstatSync, readSync, closeSync } = require('node:fs');
 const { TextDecoder } = require('node:util');
 
+// JSON.parse silently keeps the final member of an object with repeated names.
+// Inspect keys before parsing, including names written with JSON escapes.
+function rejectDuplicateObjectKeys(source, label) {
+  let cursor = 0;
+  const invalid = () => { throw new Error(`invalid ${label} JSON structure`); };
+  const whitespace = char => char === ' ' || char === '\t' || char === '\r' || char === '\n';
+  function skipSpace() {
+    while (cursor < source.length && whitespace(source[cursor])) cursor++;
+  }
+  function scanString(decode) {
+    if (source[cursor] !== '"') invalid();
+    const start = cursor++;
+    while (cursor < source.length) {
+      if (source[cursor] === '\\') {
+        cursor += 2;
+      } else if (source[cursor] === '"') {
+        cursor++;
+        if (!decode) return;
+        try { return JSON.parse(source.slice(start, cursor)); }
+        catch { invalid(); }
+      } else {
+        cursor++;
+      }
+    }
+    invalid();
+  }
+  function scanValue(depth) {
+    if (depth > 128) throw new Error(`${label} JSON nesting exceeds 128 levels`);
+    skipSpace();
+    if (source[cursor] === '{') {
+      cursor++;
+      skipSpace();
+      if (source[cursor] === '}') { cursor++; return; }
+      const seen = new Set();
+      while (true) {
+        const key = scanString(true);
+        if (seen.has(key)) throw new Error(`${label} has duplicate JSON object keys`);
+        seen.add(key);
+        skipSpace();
+        if (source[cursor] !== ':') invalid();
+        cursor++;
+        scanValue(depth + 1);
+        skipSpace();
+        if (source[cursor] === '}') { cursor++; return; }
+        if (source[cursor] !== ',') invalid();
+        cursor++;
+        skipSpace();
+      }
+    }
+    if (source[cursor] === '[') {
+      cursor++;
+      skipSpace();
+      if (source[cursor] === ']') { cursor++; return; }
+      while (true) {
+        scanValue(depth + 1);
+        skipSpace();
+        if (source[cursor] === ']') { cursor++; return; }
+        if (source[cursor] !== ',') invalid();
+        cursor++;
+      }
+    }
+    if (source[cursor] === '"') { scanString(false); return; }
+    const start = cursor;
+    while (cursor < source.length && !whitespace(source[cursor]) &&
+        !',]}'.includes(source[cursor])) cursor++;
+    if (cursor === start) invalid();
+  }
+  scanValue(0);
+  skipSpace();
+  if (cursor !== source.length) invalid();
+}
+
 function readPinnedJson(file, expectedSha256, maxBytes, label) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 ||
       typeof expectedSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(expectedSha256)) {
@@ -42,12 +114,12 @@ function readPinnedJson(file, expectedSha256, maxBytes, label) {
   if (createHash('sha256').update(bytes).digest('hex') !== expectedSha256) {
     throw new Error(`${label} SHA-256 differs from pinned trust anchor`);
   }
-  try {
-    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    return JSON.parse(decoded);
-  } catch {
-    throw new Error(`invalid ${label} UTF-8/JSON`);
-  }
+  let decoded;
+  try { decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch { throw new Error(`invalid ${label} UTF-8`); }
+  rejectDuplicateObjectKeys(decoded, label);
+  try { return JSON.parse(decoded); }
+  catch { throw new Error(`invalid ${label} JSON`); }
 }
 
 module.exports = { readPinnedJson };

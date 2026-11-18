@@ -51,6 +51,34 @@ test('rejects invalid UTF-8 and malformed JSON despite a valid byte digest', t =
     Buffer.from('{"malformed":}')]) {
     const f = fixture(t, bytes);
     assert.throws(() => readPinnedJson(f.file, f.sha256, 1024, 'oracle'),
-      /invalid oracle UTF-8\/JSON/);
+      /invalid oracle (?:UTF-8|JSON)/);
   }
+});
+
+test('rejects repeated keys at root, nested, and Unicode-escaped aliases', t => {
+  for (const raw of [
+    '{"schema":"first","schema":"second"}',
+    '{"reference":{"frame":"A","frame":"B"}}',
+    String.raw`{"reference":{"plane":"A","\u0070lane":"B"}}`,
+    '{"events":[{"body":"Mars","body":"Venus"}]}',
+  ]) {
+    const bytes = Buffer.from(raw);
+    const f = fixture(t, bytes);
+    assert.throws(() => readPinnedJson(f.file, f.sha256, 1024, 'oracle'),
+      /oracle has duplicate JSON object keys/);
+  }
+});
+
+test('permits an ordinary key repeated in separate object scopes', t => {
+  const bytes = Buffer.from('{"events":[{"body":"Mars"},{"body":"Venus"}]}');
+  const f = fixture(t, bytes);
+  assert.deepEqual(readPinnedJson(f.file, f.sha256, 1024, 'oracle'),
+    { events: [{ body: 'Mars' }, { body: 'Venus' }] });
+});
+
+test('rejects pathologically deep JSON before recursive parsing', t => {
+  const bytes = Buffer.from('['.repeat(129) + '0' + ']'.repeat(129));
+  const f = fixture(t, bytes);
+  assert.throws(() => readPinnedJson(f.file, f.sha256, 1024, 'oracle'),
+    /oracle JSON nesting exceeds 128 levels/);
 });
