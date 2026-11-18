@@ -14,6 +14,44 @@ agreed and recorded before seeing the new comparison results. A failed or
 missing item remains open; do not silently widen tolerances or relabel a
 transport smoke as an accuracy test.
 
+## Offline structural preflight
+
+`tools/engine_validation_preflight.py` checks the shape of a single UTF-8
+JSON plan without invoking the engine or reference, accessing any artifact
+named inside it, or contacting the network. An explicitly **invented**
+example is available at
+[`tools/fixtures/engine_validation_plan.synthetic.json`](../tools/fixtures/engine_validation_plan.synthetic.json).
+Its names, digests, values and review statements are fabricated for tests and
+must never be treated as actual engine, kernel or reviewer evidence.
+
+```sh
+python tools/engine_validation_preflight.py tools/fixtures/engine_validation_plan.synthetic.json
+python -m unittest discover -s tools -p test_engine_validation_preflight.py -v
+```
+
+Copy the example to a separately managed plan and replace its declarations
+when preparing a real independent assessment. Version 1 requires an explicit
+nonempty body/quantity scope and signed microsecond interval; source, binary,
+binding and kernel digest **syntax** plus declared build/time/kernel
+provenance; reference and shared-dependency descriptions; case selection,
+holdout and expected count; one finite nonnegative maximum-absolute threshold
+with matching units for every body/quantity pair; and reviewer/preregistration
+declarations. Supported quantities and exact units are in the synthetic
+example and the tool's `UNITS` mapping. It rejects duplicate/unknown keys,
+duplicate matrix entries, nonfinite or nonstandard numbers, incomplete
+matrices, invalid UTF-8 and oversized inputs. Invalid input produces a
+nonzero exit and no JSON report.
+
+On a syntactically valid plan, the output includes the plan's local SHA-256
+and `declarations_well_formed: true`; all independent-validation,
+astronomical-accuracy, coverage and import-safety flags remain **false**. The
+tool does not authenticate hashes, open declared files, establish reviewer
+identity or approval timing, prove independence, execute cases, compare
+results, or assess physical correctness. The digest identifies only the bytes
+read, not a trusted or immutable preregistration. Version 1 also does not
+encode the complete vector, percentile, uncertainty or event-time criteria
+below; those remain mandatory human-reviewed evidence.
+
 ## Scope of the eventual decision
 
 The proposed initial capability is **geocentric apparent longitude and

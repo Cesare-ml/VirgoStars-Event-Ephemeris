@@ -1,0 +1,75 @@
+{
+  "schema": "engine-validation-plan-v1",
+  "scope": {
+    "bodies": [
+      "SyntheticA",
+      "SyntheticB"
+    ],
+    "start_us": -10,
+    "end_us": 10,
+    "quantities": [
+      "longitude_degrees",
+      "latitude_speed_degrees_per_day"
+    ],
+    "center": "synthetic center",
+    "frame": "synthetic frame",
+    "corrections": "synthetic corrections",
+    "time_convention": "synthetic time"
+  },
+  "engine": {
+    "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "binary_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "binding_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "kernel_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "build_attestation": "invented build record",
+    "kernel_provenance": "invented kernel source",
+    "time_data_identity": "invented time inputs"
+  },
+  "reference": {
+    "implementation": "invented reference",
+    "version": "synthetic",
+    "provenance": "invented reference record",
+    "shared_dependencies": "declared none",
+    "independence_rationale": "invented separation"
+  },
+  "cases": {
+    "selection": "invented grid",
+    "holdout": "invented holdout",
+    "expected_count": 8
+  },
+  "tolerances": [
+    {
+      "body": "SyntheticA",
+      "quantity": "longitude_degrees",
+      "max_absolute_error": 0.1,
+      "unit": "degrees",
+      "rationale": "invented test threshold"
+    },
+    {
+      "body": "SyntheticA",
+      "quantity": "latitude_speed_degrees_per_day",
+      "max_absolute_error": 0.1,
+      "unit": "degrees/day",
+      "rationale": "invented test threshold"
+    },
+    {
+      "body": "SyntheticB",
+      "quantity": "longitude_degrees",
+      "max_absolute_error": 0.1,
+      "unit": "degrees",
+      "rationale": "invented test threshold"
+    },
+    {
+      "body": "SyntheticB",
+      "quantity": "latitude_speed_degrees_per_day",
+      "max_absolute_error": 0.1,
+      "unit": "degrees/day",
+      "rationale": "invented test threshold"
+    }
+  ],
+  "review": {
+    "reviewer": "invented reviewer",
+    "relationship": "invented relationship",
+    "preapproval_record": "invented preregistration"
+  }
+}

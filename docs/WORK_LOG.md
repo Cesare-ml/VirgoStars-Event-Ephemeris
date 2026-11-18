@@ -1,3 +1,15 @@
+## 2026-11-18 — Offline independent-engine plan preflight
+
+- Added a read-only structural JSON preflight and an explicitly invented
+  example. It checks required declarations, digest syntax, signed time range,
+  one matching-unit tolerance per body/quantity pair, unambiguous bounded
+  JSON and preapproval metadata. It neither opens declared artifacts nor
+  verifies their identity, reviewer, independence, accuracy or coverage.
+  Success retains all scientific/import flags as false.
+- Eight synthetic Python tests passed locally, including the CLI and example;
+  all four synthetic latitude-zero tests also passed. The example carries no
+  real provenance, actual thresholds or evidence of engine validation.
+
 ## 2026-11-18 — Independent-engine protocol and synthetic failure handling
 
 - Prepared [the proposed independent-engine validation protocol](ENGINE_INDEPENDENT_VALIDATION_PLAN.md):
