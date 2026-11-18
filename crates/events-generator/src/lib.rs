@@ -8,8 +8,9 @@
 //! Experimental, provider-neutral event *candidate* discovery.
 //!
 //! This crate never reads/writes the owner archive, SQL tables or gaps. It
-//! scans finite longitude/speed samples supplied by the caller and brackets
-//! possible stations and zodiac ingresses. It is NOT a complete astronomy
+//! scans finite longitude/speed (and, separately, ecliptic-latitude/speed)
+//! samples supplied by the caller and brackets candidate stations, zodiac
+//! ingresses and ecliptic-plane crossings. It is NOT a complete astronomy
 //! generator: unsampled multiple crossings can be missed, a candidate is not
 //! a verified source record, and source IDs must never be invented here.
 //!
@@ -23,6 +24,7 @@ use virgostars_events_core::{BodyId, MotionDirection, TimestampMicros, ZodiacSig
 
 pub mod adaptive;
 pub mod gaps;
+pub mod latitude_crossings;
 pub mod lunar;
 pub mod provider_process;
 pub mod speed_crosscheck;
@@ -42,6 +44,23 @@ pub struct LongitudeSample {
 /// Replaceable *development-time* position source, never part of the reader.
 pub trait LongitudeProvider {
     fn sample(&self, body: &BodyId, at: TimestampMicros) -> Result<LongitudeSample, String>;
+}
+
+/// Signed geocentric ecliptic latitude (north positive) and its time derivative.
+///
+/// The implementing development-only provider must state whether its plane is
+/// mean/true and of date/fixed epoch, apparent corrections, time scales,
+/// ephemeris/kernel/version and license. These values must not be inferred from
+/// longitude. This trait is never used by the offline P0 consumer.
+#[derive(Clone, Copy, Debug)]
+pub struct LatitudeSample {
+    pub latitude_degrees: f64,
+    pub latitude_speed_degrees_per_day: f64,
+}
+
+pub trait LatitudeProvider {
+    fn sample_latitude(&self, body: &BodyId, at: TimestampMicros)
+        -> Result<LatitudeSample, String>;
 }
 
 /// UTC/POSIX microsecond interval, fixed scan stride and target bracket size.
@@ -79,6 +98,7 @@ pub enum GenerationError {
     AmbiguousIngressStep,
     AmbiguousLunarStep,
     AmbiguousSpeedExtremum,
+    AmbiguousLatitudeCrossing,
     InsufficientSpeedSamples,
     Provider(String),
 }
@@ -94,6 +114,9 @@ impl fmt::Display for GenerationError {
             Self::AmbiguousSpeedExtremum => {
                 f.write_str("ambiguous speed extremum; reduce scan step or investigate plateau")
             }
+            Self::AmbiguousLatitudeCrossing => f.write_str(
+                "ambiguous latitude/latitude-speed zero; insufficient sign context or plateau",
+            ),
             Self::InsufficientSpeedSamples => {
                 f.write_str("speed extrema search needs at least three sample times")
             }
