@@ -7,6 +7,13 @@
   local-date boundary pairs and durations, including Lord Howe's half-hour
   transitions. These are fixture checks, not a shipped `onDate` adapter.
 
+## 2026-11-18 — Rome event-membership fixture integration review
+
+- Reconciled PR #27 with main, preserving both historical log and validation
+  entries. Its six UTC day boundaries match the date-only Rome fixture already
+  on main. Synthetic event IDs test half-open membership at microsecond
+  boundaries; they do not prove an actual `onDate` implementation exists.
+
 ## 2026-11-18 — Combined Python gate and Windows temporary-fixture audit
 
 - Reconciled PR #14 and dependent PR #31 with main. Removed a duplicated Moon
@@ -1144,6 +1151,15 @@ This is the shared state for agents. Add a dated brief entry **in each working d
 - **Executed:** Python 3 `zoneinfo` independently checked all five specified zone/day UTC intervals on 2026-11-15. On Node.js v22.16.0, `node --check test/non-hour-zone-local-days.test.mjs` → exit 0; `node --test test/non-hour-zone-local-days.test.mjs` → **9 passed, 0 failed, exit 0** in an isolated exact-blob mirror. Exact Git blob IDs: test `ad1e23558873edbd5d550d4c56a1133f594909c3`; fixture `4e8a6b8bcef7c188e9182b0040381ec786d7130e`.
 - **Not run:** full repo/npm/Cargo tests; actual runtime `onDate` (not implemented), device, database or production checks.
 - **Next:** independent PR review, then compare eventual timezone wrapper outputs against these fixed references; never derive the test oracle using the same wrapper.
+
+## 2026-11-15 — synthetic onDate microsecond membership around Rome DST
+
+- **Issue / branch:** [#24](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/24) · `agent/chat-c4d91e7a/24-rome-dst-microsecond-membership` · session `chat-c4d91e7a`; draft PR linked in issue/PR once opened.
+- **Source facts:** [API contract](API_CONTRACTS.md) defines `onDate` on a local IANA calendar date as a UTC half-open range. Separate [PR #22](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/22) provides independent Europe/Rome 2026 UTC bounds. No real `onDate` adapter is shipped on `main` in this work.
+- **Changed:** new synthetic `test/fixtures/local-day-event-membership.json` (20 invented motion/ingress instants across 6 local dates), `test/local-day-event-membership.test.mjs` (9 Node tests), and this validation/work log. Checks include inclusive starts, exclusive ends, adjacent-day uniqueness, 23h/25h intervals, exact ±1 µs neighbors and malformed fixture rejection; timestamps are represented with integer `BigInt` microseconds.
+- **Executed on Node.js v22.16.0:** `node --check test/local-day-event-membership.test.mjs` **passed**; `node --test test/local-day-event-membership.test.mjs` **9 passed, 0 failed** in an isolated local directory. Exact Git blob SHAs of fixture and test were compared against the GitHub branch. **Not run:** complete repository test suite, Cargo/Rust, WASM/Python, an actual `onDate` wrapper or any real/private dataset.
+- **Open risks:** historic/future IANA timezone rules may change; tzdb version was not pinned. Same-instant cross-family event ordering remains a separate contract decision and is intentionally omitted from this fixture. Reconcile shared docs with PR #22 before any integration.
+- **Next:** execute the real adapter on the fixture when its UTC-range/IANA wrapper exists, compare IDs exactly and rerun native cross-language acceptance tests. No dataset license, merge, publication, GitHub Actions or production deployment here.
 
 ### 2026-11-14 — Pre-install Python wheel data-exclusion gate (draft PR #5)
 
