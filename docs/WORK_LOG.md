@@ -1,3 +1,21 @@
+## 2026-11-18 — Combined Python gate and Windows temporary-fixture audit
+
+- Reconciled PR #14 and dependent PR #31 with main. Removed a duplicated Moon
+  gap warning from a test fixture: main and the older PR had each added it.
+  No phase, coverage or scientific data semantics were relaxed.
+- The first full Windows Rust run exposed a pre-existing race: parallel
+  `p0-verify` unit tests could obtain the same clock tick and silently
+  overwrite each other's temporary file. Added an atomic suffix, exclusive
+  file creation and a 64-live-archive isolation regression.
+- Windows/Python 3.12: 42/42 source tests, 9 focused Unicode tests, 16
+  synthetic CSV/P0 tests and runner regressions 11/11 and 14/14 passed.
+  The official Rust validator passed fmt, locked Clippy, workspace tests
+  (one separately handled optional snapshot test ignored) and release build.
+  A freshly built Windows wheel installed offline in a clean venv passed
+  51/51 mandatory cases and 3/3 snapshot smoke cases; 5,115 synod probes
+  matched the reconstructed PR #6 CSV. Its manifest is not an independent
+  trust anchor. No astronomical coverage was certified.
+
 ## 2026-11-18 — Windows Rust workspace formatting validation
 
 - Applied `cargo fmt --all` to the existing workspace so the documented
