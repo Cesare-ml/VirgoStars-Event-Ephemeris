@@ -592,6 +592,41 @@ mod tests {
     }
 
     #[test]
+    fn swapping_synthetic_providers_reverses_offsets_and_unmatched_sides() {
+        let first = provider(0.0, 1.0);
+        let second = provider(0.005, 1.2);
+        let forward = compare(&first, &second, options());
+        let reverse = compare(&second, &first, options());
+        assert_eq!(forward.pairs.len(), 12);
+        assert_eq!(reverse.pairs.len(), forward.pairs.len());
+        for pair in &forward.pairs {
+            let reversed = reverse
+                .pairs
+                .iter()
+                .find(|candidate| {
+                    candidate.primary == pair.reference && candidate.reference == pair.primary
+                })
+                .expect("reversed comparison must preserve the same pair");
+            assert_eq!(reversed.reference_offset_us, -pair.reference_offset_us);
+            assert_eq!(reversed.speed_within_tolerance, pair.speed_within_tolerance);
+            match (
+                pair.signed_speed_offset_degrees_per_day,
+                reversed.signed_speed_offset_degrees_per_day,
+            ) {
+                (Some(a), Some(b)) => assert_eq!(a, -b),
+                (None, None) => (),
+                _ => panic!("speed residual availability changed"),
+            }
+        }
+        let later = provider(0.04, 1.0);
+        let forward = compare(&first, &later, options());
+        let reverse = compare(&later, &first, options());
+        assert_eq!(forward.unmatched_primary, reverse.unmatched_reference);
+        assert_eq!(forward.unmatched_reference, reverse.unmatched_primary);
+        assert!(!forward.unmatched_primary.is_empty());
+    }
+
+    #[test]
     fn matching_times_still_reveal_disagreement_of_signed_peak_speeds() {
         let report = compare(&provider(0.0, 1.0), &provider(0.0, 1.2), options());
         assert_eq!(report.pairs.len(), 12);
@@ -786,6 +821,80 @@ mod tests {
         assert_eq!(report.maximum_absolute_latitude_offset_degrees, 0.0);
         assert_eq!(report.maximum_absolute_speed_offset_degrees_per_day, 0.0);
         assert_eq!((a, b), (2, 2));
+    }
+
+    #[test]
+    fn same_instant_comparison_is_symmetric_near_timestamp_limits() {
+        use std::cell::RefCell;
+
+        struct Recorded {
+            latitude: f64,
+            speed: f64,
+            times: RefCell<Vec<i64>>,
+        }
+        impl LatitudeProvider for Recorded {
+            fn sample_latitude(
+                &self,
+                _: &BodyId,
+                at: TimestampMicros,
+            ) -> Result<LatitudeSample, String> {
+                self.times.borrow_mut().push(at.as_i64());
+                Ok(LatitudeSample {
+                    latitude_degrees: self.latitude,
+                    latitude_speed_degrees_per_day: self.speed,
+                })
+            }
+        }
+        let a = Recorded {
+            latitude: 0.25,
+            speed: 1.0,
+            times: RefCell::new(Vec::new()),
+        };
+        let b = Recorded {
+            latitude: 0.375,
+            speed: 0.5,
+            times: RefCell::new(Vec::new()),
+        };
+        for start in [i64::MIN, i64::MAX - 10] {
+            let opts = LatitudeSampleComparisonOptions {
+                window: SearchWindow {
+                    start_us: start,
+                    end_us: start + 10,
+                    step_us: 4,
+                    precision_us: 1,
+                },
+                tolerance: LatitudeSampleTolerance {
+                    latitude_degrees: 0.0,
+                    signed_speed_degrees_per_day: 0.0,
+                },
+            };
+            a.times.borrow_mut().clear();
+            b.times.borrow_mut().clear();
+            let (mut budget_a, mut budget_b) = (3, 3);
+            let forward = compare_latitude_provider_samples(
+                &a,
+                &b,
+                &body(),
+                opts,
+                &mut budget_a,
+                &mut budget_b,
+            )
+            .unwrap();
+            assert_eq!(*a.times.borrow(), [start, start + 4, start + 8]);
+            assert_eq!(*b.times.borrow(), *a.times.borrow());
+            assert_eq!((budget_a, budget_b), (0, 0));
+            let reverse =
+                compare_latitude_provider_samples(&b, &a, &body(), opts, &mut 3, &mut 3).unwrap();
+            assert_eq!(forward.disagreements.len(), 3);
+            for (f, r) in forward.disagreements.iter().zip(&reverse.disagreements) {
+                assert_eq!(f.at_us, r.at_us);
+                assert_eq!(f.latitude_offset_degrees, -r.latitude_offset_degrees);
+                assert_eq!(
+                    f.signed_speed_offset_degrees_per_day,
+                    -r.signed_speed_offset_degrees_per_day
+                );
+            }
+        }
     }
 
     #[test]

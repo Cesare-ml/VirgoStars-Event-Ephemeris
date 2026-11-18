@@ -1,3 +1,14 @@
+## 2026-11-18 — Synthetic provider comparison symmetry
+
+- Swapping two invented periodic latitude providers preserves event pairs,
+  reverses signed offsets and exchanges unmatched sides. An additional
+  same-instant test exercises both signed timestamp extremes, exact probe
+  budgets and the exclusive-end grid.
+- These model checks do not establish provider independence, physical
+  accuracy or complete coverage.
+- The complete locked Rust validator passed locally on Windows; one optional
+  snapshot test was ignored. No real ephemeris provider was run.
+
 ## 2026-11-18 — Fail closed on sampled flat speed peaks
 
 - Invented flat-top models exposed a misleading narrow bracket in both
