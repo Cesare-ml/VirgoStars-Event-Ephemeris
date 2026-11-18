@@ -1,3 +1,99 @@
+## 2026-11-18 — Late synthetic provider failure
+
+- An invented provider produces a candidate in the first interval and fails
+  during a later interval. Both direct and adaptive scans return the provider
+  error rather than a partial candidate list; adaptive pair probes, including
+  the failing pair, remain charged.
+- All five aspect probe-budget integration tests, workspace format check and
+  generator all-targets Clippy passed locally on Windows.
+
+## 2026-11-18 — Synthetic adaptive-aspect blind spot
+
+- A continuous invented oscillation has opposite signs at intermediate
+  instants while endpoints and midpoint all appear at the aspect target.
+  Both direct and adaptive scans return no candidates; the adaptive risk
+  heuristic does not subdivide. This reproducible limitation demonstrates
+  that an empty result cannot certify absence or interval coverage.
+- The targeted test, workspace format check and generator all-targets
+  Clippy passed locally on Windows.
+
+## 2026-11-18 — Synthetic aspect window boundaries
+
+- Checked direct and adaptive exact-aspect scans for invented linear motion in
+  both directions, with crossings at the inclusive start, grid and midpoint
+  boundaries and exclusive end. Each interior crossing is reported once;
+  the exclusive-end crossing is omitted. These cases do not certify coverage.
+- The full locked Rust validator passed locally on Windows, with one optional
+  snapshot test ignored.
+
+## 2026-11-18 — Reject overflowing aspect pair arithmetic
+
+- Synthetic midpoint samples with individually finite inputs exposed two
+  non-finite derived values: longitude difference and relative speed. Both
+  are now checked before use, so direct, adaptive and tangency scans return
+  `InvalidSample` rather than using invalid arithmetic.
+- These extreme synthetic values test defensive numerical behavior only; they
+  are not astronomical measurements or coverage evidence.
+- The complete locked Rust validator passed locally on Windows; one optional
+  snapshot test was ignored. No real ephemeris provider was run.
+
+## 2026-11-18 — Synthetic aspect edge and failure checks
+
+- Extended the synthetic invariants to 112 combinations, including windows
+  near both limits of signed microsecond timestamps. Added a failing second
+  provider: the started pair probe remains charged and no report is returned.
+- The complete locked Rust validator passed locally on Windows, with one
+  optional snapshot test ignored. These synthetic checks do not certify
+  astronomical accuracy or coverage.
+
+## 2026-11-18 — Synthetic aspect invariants
+
+- Added a linear synthetic pair-provider check over 56 combinations: seven
+  target orientations, direct/retrograde relative motion, two signed epochs
+  and two global longitude rotations. It checks canonical pair-order
+  invariance, bracket precision, expected candidate kind and exact agreement
+  between provider-call counts and adaptive pair-probe budget consumption.
+- The check passed locally on Windows. It exercises an analytical test model;
+  it is not a planetary reference, missed-event proof or coverage certificate.
+- The complete locked Rust validator also passed on Windows (one optional
+  snapshot integration test ignored in this run). No ephemeris provider or
+  coverage certification was used.
+
+## 2026-11-17 — Potential tangency warnings kept separate from exact aspects (PR #36 draft)
+
+- **Rust change:** added `aspects::potential_aspect_tangencies` and typed `PotentialAspectTangency` warnings. It brackets sampled sign reversals of **relative** longitude speed, evaluates distance from the seven oriented targets for 0°/60°/90°/120°, and reports an explicit `residual_degrees` under caller-selected **0..=0.01° warning threshold**. It handles sampled zero-speed interior points with opposing neighbors and preserves exclusive-end behavior; ambiguous angular steps fail closed.
+- **Safety:** warnings are **not** exact-aspect events. A nonzero angular residual explicitly denotes a near miss, and even a numeric zero is not independent ephemeris proof. Unsampled double relative stations, flat/inflectional stationary points, search-window endpoints without both neighboring speeds, true source-archive coverage and full scientific parity remain unresolved. No new P0 family, exported records, API reader, real-data mutation, GitHub Actions or release.
+- **Validation:** 4 new synthetic tests check zero-residual station, sampled interior boundary, configurable near-miss warnings, invalid tolerances, non-stationary aspects and half-open endpoints. Total **13/13 aspect tests PASS**. Linux Rust 1.90 `cargo fmt -p virgostars-events-generator -- --check`, `cargo test --locked --workspace --quiet` (all runnable tests PASS, 1 pre-existing ignored), `cargo clippy --locked --workspace --all-targets -- -D warnings` and `cargo build --locked --workspace --release --quiet` all PASS. This does **not** certify any UTC completeness interval; still unknown per body-pair/type.
+
+## 2026-11-17 — Risk-triggered adaptive aspect rescan, PR #36 extension (draft)
+
+- **Scope:** extended `aspects.rs` with `adaptive_exact_aspect_scan`, a bounded-midpoint, at-most-eight-depth risk-triggered Rust scan with caller-owned probe budget and diagnostic counters. It inspects sign reversals and dips in relative longitude speed, angular direction reversal and oversized movement before subdividing; each accepted leaf uses the existing candidate-only bracket detector. It is library-only; no CLI/P0/reader/DB or release change.
+- **Synthetic regression:** a 2-day interval with *equal* relative longitudes at both endpoints hides two 60° crossings from the initial direct scan. The new rescan detects **both**, including chronological brackets; a too-small probe budget fails closed with `TooManySteps`, and invalid recursion depth is rejected before sampling. The module now contains **9/9 passing unit tests**.
+- **Linux gates:** `cargo fmt -p virgostars-events-generator`, `cargo test --locked --workspace --quiet` (all runnable pass; 1 previously ignored), `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo build --locked --workspace --release --quiet` all PASS. This is **heuristic**, not interval-arithmetic proof: tangential contacts, hidden sub-midpoint oscillations, real ephemeris/golden verification and source-coverage certification remain open. Every unavailable UTC interval remains marked unknown, never complete. PR #36 stays draft.
+
+## 2026-11-17 — Experimental Rust exact-aspect candidate detector (draft)
+
+- **Scope:** added `crates/events-generator/src/aspects.rs` exposing provider-neutral `exact_aspect_candidates` for canonical pairs of bodies and conjunction 0°, sextile ±60°, square ±90° and trine ±120°, producing UTC microsecond **brackets**, not certified astronomical events. Uses a half-open search interval, 0°/360° wrap handling, bounded relative movement rejection, bisection and conservative zero-speed boundary treatment.
+- **Verification:** 6 synthetic unit tests cover all requested exact aspect types, reversed pairs, wrap, retrograde movement, inclusivity, coarse-grid refusal, invalid samples and a tangent case which is deliberately **not** asserted as a discovered event. Linux Rust 1.90 `cargo fmt -p virgostars-events-generator -- --check`, `cargo test --locked --workspace --quiet` (all executed pass, one pre-existing ignored), `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo build --locked --workspace --release --quiet`, and `git diff --check` all **PASS**. No real ephemeris-provider execution, independently validated astronomical timestamps, missing-span completeness or source data have been verified.
+- **Unfinished:** tangential contacts, hidden repeated crossings/adaptive sampling and independent scientific parity; generator CLI, reviewed per-pair/type coverage, versioned aspect archive and offline reader. No P0/DB/source archive mutation, deployment or release; the draft PR must remain unmerged until reviewed.
+
+## 2026-11-18 — Count all adaptive aspect provider probes
+
+- A synthetic counting provider showed that a budget of one pair-probe could
+  still invoke the provider ten times: endpoint, leaf and bisection samples
+  bypassed the adaptive midpoint counter.
+- The adaptive scan now charges one shared unit before each pair of
+  same-instant provider calls, including repeated endpoints and root
+  refinement, and fails without a partial report on exhaustion. This can
+  exhaust older budget settings sooner. The non-adaptive API is unchanged.
+- Three synthetic regressions cover initial endpoints, leaf resampling and
+  root refinement; all pass on Windows alongside 13 aspect tests. No real
+  astronomical provider, coverage claim or event import is involved.
+- Reconciled with main at `54bed09`. Windows `tools/validate_rust.py`
+  passed all locked Rust gates (one optional real-snapshot test ignored),
+  and all 64 existing Node fixture/link tests passed. Scientific reference
+  and coverage review remain outstanding.
+
 ## 2026-11-18 — Non-hour IANA fixture integration review
 
 - Reconciled PR #26 with current main and preserved both historical log and
