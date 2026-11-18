@@ -1,3 +1,16 @@
+## 2026-11-18 — Synthetic aspect invariants
+
+- Added a linear synthetic pair-provider check over 56 combinations: seven
+  target orientations, direct/retrograde relative motion, two signed epochs
+  and two global longitude rotations. It checks canonical pair-order
+  invariance, bracket precision, expected candidate kind and exact agreement
+  between provider-call counts and adaptive pair-probe budget consumption.
+- The check passed locally on Windows. It exercises an analytical test model;
+  it is not a planetary reference, missed-event proof or coverage certificate.
+- The complete locked Rust validator also passed on Windows (one optional
+  snapshot integration test ignored in this run). No ephemeris provider or
+  coverage certification was used.
+
 ## 2026-11-17 — Potential tangency warnings kept separate from exact aspects (PR #36 draft)
 
 - **Rust change:** added `aspects::potential_aspect_tangencies` and typed `PotentialAspectTangency` warnings. It brackets sampled sign reversals of **relative** longitude speed, evaluates distance from the seven oriented targets for 0°/60°/90°/120°, and reports an explicit `residual_degrees` under caller-selected **0..=0.01° warning threshold**. It handles sampled zero-speed interior points with opposing neighbors and preserves exclusive-end behavior; ambiguous angular steps fail closed.
