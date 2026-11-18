@@ -23,6 +23,8 @@ Le date sono **UTC**. Gli intervalli di elaborazione sono scritti come `[inizio 
 
 **G3E — controllo tra provider:** sono disponibili un confronto Rust **sperimentale** dei sei tipi latitudinali osservati e una verifica diretta degli scarti di latitudine/velocità agli stessi istanti UTC, anche senza eventi. Quindici test sintetici di confronto (48 G3E totali) verificano discrepanze di direzione/istante/velocità e bias numerici. Queste funzioni non sono mai state eseguite con due effemeridi astronomiche realmente indipendenti; perciò **nessuna** finestra UTC G3E è passata da `non determinato` ad approvata. [Contratto del confronto](G3E_PROVIDER_COMPARISON.md).
 
+**G3E — trasporto dati esterni:** `ProcessLatitudeProvider` può interrogare un eseguibile separato con il nuovo protocollo `virgostars.latitude.v1` (4 test di integrazione con un processo sintetico). **Non esiste ancora un eseguibile sorgente astronomico reale verificato**, né un confronto con goldens planetari o un'approvazione di copertura. Il protocollo non cambia gli stati `non determinato` sopra riportati.
+
 **Attenzione:** il range ampio 2099–4836 è solo l'area *proposta* per la ricerca e richiede una scansione in piccole finestre. Non va mai etichettato come intervallo completamente privo di eventi. Anche fuori dagli intervalli qui indicati la copertura è **sconosciuta**, non dichiarata completa.
 
 ## Come ottenere la lista esatta e leggibile dal proprio archivio autorizzato

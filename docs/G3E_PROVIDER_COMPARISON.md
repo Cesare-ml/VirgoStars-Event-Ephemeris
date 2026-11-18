@@ -33,6 +33,34 @@ The report gives the number of tested instants, **signed reference-minus-primary
 
 This direct check catches a coordinate-frame or velocity mismatch that event-only comparison might miss (for example, two providers returning **zero event candidates** throughout the same interval). It still cannot prove that unsampled instants agree, identify which provider is correct or certify completeness. Direct sample comparison should precede event-candidate matching in an actual ephemeris adapter audit.
 
+## Development-only latitude process adapter (`virgostars.latitude.v1`)
+
+`provider_process::ProcessLatitudeProvider::spawn(path)` now implements `LatitudeProvider` through an explicitly selected **external executable**. It does not load a kernel or a private backend itself and is never used by the offline reader. It shares the existing bounded JSON-lines transport with the longitude adapter, but has a **distinct versioned identity and response format**; do not point it at a `virgostars.longitude.v2` process.
+
+The executable first writes one UTF-8 JSON line with exactly these identity fields (example values are illustrative, **not** verified astronomical facts):
+
+```json
+{"protocol":"virgostars.latitude.v1","provider":"YOUR_REVIEWED_PROVIDER","version":"PINNED_VERSION","frame":"geocentric-ecliptic-latitude-degrees","ecliptic_plane":"mean-of-date","position_corrections":"geometric","dynamical_time_scale":"TT","input_time_scale":"utc-posix-microseconds","speed_definition":"signed-d-beta-dt-degrees-per-day","flags":"PINNED_FLAGS","source_license":"REVIEWED_LICENSE","kernel_digest":null,"source_digest":null}
+```
+
+Values for `ecliptic_plane`, `position_corrections`, `dynamical_time_scale`, `flags`, `source_license` and optional digests are supplied and **must be audited independently**; strings merely being nonempty does not validate them. In particular, the speed must be the actual signed time derivative of latitude, not longitude speed or an undocumented finite-difference approximation. Two self-reported identities, even if different, do not prove that the providers use different kernels or algorithms.
+
+For each requested sample, the executable reads one line:
+
+```json
+{"body":"Mars","utc_microseconds":"-1"}
+```
+
+It returns one JSON line with **exactly** the same body and decimal-string UTC/POSIX microseconds:
+
+```json
+{"body":"Mars","utc_microseconds":"-1","latitude_degrees":1.25,"latitude_speed_degrees_per_day":-0.125}
+```
+
+The example numbers above are **synthetic**. The adapter rejects mismatched body/time echoes, malformed or excessive output (8,192-byte line cap), invalid identities, nonfinite values and latitudes outside ±90°. String timestamps preserve even the full signed `i64` range. Provider errors propagate to the caller rather than returning plausible defaults. The executable's mathematical time conversion, binaries, library dependencies, kernel and dataset licensing are **not** validated by the transport.
+
+Four cross-platform subprocess integration tests compile an independent, standalone Rust mock executable, exercise exact time echoes and negative velocity, refuse incompatible identities and six malformed/faulty reply modes, then run a real two-process sample comparison. They are **transport tests only**, not astronomical goldens. The next scientific step is to implement and separately validate one actual producer for this protocol (and then an independent reference), before adding a command-line scientific review workflow.
+
 ## Requirements before real astronomical parity
 
 1. Implement two **separately substantiated, license-reviewed** `LatitudeProvider`s. State the ecliptic reference plane (mean/true, epoch/date), geocentric/apparent corrections, time scale, ephemeris/kernel exact version, algorithm and dependencies for **each**. Sharing one upstream kernel through two wrappers is not independent validation.
@@ -45,10 +73,11 @@ This direct check catches a coordinate-frame or velocity mismatch that event-onl
 
 ```bash
 cargo test --locked -p virgostars-events-generator latitude_provider_compare
+cargo test --locked -p virgostars-events-generator --test latitude_process
 cargo fmt -p virgostars-events-generator -- --check
 cargo test --locked --workspace --quiet
 cargo clippy --locked --workspace --all-targets -- -D warnings
 cargo build --locked --workspace --release --quiet
 ```
 
-Fifteen deterministic tests exercise both **event-candidate comparison (8)** and **direct sample residuals (7)** using analytical synthetic providers. The latter cover systematic latitude and speed offsets even with no candidate events, independent tolerance verdicts, exact exclusive UTC end, invalid tolerances/samples, provider errors, non-finite residuals and exhausted budgets. **These are not real planetary ephemeris goldens**. The 33 scanner tests plus these 15 comparison tests total **48 synthetic G3E tests**. See [G3E roadmap](ROADMAP.md), [algorithm inventory](ASTRONOMICAL_EVENT_ALGORITHMS.md), [coverage status](COVERAGE_STATUS.md), and [issue #38](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/38).
+Fifteen deterministic tests exercise both **event-candidate comparison (8)** and **direct sample residuals (7)** using analytical synthetic providers. The latter cover systematic latitude and speed offsets even with no candidate events, independent tolerance verdicts, exact exclusive UTC end, invalid tolerances/samples, provider errors, non-finite residuals and exhausted budgets. The 33 scanner tests plus these 15 comparison tests total **48 synthetic G3E algorithm tests**, now supplemented by **4 external-process protocol tests**. **None are real planetary ephemeris goldens**. See [G3E roadmap](ROADMAP.md), [algorithm inventory](ASTRONOMICAL_EVENT_ALGORITHMS.md), [coverage status](COVERAGE_STATUS.md), and [issue #38](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/38).
