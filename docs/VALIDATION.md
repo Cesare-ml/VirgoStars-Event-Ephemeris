@@ -286,6 +286,12 @@ Run `cargo generate-lockfile` after updating the `tempfile` Rust dependency (exi
 
 For a shared synthetic golden fixture, compare exact serialized results and error categories from Rust, JS/TS WASM and Python PyO3. Include UTC and Europe/Rome on both DST transitions, out-of-coverage dates, month containing multiple new moons, negative timestamps, missing phases and invalid input. Test browser and Node loading separately, and Python wheels on supported target platforms.
 
+### Calendar-date failure gate — entire skipped IANA day
+
+Future Rust `onDate(localDate, timeZone)` and thin bindings must be compared against [`test/fixtures/skipped-local-day.json`](../test/fixtures/skipped-local-day.json) using `node --test test/skipped-local-day.test.mjs` as an **offline golden/schema test**. The fixture covers `Pacific/Apia` 2011-12-29 and 2011-12-31 as adjacent continuous UTC half-open intervals, with the completely nonexistent 2011-12-30 yielding the proposed **typed `NonexistentLocalDate` error**, never an empty result or a query shifted into the next date. The Node test checks the contract only; a later independent Rust engine + timezone-provider integration test must prove actual conversion, failure propagation and cross-language parity against a recorded IANA tzdb version.
+
+Goldens checked independently on 2026-11-15 with Python 3 `zoneinfo` and system IANA tzdb **2025b**. This evidence does **not** establish a shipped timezone service or shipped event reader. Other DST boundaries are covered by the separate Europe/Rome fixture below.
+
 **Pre-implementation local-day acceptance oracle:** `node --test test/local-day-utc-boundaries.test.mjs` validates the independent UTC interval fixture for UTC and Europe/Rome on both 2026 DST transition days and adjacent days. Golden boundaries are hard-coded separately from fixture entries and checked for exact equality, half-open adjacency, positive durations and invalid fixture mutations. This validates **fixture integrity only**; after an IANA-zone `onDate` wrapper exists, add an integration test that compares **its actual output** to the oracle without reusing the algorithm under test. 2026 timezone law/tzdb data may change; keep provenance explicit.
 
 ## Gate E: backend behavior parity
