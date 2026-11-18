@@ -154,6 +154,71 @@ The rest of the audit CLI's required window/precision/tolerance options still ap
 
 Run the reproducible **synthetic bridge and owner-smoke tests** with `node --test tools/tests/vseph_virgostars_latitude_provider.test.cjs tools/tests/vseph_de441_owner_smoke.test.cjs`. They supply a tiny **fake** `.eph` file, fake addon bytes and a fake Node `Engine` only to check process plumbing, kernel/binding fingerprints, three calendar epochs, exact UTC echoes, civil-time policy, malformed native replies and create-only reports. **Ten tests** pass on Linux; these are **not** a real DE441 integration, Windows runtime check or source-independent astronomical comparison. A real-kernel owner smoke and independently authored goldens remain pending.
 
+## G3E SHA-pinned coordinate-golden comparison (experimental)
+
+`tools/vseph_review_latitude_goldens.cjs` compares actual Node-bridge **geocentric ecliptic latitude** and **signed latitude speed** at *explicit owner-supplied UTC instants* against a bounded JSON reference file. Unlike the owner smoke's three fixed dates, this accepts **1–256 distinct body/UTC samples** selected by a reference author. It requires separate lowercase SHA-256 pins for **both** the existing DE441 and the reference file and reports the measured binding fingerprint alongside the source identity. It does not invent event times or generate goldens. No new source data is included in this repository.
+
+### Reference file contract
+
+The following is a **synthetic format illustration**, not real planetary values or an independent reference:
+
+```json
+{
+  "schema": "vseph.g3e.latitude-goldens.v1",
+  "reference": {
+    "provider": "SYNTHETIC-REFERENCE-NOT-ASTRONOMICAL",
+    "version": "fixture-v1",
+    "origin": "test-only-manual-fixture",
+    "method": "synthetic-constant-function",
+    "source_license": "synthetic-test-data",
+    "frame": "geocentric-ecliptic-latitude-degrees",
+    "ecliptic_plane": "true-ecliptic-and-equinox-of-date (IAU-2006/2000B)",
+    "position_corrections": "one-way-light-time;solar-deflection;annual-aberration;date-frame-rotation",
+    "dynamical_time_scale": "TDB (approximate from civil UTC; signed rate per TDB day)",
+    "input_time_scale": "utc-posix-microseconds",
+    "speed_definition": "signed-d-beta-dt-degrees-per-day"
+  },
+  "samples": [
+    {
+      "body": "Mars",
+      "utc_microseconds": "946684800000000",
+      "latitude_degrees": 1.25,
+      "latitude_speed_degrees_per_day": -0.125
+    }
+  ]
+}
+```
+
+Only *precisely matched conventions* may be compared: the six frame/ecliptic/correction/time/speed fields must **exactly match** the bridge identity, after independent semantic review of their meaning. Numeric latitude values must be finite within ±90°, signed speeds finite, and UTC microseconds canonical decimal strings within the bridge's `[1900-01-01,2027-06-28)` policy. Duplicate body+UTC samples, empty/malformed reference metadata, excessive file size (256 KiB) and more than 256 entries are refused. A reference file can falsely *declare* an independent method, just as a bridge can falsely declare its source revision: **metadata equality and two agreeing numerically different executables do not substantiate scientific independence**.
+
+### Owner invocation (PowerShell, after building the native addon)
+
+From the **event-ephemeris checkout containing this script**:
+
+```powershell
+$ephemeris = 'D:\GitHub\VirgoStars-Ephemeris'
+$kernel = 'D:\GitHub\virgo-stars\database\effemeridi\astrodienst\de441.eph'
+$binding = Join-Path $ephemeris 'bindings\node\index.js'
+$commit = (git -C $ephemeris rev-parse HEAD)
+$goldens = 'D:\astronomy-reference\reviewed-latitude-goldens.json'
+
+# Obtain BOTH of these hashes from separately reviewed/preserved manifests.
+$trustedKernelSha = '<independently-pinned-64-lowercase-hex-sha256-of-DE441>'
+$trustedGoldenSha = '<independently-pinned-64-lowercase-hex-sha256-of-reference-json>'
+
+node .\tools\vseph_review_latitude_goldens.cjs --binding $binding --kernel $kernel --kernel-sha256 $trustedKernelSha --source-commit $commit --goldens $goldens --goldens-sha256 $trustedGoldenSha --latitude-tolerance-deg 0.001 --speed-tolerance-deg-per-day 0.0001
+```
+
+The example tolerances are **arbitrary CLI placeholders**, **not** scientifically justified error bounds. An actual comparison requires independent author/source/license/provenance review and tolerances justified per body and epoch *before interpreting the results*. An optional `--report <new-path>` saves the same JSON **without overwriting** an existing file.
+
+| Exit | Meaning | JSON stdout |
+| --- | --- | --- |
+| `0` | All *supplied samples* within **operator-defined** tolerances; does not establish physical accuracy | Complete report |
+| `1` | At least one latitude or signed-speed residual beyond tolerance | Complete report, every discrepancy and worst observed residual |
+| `2` | Bad SHA pin/reference/format, mismatched frame/time convention, native process error or existing report path | **Empty**; diagnostic on stderr |
+
+The JSON deliberately keeps `reference_independence_scientifically_established:false`, `astronomical_accuracy_verified:false`, `coverage_certified:false`, and `safe_to_import:false` **regardless of exit status**. A matching oracle set establishes only an observed numerical check at its supplied instants; no continuous-time completeness, independent physical correctness, node/station/peak timestamp parity, P0 acceptance or database import follows. The executable's **six tests use synthetic fake Engine and fake `.eph` only**; an owner-run real DE441 and truly independently authored reference vectors remain **NOT RUN**.
+
 ## Requirements before real astronomical parity
 
 1. Implement two **separately substantiated, license-reviewed** `LatitudeProvider`s. State the ecliptic reference plane (mean/true, epoch/date), geocentric/apparent corrections, time scale, ephemeris/kernel exact version, algorithm and dependencies for **each**. Sharing one upstream kernel through two wrappers is not independent validation.
@@ -170,6 +235,7 @@ cargo test --locked -p virgostars-events-generator --test latitude_process
 cargo test --locked -p virgostars-events-generator --test latitude_cli
 node --test tools/tests/vseph_virgostars_latitude_provider.test.cjs
 node --test tools/tests/vseph_de441_owner_smoke.test.cjs
+node --test tools/tests/vseph_review_latitude_goldens.test.cjs
 cargo fmt -p virgostars-events-generator -- --check
 cargo test --locked --workspace --quiet
 cargo clippy --locked --workspace --all-targets -- -D warnings
