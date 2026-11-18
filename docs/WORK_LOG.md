@@ -913,6 +913,25 @@ astronomical coverage. The global Rust fmt gate remains outstanding.
 
 # Agent work log and handoffs
 
+## 2026-11-18 — Apia skipped-date fixture integration review
+
+- Reconciled this branch with main, preserving both conflicting work-log
+  entries. The Apia and Markdown checker suites passed 25/25 on Windows; the
+  repository link check and Rust formatting gate passed.
+- Node 22.18.0 / ICU 77.1 / tzdb 2025b confirmed both neighboring date
+  boundaries and the instant where Apia jumped from December 29 to 31.
+  An hourly scan is a sampled check, not proof of continuous completeness.
+  The typed error and the `onDate` API remain proposed.
+
+## 2026-11-15 — Entirely skipped local calendar day: proposed API error contract
+
+- **Issue / branch:** [#21](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/21); `agent/chat-45a0e580/21-skipped-local-day-contract`, agent `chat-45a0e580`. Draft PR will remain unmerged.
+- **Observed fact:** Python 3 stdlib `zoneinfo` with system IANA tzdb **2025b** independently confirms that `Pacific/Apia` skipped `2011-12-30` entirely when its UTC offset shifted from −10 to +14 hours. Normal neighboring days have UTC ranges `[2011-12-29T10:00Z, 2011-12-30T10:00Z)` and `[2011-12-30T10:00Z, 2011-12-31T10:00Z)`; they join without overlap.
+- **Changes:** Explicit proposed `NonexistentLocalDate { localDate, timeZone }` error in `docs/API_CONTRACTS.md`, synthetic hand-reviewed JSON fixture `test/fixtures/skipped-local-day.json`, eight standard-library-only Node contract regressions `test/skipped-local-day.test.mjs`, validation gate in `docs/VALIDATION.md`. No timezone converter or event reader was implemented.
+- **Verification:** Python 3 stdlib `zoneinfo` conversion and round trips **PASS**, system tzdb **2025b** from `/usr/share/zoneinfo/tzdata.zi`. **Node v22.16.0 PASS:** `node --check test/skipped-local-day.test.mjs` (exit 0); `node --test test/skipped-local-day.test.mjs` (8 passed / 0 failed, exit 0) in a local offline two-file reconstruction whose actual Git blob SHA-1 values **exactly match** the committed GitHub fixture `b8826057234a8a8d3b73dfcba3078a45f67ae1d0` and test `5a6bebc6dd54f875295f882b3ff08a58d37af992`. Full-checkout integration and real Rust/WASM/Python timezone/query implementation are **not run / not implemented**.
+- **Risks / next:** Keep project implementation status *proposed*; reconcile with separate Europe/Rome contract PR #22 after it lands, run actual standard-library fixture tests and then cross-language Rust/WASM/Python boundary parity when implementations exist. No proprietary astronomical data, production integration, publication, release or merge.
+
+
 ## 2026-11-18 — Rome local-day fixture integration review
 
 - Reconciled this branch with current main, preserving both work-log entries.

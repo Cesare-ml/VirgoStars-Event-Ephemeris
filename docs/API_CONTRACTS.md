@@ -38,6 +38,21 @@ No runtime position calculation, hidden interpolation, invented source IDs, or i
 
 `onDate` accepts local ISO calendar dates (e.g. 2030-03-31) and IANA zone names; convert to [UTC start of local day, UTC start of next local day). No ambiguous local timestamp parsing. Functions that accept an instant require an explicit `Z` or offset. Expose a Rust UTC-range primitive; wrappers may use a versioned timezone implementation.
 
+### Entirely skipped IANA local calendar days (proposed, fail-closed)
+
+A requested local ISO date may **not exist at all** in its IANA zone. The future Rust UTC-day-range primitive and `motions.onDate`, `ingresses.onDate`, and `events.onDate` MUST return a **typed `NonexistentLocalDate { localDate, timeZone }` error**, not `[]`, `null`, an empty `[start,end)` interval, `MissingCoverage`, `InvalidTimeZone`, or a silently shifted query for a neighboring day. Distinguish this error from invalid calendar spelling, an unknown zone, or a real date with no events. JS/TS WASM and Python bindings must preserve the same error category and original user-supplied date/zone; this API and error type are **proposed only**.
+
+**Independent historical oracle:** `Pacific/Apia` crossed the international date line at the end of 2011-12-29, moving UTC−10 to UTC+14 and omitting **2011-12-30**. Under the reviewed IANA timezone rules:
+
+| Requested local date | UTC range / outcome |
+| --- | --- |
+| `2011-12-29` | `[2011-12-29T10:00:00Z, 2011-12-30T10:00:00Z)` |
+| `2011-12-30` | `NonexistentLocalDate` error; **no UTC range** |
+| `2011-12-31` | `[2011-12-30T10:00:00Z, 2011-12-31T10:00:00Z)` |
+
+The two existing local dates are **contiguous in UTC** even though one calendar label is absent; do not manufacture a 0-hour or 24-hour event search for the missing label. Other real civil days may have 23, 25 or non-midnight-start durations: first determine which UTC instants genuinely belong to the requested local calendar date, then apply the half-open `[start,end)` query. Never infer validity solely by constructing local `00:00` with a possibly imaginary offset. The exact proposed error and goldens are specified in [`test/fixtures/skipped-local-day.json`](../test/fixtures/skipped-local-day.json), checked by `node --test test/skipped-local-day.test.mjs`. Goldens are **contracts**, not a timezone engine or proof that an `onDate` implementation exists.
+
+
 **Proposed `onDate` UTC-boundary contract fixture (issue #20):** [`test/fixtures/local-day-utc-boundaries.json`](../test/fixtures/local-day-utc-boundaries.json) contains seven independent golden half-open intervals, including Europe/Rome's 2026-03-29 **23-hour** day (`2026-03-28T23:00:00Z` to `2026-03-29T22:00:00Z`) and 2026-10-25 **25-hour** day (`2026-10-24T22:00:00Z` to `2026-10-25T23:00:00Z`). The bounds were separately checked with Python `zoneinfo` using the available system IANA timezone data. They are **test oracles**, not the result of an implemented `onDate` function; future wrappers must produce the same intervals for the applicable tzdb rules, never assume all dates are 86,400 seconds or silently treat local midnight as UTC. The fixture and test intentionally do not implement IANA conversion or fetch event records.
 
 ## Date, boundary and failure policy
