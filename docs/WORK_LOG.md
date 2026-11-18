@@ -34,6 +34,23 @@
 - **Actually checked:** 5/5 focused Python 3.13.5 ZIP cases **PASS** in a local isolated reproduction of the exact normalization and path-collision logic, with real `zipfile.ZipFile` member names. GitHub connector readback confirms the committed code and test additions. **Not run:** the full committed `tools/test_wheel_contents_policy.py` suite, all 54 packaging preflight tests, Python 42 source tests, 51 installed-wheel tests, Rust/Cargo/PyO3, or authorized owner-data parity.
 - **Next:** on a full branch checkout run `python -m unittest discover -s tools -p test_wheel_contents_policy.py -v`, `python tools/validate_wheel_preflight.py`, then the locked Rust/wheel and independent original CSV/P0 gates. Keep PR **draft**; no GitHub Actions, release, merge, dataset edits or scientific-completeness claim.
 
+## 2026-11-18 — Windows Python discovery roots
+
+On Windows/Python 3.12, the source preflight stopped after 26 tests because
+`unittest.defaultTestLoader` retained the first discovery root and refused
+the separate `tools` directory. The wheel gate used the same shared loader.
+Both now instantiate a fresh loader per suite; real sequential discovery in
+distinct temporary directories is covered for each gate.
+
+With the local fix, source preflight passed 42/42; gate regressions passed
+11/11 and 14/14, and the synthetic CSV/P0 suite passed 16/16. The original
+branch lockfile was stale; a Cargo-generated offline lockfile in the isolated
+checkout allowed maturin 1.16.0 to build a Windows abi3 wheel. Offline
+installation in a clean venv passed 51/51 mandatory tests, including 9
+compiled-native fixture tests. The generated lockfile has not been reviewed
+for integration. This does not establish real-source CSV/P0 parity or
+astronomical coverage. The global Rust fmt gate remains outstanding.
+
 ## 2026-11-14 — Reject Win32 superscript COM/LPT device names in Python wheels (draft PR #5)
 
 - **Confirmed portability gap:** the existing case-insensitive ZIP wheel path policy rejected ASCII device basenames `COM1`…`COM9` / `LPT1`…`LPT9`, but not `COM¹`, `COM²`, `COM³`, `LPT¹`, `LPT²`, `LPT³`. Microsoft officially documents that Windows treats the ISO-8859-1 superscript digits as reserved device-name suffixes, even in subdirectories and before filename extensions (`https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file`). Those ZIP members could therefore bypass the wheel preflight while being invalid/ambiguous on Windows.
@@ -1212,3 +1229,12 @@ Reviewed `pyproject.toml`, Rust binding manifest, `Cargo.lock`, existing `check_
 - **Windows operator integration:** `tools/compute-missing-intervals.ps1 -ReferenceProviderSha256` forwards the independently supplied hash, validates exact lowercase syntax and provider requirement, demands matching reviewer digest/report flags before saving and uses `_sha` plus its first 12 characters in the staging filename. A changed reference-file pin therefore cannot be accidentally skipped because an older unpinned/differently pinned report already exists. Added a native PowerShell `Get-FileHash` example and documented the requirement to lowercase the result.
 - **Regression:** the existing standalone synthetic Rust mock provider is hashed and checked with a finer rescan; wrong digest, invalid/uppercase digest, missing provider and symlinked executable (Unix) all fail closed. Prior unpinned behavior remains opt-in and reports null/no authenticated executable. End-to-end Rust `review_cli`: **24/24 PASS**. Linux Rust 1.90 `cargo fmt -p virgostars-events-generator -- --check`, `cargo test --locked --workspace --quiet` (all runnable tests PASS, 1 pre-existing ignored), `cargo clippy --locked --workspace --all-targets -- -D warnings` and `cargo build --locked --workspace --release --quiet` all **PASS**; `git diff --check` pending commit.
 - **Unverified limits:** the SHA only confirms local bytes *at check time*. It cannot authenticate wrapper dependencies/imports, dynamic libraries, NASA kernels, runtime flags, author signatures, genuine scientific independence, or prevent a file replacement between check and launch; no source data or astronomical accuracy can be certified. Real authorized Swiss/DE441 golden comparisons, original CSV/P0 parity, actual Windows PowerShell 5.1/7 syntax and end-to-end execution, mobile/desktop builds, source licensing and owner approval remain pending. No archive/DB write, source ID invention, GitHub Actions, merge, release or deployment; draft PR #32 stacked on #5.
+
+## 2026-11-17 — Complete-checkout Python gate repair (stacked on PR #14)
+
+- **Base and scope:** `fix/python-native-json-unicode-scalars-20261114` at `aede3f6`, stacked on draft PR #14 and draft PR #5; two test files only, plus this log. No Rust runtime, scientific dataset, archive encoding or public API changes.
+- **Reproduced on a fresh full Git checkout, Python 3.12.14:** `python tools/validate_python_sources.py` initially failed with two assertions and two errors in the 18-method API suite. `python -m unittest discover -s tools -p 'test_*.py' -q` initially failed with twelve subtest errors in the CSV/P0 varint regression (251 test methods discovered, one optional skip).
+- **Cause and fix:** the P0 parity fixture encoder shadowed the imported `verify_csv_p0.uvar` decoder, so canonical/invalid-varint tests called the wrong function. Renamed only the local encoder to `encode_uvar`. API fixtures were stale after stricter JSON integer, stage-reason and Moon gap-warning validation; retained the fail-closed production checks and corrected fixture status, coverage warnings and assertions of the earlier transport rejection layer. The fixed regression still verifies strict u64/i64 boundaries and exactly recorded Moon status/gap disclosures.
+- **Full-checkout commands passed:** `python tools/validate_python_sources.py` **42/42 PASS** (18 API + 8 CLI + 16 CSV oracle); `python -m unittest discover -s tools -p 'test_*.py' -q` **251 tests OK, one skipped optional case**; `python tools/validate_p0_synthetic.py` **15/15 PASS**; `PYTHONPATH=python python -m unittest discover -s python/tests -p 'test_native_json_unicode.py' -q` **9/9 PASS**; `python -m compileall -q python/virgostars_events python/tests tools` **PASS**; `git diff --check` **PASS**. All run without authentic owner archive or native Rust extension.
+- **Unverified:** this host has no `cargo`/`rustc`, so locked Rust fmt/Clippy/test/release, PyO3/maturin wheel installation and 51-case native acceptance are **not run**. The owner dataset's full CSV/P0 equality and astronomical coverage remain unverified here. One skipped tools case is not silently counted as a pass.
+- **Next:** regenerate/review the known-stale `Cargo.lock` with Rust installed, run `python tools/validate_rust.py` and native wheel acceptance against an explicitly trusted local P0 archive; independently review this stacked PR before integrating the draft chain. No main merge, release, dataset edits, GitHub Actions or production changes.
