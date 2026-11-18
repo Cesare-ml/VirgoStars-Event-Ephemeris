@@ -12,7 +12,7 @@
 //! The caller must separately audit ecliptic frame, corrections, kernel,
 //! time scale, licensing and independent astronomical golden timestamps.
 
-use virgostars_events_core::BodyId;
+use virgostars_events_core::{BodyId, TimestampMicros};
 
 use crate::{
     latitude_crossings::{
@@ -20,7 +20,7 @@ use crate::{
         EclipticPlaneDirection, LatitudeMotionDirection,
     },
     latitude_extrema::{adaptive_latitude_speed_extrema_scan, LatitudeSpeedExtremumKind},
-    GenerationError, LatitudeProvider, SearchWindow,
+    next_time, GenerationError, LatitudeProvider, LatitudeSample, SearchWindow,
 };
 
 /// Matches only the same astronomical event family and observed direction.
@@ -347,6 +347,143 @@ pub fn compare_latitude_event_providers<A: LatitudeProvider, B: LatitudeProvider
     Ok(result)
 }
 
+/// Numeric tolerances for same-instant latitude and signed latitude speed.
+/// These are explicitly chosen by a scientific reviewer, never inferred.
+#[derive(Clone, Copy, Debug)]
+pub struct LatitudeSampleTolerance {
+    pub latitude_degrees: f64,
+    pub signed_speed_degrees_per_day: f64,
+}
+
+/// One identical UTC sampling schedule is used for both latitude providers.
+#[derive(Clone, Copy, Debug)]
+pub struct LatitudeSampleComparisonOptions {
+    pub window: SearchWindow,
+    pub tolerance: LatitudeSampleTolerance,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LatitudeSampleDisagreement {
+    pub at_us: i64,
+    /// Signed reference minus primary beta, degrees.
+    pub latitude_offset_degrees: f64,
+    /// Signed reference minus primary d(beta)/dt, degrees/day.
+    pub signed_speed_offset_degrees_per_day: f64,
+    pub latitude_within_tolerance: bool,
+    pub speed_within_tolerance: bool,
+}
+
+/// Sample residuals can reveal differences even if both event scans are empty.
+/// This report still never determines astronomical accuracy or UTC coverage.
+#[derive(Debug, Default)]
+pub struct LatitudeSampleComparisonReport {
+    pub samples_checked: usize,
+    /// Stored only for at least one out-of-tolerance coordinate/speed.
+    pub disagreements: Vec<LatitudeSampleDisagreement>,
+    pub maximum_absolute_latitude_offset_degrees: f64,
+    pub maximum_absolute_speed_offset_degrees_per_day: f64,
+    pub maximum_latitude_offset_at_us: Option<i64>,
+    pub maximum_speed_offset_at_us: Option<i64>,
+}
+
+impl LatitudeSampleComparisonReport {
+    /// Only a verdict for the **sampled** instants and supplied tolerances.
+    pub fn has_sample_disagreements(&self) -> bool {
+        !self.disagreements.is_empty()
+    }
+}
+
+fn checked_latitude_sample<P: LatitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    at_us: i64,
+    remaining_probes: &mut usize,
+) -> Result<LatitudeSample, GenerationError> {
+    if *remaining_probes == 0 {
+        return Err(GenerationError::TooManySteps);
+    }
+    *remaining_probes -= 1;
+    let sample = provider
+        .sample_latitude(body, TimestampMicros::new(at_us))
+        .map_err(GenerationError::Provider)?;
+    if !sample.latitude_degrees.is_finite()
+        || sample.latitude_degrees.abs() > 90.0
+        || !sample.latitude_speed_degrees_per_day.is_finite()
+    {
+        return Err(GenerationError::InvalidSample);
+    }
+    Ok(sample)
+}
+
+/// Check actual coordinate/speed residuals on an identical, bounded UTC grid.
+///
+/// Probes occur at `[start, end)` in increments of `step_us` (never sampling
+/// the exclusive end). Unlike candidate matching, this detects systematic
+/// beta/speed offsets even with two empty candidate lists. Separate budgets
+/// apply to both providers, and no partial report is returned on error.
+/// An empty disagreement list can never certify unsampled instants, frame
+/// equivalence, provider independence or scientific coverage.
+pub fn compare_latitude_provider_samples<A: LatitudeProvider, B: LatitudeProvider>(
+    primary: &A,
+    reference: &B,
+    body: &BodyId,
+    options: LatitudeSampleComparisonOptions,
+    primary_remaining_probes: &mut usize,
+    reference_remaining_probes: &mut usize,
+) -> Result<LatitudeSampleComparisonReport, GenerationError> {
+    options.window.validate()?;
+    if !options.tolerance.latitude_degrees.is_finite()
+        || options.tolerance.latitude_degrees < 0.0
+        || !options.tolerance.signed_speed_degrees_per_day.is_finite()
+        || options.tolerance.signed_speed_degrees_per_day < 0.0
+    {
+        return Err(GenerationError::InvalidWindow);
+    }
+    let mut report = LatitudeSampleComparisonReport::default();
+    let mut at_us = options.window.start_us;
+    while at_us < options.window.end_us {
+        // Budget feasibility is shared for the pair before either call.
+        if *primary_remaining_probes == 0 || *reference_remaining_probes == 0 {
+            return Err(GenerationError::TooManySteps);
+        }
+        let a = checked_latitude_sample(primary, body, at_us, primary_remaining_probes)?;
+        let b = checked_latitude_sample(reference, body, at_us, reference_remaining_probes)?;
+        let lat_offset = b.latitude_degrees - a.latitude_degrees;
+        let speed_offset = b.latitude_speed_degrees_per_day - a.latitude_speed_degrees_per_day;
+        if !lat_offset.is_finite() || !speed_offset.is_finite() {
+            return Err(GenerationError::InvalidSample);
+        }
+        let abs_lat = lat_offset.abs();
+        let abs_speed = speed_offset.abs();
+        if report.maximum_latitude_offset_at_us.is_none()
+            || abs_lat > report.maximum_absolute_latitude_offset_degrees
+        {
+            report.maximum_absolute_latitude_offset_degrees = abs_lat;
+            report.maximum_latitude_offset_at_us = Some(at_us);
+        }
+        if report.maximum_speed_offset_at_us.is_none()
+            || abs_speed > report.maximum_absolute_speed_offset_degrees_per_day
+        {
+            report.maximum_absolute_speed_offset_degrees_per_day = abs_speed;
+            report.maximum_speed_offset_at_us = Some(at_us);
+        }
+        let latitude_within_tolerance = abs_lat <= options.tolerance.latitude_degrees;
+        let speed_within_tolerance = abs_speed <= options.tolerance.signed_speed_degrees_per_day;
+        if !latitude_within_tolerance || !speed_within_tolerance {
+            report.disagreements.push(LatitudeSampleDisagreement {
+                at_us,
+                latitude_offset_degrees: lat_offset,
+                signed_speed_offset_degrees_per_day: speed_offset,
+                latitude_within_tolerance,
+                speed_within_tolerance,
+            });
+        }
+        report.samples_checked += 1;
+        at_us = next_time(at_us, options.window);
+    }
+    Ok(report)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -596,5 +733,282 @@ mod tests {
         );
         assert_eq!(b, 0);
         assert!(a < 2_000);
+    }
+
+    struct SampleOffset {
+        latitude_bias: f64,
+        speed_bias: f64,
+    }
+
+    impl LatitudeProvider for SampleOffset {
+        fn sample_latitude(
+            &self,
+            _: &BodyId,
+            at: TimestampMicros,
+        ) -> Result<LatitudeSample, String> {
+            let days = at.as_i64() as f64 / DAY as f64;
+            Ok(LatitudeSample {
+                latitude_degrees: 0.2 + 0.02 * days + self.latitude_bias,
+                latitude_speed_degrees_per_day: 0.02 + self.speed_bias,
+            })
+        }
+    }
+
+    fn sample_options() -> LatitudeSampleComparisonOptions {
+        LatitudeSampleComparisonOptions {
+            window: SearchWindow {
+                start_us: 0,
+                end_us: 2 * DAY,
+                step_us: DAY / 4,
+                precision_us: 1_000_000,
+            },
+            tolerance: LatitudeSampleTolerance {
+                latitude_degrees: 0.01,
+                signed_speed_degrees_per_day: 0.001,
+            },
+        }
+    }
+
+    #[test]
+    fn matching_latitude_samples_have_zero_residual_and_shared_utc_grid() {
+        let (mut a, mut b) = (10, 10);
+        let report = compare_latitude_provider_samples(
+            &provider(0.0, 1.0),
+            &provider(0.0, 1.0),
+            &body(),
+            sample_options(),
+            &mut a,
+            &mut b,
+        )
+        .unwrap();
+        assert_eq!(report.samples_checked, 8);
+        assert!(!report.has_sample_disagreements());
+        assert_eq!(report.maximum_absolute_latitude_offset_degrees, 0.0);
+        assert_eq!(report.maximum_absolute_speed_offset_degrees_per_day, 0.0);
+        assert_eq!((a, b), (2, 2));
+    }
+
+    #[test]
+    fn systematic_frame_and_speed_biases_show_up_even_without_events() {
+        let (mut a, mut b) = (20, 20);
+        let report = compare_latitude_provider_samples(
+            &SampleOffset {
+                latitude_bias: 0.0,
+                speed_bias: 0.0,
+            },
+            &SampleOffset {
+                latitude_bias: 0.025,
+                speed_bias: -0.004,
+            },
+            &body(),
+            sample_options(),
+            &mut a,
+            &mut b,
+        )
+        .unwrap();
+        assert_eq!(report.samples_checked, 8);
+        assert_eq!(report.disagreements.len(), 8);
+        assert!(report.has_sample_disagreements());
+        assert!((report.maximum_absolute_latitude_offset_degrees - 0.025).abs() < 1e-10);
+        assert!((report.maximum_absolute_speed_offset_degrees_per_day - 0.004).abs() < 1e-10);
+        assert!(report.disagreements.iter().all(|d| {
+            !d.latitude_within_tolerance
+                && !d.speed_within_tolerance
+                && d.latitude_offset_degrees > 0.0
+                && d.signed_speed_offset_degrees_per_day < 0.0
+        }));
+    }
+
+    #[test]
+    fn coordinate_and_speed_tolerances_are_independently_applied() {
+        let mut opts = sample_options();
+        opts.tolerance.latitude_degrees = 0.03;
+        let (mut a, mut b) = (20, 20);
+        let report = compare_latitude_provider_samples(
+            &SampleOffset {
+                latitude_bias: 0.0,
+                speed_bias: 0.0,
+            },
+            &SampleOffset {
+                latitude_bias: 0.02,
+                speed_bias: 0.004,
+            },
+            &body(),
+            opts,
+            &mut a,
+            &mut b,
+        )
+        .unwrap();
+        assert_eq!(report.disagreements.len(), 8);
+        assert!(report
+            .disagreements
+            .iter()
+            .all(|d| d.latitude_within_tolerance && !d.speed_within_tolerance));
+    }
+
+    #[test]
+    fn grid_never_samples_the_exclusive_end_even_if_it_disagrees() {
+        struct EndSpike;
+        impl LatitudeProvider for EndSpike {
+            fn sample_latitude(
+                &self,
+                _: &BodyId,
+                at: TimestampMicros,
+            ) -> Result<LatitudeSample, String> {
+                Ok(LatitudeSample {
+                    latitude_degrees: if at.as_i64() == DAY { 1.0 } else { 0.0 },
+                    latitude_speed_degrees_per_day: 0.0,
+                })
+            }
+        }
+        struct Zero;
+        impl LatitudeProvider for Zero {
+            fn sample_latitude(
+                &self,
+                _: &BodyId,
+                _: TimestampMicros,
+            ) -> Result<LatitudeSample, String> {
+                Ok(LatitudeSample {
+                    latitude_degrees: 0.0,
+                    latitude_speed_degrees_per_day: 0.0,
+                })
+            }
+        }
+        let mut opts = sample_options();
+        opts.window.end_us = DAY;
+        let (mut a, mut b) = (10, 10);
+        let report =
+            compare_latitude_provider_samples(&EndSpike, &Zero, &body(), opts, &mut a, &mut b)
+                .unwrap();
+        assert_eq!(report.samples_checked, 4);
+        assert!(report.disagreements.is_empty());
+        assert_eq!((a, b), (6, 6));
+    }
+
+    #[test]
+    fn bad_sample_options_reject_before_any_provider_calls() {
+        for bad in [f64::NAN, f64::INFINITY, -0.01] {
+            let mut opts = sample_options();
+            opts.tolerance.latitude_degrees = bad;
+            let (mut a, mut b) = (10, 10);
+            assert_eq!(
+                compare_latitude_provider_samples(
+                    &Monotone,
+                    &Monotone,
+                    &body(),
+                    opts,
+                    &mut a,
+                    &mut b
+                )
+                .unwrap_err(),
+                GenerationError::InvalidWindow
+            );
+            assert_eq!((a, b), (10, 10));
+            opts = sample_options();
+            opts.tolerance.signed_speed_degrees_per_day = bad;
+            assert_eq!(
+                compare_latitude_provider_samples(
+                    &Monotone,
+                    &Monotone,
+                    &body(),
+                    opts,
+                    &mut a,
+                    &mut b
+                )
+                .unwrap_err(),
+                GenerationError::InvalidWindow
+            );
+            assert_eq!((a, b), (10, 10));
+        }
+    }
+
+    #[test]
+    fn sample_comparison_budget_exhaustion_never_returns_partial_report() {
+        let (mut a, mut b) = (10, 2);
+        assert_eq!(
+            compare_latitude_provider_samples(
+                &Monotone,
+                &Monotone,
+                &body(),
+                sample_options(),
+                &mut a,
+                &mut b
+            )
+            .unwrap_err(),
+            GenerationError::TooManySteps
+        );
+        assert_eq!((a, b), (8, 0));
+    }
+
+    #[test]
+    fn provider_errors_invalid_samples_and_overflowed_residuals_fail_closed() {
+        struct InvalidSampleProvider(f64, f64);
+        impl LatitudeProvider for InvalidSampleProvider {
+            fn sample_latitude(
+                &self,
+                _: &BodyId,
+                _: TimestampMicros,
+            ) -> Result<LatitudeSample, String> {
+                Ok(LatitudeSample {
+                    latitude_degrees: self.0,
+                    latitude_speed_degrees_per_day: self.1,
+                })
+            }
+        }
+        for invalid in [
+            InvalidSampleProvider(f64::NAN, 0.0),
+            InvalidSampleProvider(90.1, 0.0),
+            InvalidSampleProvider(0.0, f64::INFINITY),
+        ] {
+            let (mut a, mut b) = (10, 10);
+            assert_eq!(
+                compare_latitude_provider_samples(
+                    &Monotone,
+                    &invalid,
+                    &body(),
+                    sample_options(),
+                    &mut a,
+                    &mut b
+                )
+                .unwrap_err(),
+                GenerationError::InvalidSample
+            );
+        }
+        let (mut a, mut b) = (10, 10);
+        assert_eq!(
+            compare_latitude_provider_samples(
+                &InvalidSampleProvider(0.0, f64::MAX),
+                &InvalidSampleProvider(0.0, -f64::MAX),
+                &body(),
+                sample_options(),
+                &mut a,
+                &mut b
+            )
+            .unwrap_err(),
+            GenerationError::InvalidSample
+        );
+        struct Fails;
+        impl LatitudeProvider for Fails {
+            fn sample_latitude(
+                &self,
+                _: &BodyId,
+                _: TimestampMicros,
+            ) -> Result<LatitudeSample, String> {
+                Err("synthetic provider failure".to_string())
+            }
+        }
+        let (mut a, mut b) = (10, 10);
+        assert_eq!(
+            compare_latitude_provider_samples(
+                &Monotone,
+                &Fails,
+                &body(),
+                sample_options(),
+                &mut a,
+                &mut b
+            )
+            .unwrap_err(),
+            GenerationError::Provider("synthetic provider failure".to_string())
+        );
     }
 }
