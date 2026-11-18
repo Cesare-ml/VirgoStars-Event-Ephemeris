@@ -1,0 +1,158 @@
+# SPDX-License-Identifier: CPAL-1.0
+# Powered by VirgoStars — https://www.virgostars.it/
+"""Validate native Rust synod phase timestamps before Python ISO projection.
+
+Only verifies the recorded wire model; stage interpretation remains in Rust.
+"""
+from __future__ import annotations
+
+from typing import Any
+
+from ._unknown_status import (
+    MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_US,
+    validate_unknown_stage_reason,
+)
+
+
+_I64_MIN = -(1 << 63)
+_I64_MAX = (1 << 63) - 1
+
+
+def validate_recorded_thresholds(
+    record: dict[str, Any], anchor_us: int | None, body: str
+) -> list[int] | None:
+    """Retain SQL NULL vs empty, but reject impossible native phase arrays.
+
+    The Rust SynodEvent constructor requires every phase strictly after its
+    anchor and the previous phase. A phase may be after the query instant or
+    even the next recorded anchor: those are original source observations,
+    not permission to classify an otherwise invalid/incomplete cycle.
+    """
+    if "phase_thresholds_us" not in record:
+        raise ValueError(f"native synod phase thresholds invalid for {body}")
+    extras = record["phase_thresholds_us"]
+    if extras is None:
+        return None
+    if anchor_us is None or type(extras) is not list:
+        raise ValueError(f"native synod phase thresholds invalid for {body}")
+    prior = anchor_us
+    for value in extras:
+        if (
+            type(value) is not int
+            or not _I64_MIN <= value <= _I64_MAX
+            or value <= prior
+        ):
+            raise ValueError(f"native synod phase thresholds invalid for {body}")
+        prior = value
+    return extras
+
+
+# These are wire-level names emitted by Rust SynodStage and
+# SynodStageStatus. This validates the claimed result shape only;
+# computing the stage from astronomical phase times remains in Rust.
+_PLANET_STAGE_CODES = frozenset({"D1", "R2", "R3", "D4"})
+_MOON_STAGE_CODES = frozenset({"CRESC1", "CRESC2", "CAL1", "CAL2"})
+# The code's stage-start instant must be an original recorded threshold.
+# -1 means the cycle anchor itself (D1/CRESC1), not an extra phase.
+# This is a wire consistency check, not an independent stage classifier.
+_STAGE_START_EXTRA_INDEX = {
+    "D1": -1, "R2": 0, "R3": 1, "D4": 2,
+    "CRESC1": -1, "CRESC2": 0, "CAL1": 1, "CAL2": 2,
+}
+_PLANET_STAGE_BODIES = frozenset({
+    "Mercury", "Venus", "Sun", "Mars", "Jupiter",
+    "Saturn", "Uranus", "Neptune", "Pluto",
+})
+_UNKNOWN_STAGE_STATUSES = frozenset({
+    "before_recorded_anchor",
+    "at_or_after_next_recorded_anchor",
+    "unknown_missing_phase_thresholds",
+    "unknown_incomplete_phase_thresholds",
+    "unknown_unsupported_phase_convention",
+    "unknown_invalid_cycle_bounds",
+    "unknown_open_ended_cycle",
+    "unknown_discontinuous_moon_anchors",
+})
+
+
+def validate_native_stage(
+    phase: dict[str, Any],
+    body: str,
+    anchor_us: int | None,
+    thresholds: list[int] | None,
+    requested_at_us: int,
+    next_anchor_us: int | None,
+) -> None:
+    """Reject inconsistent Rust phase status/code pairs, without classifying.
+
+    A stage is known only with three recorded extra thresholds, for a body
+    supported by the current Rust four-stage convention. Unknown status
+    codes never imply a known stage, regardless of source timestamps.
+    """
+    required = ("code", "started_at_us", "status")
+    if any(key not in phase for key in required):
+        raise ValueError(f"native synod phase status invalid for {body}")
+    code = phase["code"]
+    started_at_us = phase["started_at_us"]
+    status = phase["status"]
+    if type(status) is not str:
+        raise ValueError(f"native synod phase status invalid for {body}")
+
+    if anchor_us is None:
+        if (
+            status != "no_preceding_recorded_cycle"
+            or code is not None
+            or started_at_us is not None
+        ):
+            raise ValueError(f"native synod phase status invalid for {body}")
+        return
+
+    if status == "derived_from_recorded_thresholds":
+        supported = (
+            _MOON_STAGE_CODES if body == "Moon"
+            else _PLANET_STAGE_CODES if body in _PLANET_STAGE_BODIES
+            else frozenset()
+        )
+        if (
+            type(code) is not str
+            or code not in supported
+            or type(started_at_us) is not int
+            or thresholds is None
+            or len(thresholds) != 3
+        ):
+            raise ValueError(f"native synod phase status invalid for {body}")
+        start_index = _STAGE_START_EXTRA_INDEX[code]
+        recorded_start = anchor_us if start_index == -1 else thresholds[start_index]
+        if started_at_us != recorded_start:
+            raise ValueError(f"native synod phase start disagrees with thresholds for {body}")
+        # A native stage may only be current inside its own source-recorded
+        # [start, next_threshold) interval. Merely matching its start is
+        # insufficient: a stale D1/R2/R3 or CRESC1/CRESC2/CAL1 label could
+        # otherwise be accepted after the next recorded boundary. The
+        # *classification* remains in Rust; this is a fail-closed wire check.
+        if (
+            start_index < 2
+            and requested_at_us >= thresholds[start_index + 1]
+        ):
+            raise ValueError(f"native synod phase code expired at a source threshold for {body}")
+        # Rust validates all three original phase thresholds against the
+        # next recorded anchor *before* returning any known stage. An early
+        # stage must not hide a corrupt final threshold crossing that anchor.
+        if next_anchor_us is not None and thresholds[2] >= next_anchor_us:
+            raise ValueError(f"native synod phase bounds conflict with next anchor for {body}")
+        if start_index == 2:
+            # Rust refuses to extend D4/CAL2 indefinitely without a next
+            # recorded anchor. A source gap >45d also makes Moon CAL2 unknown.
+            if next_anchor_us is None:
+                raise ValueError(f"native synod final stage lacks next recorded anchor for {body}")
+            if (body == "Moon" and
+                    next_anchor_us - anchor_us > MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_US):
+                raise ValueError(f"native synod lunar final stage crosses source gap for {body}")
+    elif status not in _UNKNOWN_STAGE_STATUSES or code is not None or started_at_us is not None:
+        raise ValueError(f"native synod phase status invalid for {body}")
+    else:
+        # The native classifier may report unknown, but its *reason* must
+        # still agree with the same raw source events and next-anchor field.
+        validate_unknown_stage_reason(
+            status, body, thresholds, next_anchor_us, anchor_us, requested_at_us
+        )
