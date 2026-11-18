@@ -19,6 +19,10 @@ return an explicit ambiguity error instead of reporting a wider bracket as
 though it met the request. This can reject very fine precision settings.
 Numerical bracket width is not physical accuracy or coverage certification.
 
+The proposed [independent engine-validation protocol](ENGINE_INDEPENDENT_VALIDATION_PLAN.md)
+defines evidence and review gates for a future bounded engine decision; it is
+a plan only and does not authorize early use of the real provider here.
+
 When two refinement probes have equal speeds, the refiners spend one more
 provider probe at an interior midpoint. They narrow to the middle only if
 that sample is strictly more extreme; otherwise they return an ambiguity

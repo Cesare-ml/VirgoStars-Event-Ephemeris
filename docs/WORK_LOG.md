@@ -1,3 +1,15 @@
+## 2026-11-18 — Independent-engine protocol and synthetic failure handling
+
+- Prepared [the proposed independent-engine validation protocol](ENGINE_INDEPENDENT_VALIDATION_PLAN.md):
+  scope, build and kernel identities, independence, matched scientific
+  conventions, preapproved tolerances, evidence and a bounded decision. This
+  is a plan, not scientific acceptance or permission for early engine use.
+- An invented provider failing at either microsecond adjacent to an exact
+  zero returns a provider error and no partial report in base/adaptive scans;
+  the shared budget records every attempted call.
+- All four targeted zero-plateau/failure tests, workspace format check and
+  generator all-targets Clippy passed locally on Windows. No real engine ran.
+
 ## 2026-11-18 — Check adjacent microseconds at exact latitude zeros
 
 - Invented zero plateaus revealed that both latitude-root and latitude-speed

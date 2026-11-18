@@ -4,6 +4,7 @@
  * Copyright (c) 2026 Cesare-ml. All Rights Reserved.
  * Powered by VirgoStars — https://www.virgostars.it/
  */
+use std::cell::Cell;
 use virgostars_events_core::{BodyId, TimestampMicros};
 use virgostars_events_generator::{
     latitude_crossings::{
@@ -121,5 +122,54 @@ fn isolated_zero_neighbour_checks_use_the_shared_budget() {
             GenerationError::TooManySteps,
         );
         assert_eq!(station_budget, 0);
+    }
+}
+
+struct FailureAtNeighbour {
+    at: i64,
+    calls: Cell<usize>,
+}
+
+impl LatitudeProvider for FailureAtNeighbour {
+    fn sample_latitude(&self, _: &BodyId, at: TimestampMicros) -> Result<LatitudeSample, String> {
+        self.calls.set(self.calls.get() + 1);
+        if at.as_i64() == self.at {
+            return Err("synthetic adjacent probe failure".to_string());
+        }
+        let value = (at.as_i64() as f64 - 50.0) * 0.01;
+        Ok(LatitudeSample {
+            latitude_degrees: value,
+            latitude_speed_degrees_per_day: value,
+        })
+    }
+}
+
+#[test]
+fn adjacent_probe_failure_returns_no_partial_root_report() {
+    let body = BodyId::try_from("Mars").unwrap();
+    let window = SearchWindow {
+        start_us: 0,
+        end_us: 100,
+        step_us: 100,
+        precision_us: 1,
+    };
+    for fail_at in [49, 51] {
+        let model = FailureAtNeighbour {
+            at: fail_at,
+            calls: Cell::new(0),
+        };
+        let mut budget = 1000;
+        assert_eq!(
+            ecliptic_plane_crossing_candidates(&model, &body, window, &mut budget).unwrap_err(),
+            GenerationError::Provider("synthetic adjacent probe failure".to_string()),
+        );
+        assert_eq!(budget, 1000 - model.calls.get());
+        model.calls.set(0);
+        budget = 1000;
+        assert_eq!(
+            adaptive_latitude_stations_scan(&model, &body, window, 1, &mut budget).unwrap_err(),
+            GenerationError::Provider("synthetic adjacent probe failure".to_string()),
+        );
+        assert_eq!(budget, 1000 - model.calls.get());
     }
 }
