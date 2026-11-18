@@ -109,3 +109,40 @@ fn root_refinement_cannot_bypass_the_shared_budget() {
     assert_eq!(provider.0.get(), 10);
     assert_eq!(budget, 0);
 }
+
+struct FailingSecondProvider(Cell<usize>);
+
+impl LongitudeProvider for FailingSecondProvider {
+    fn sample(&self, body: &BodyId, _at: TimestampMicros) -> Result<LongitudeSample, String> {
+        self.0.set(self.0.get() + 1);
+        if body.as_str() == "Venus" {
+            return Err("synthetic provider failure".to_owned());
+        }
+        Ok(LongitudeSample {
+            longitude_degrees: 0.0,
+            longitude_speed_degrees_per_day: 0.0,
+        })
+    }
+}
+
+#[test]
+fn provider_failure_consumes_the_started_pair_probe_and_returns_no_report() {
+    let provider = FailingSecondProvider(Cell::new(0));
+    let mut budget = 4;
+    let result = adaptive_exact_aspect_scan(
+        &provider,
+        &BodyId::try_from("Mars").unwrap(),
+        &BodyId::try_from("Venus").unwrap(),
+        SearchWindow {
+            start_us: 0,
+            end_us: 100,
+            step_us: 100,
+            precision_us: 1,
+        },
+        1,
+        &mut budget,
+    );
+    assert!(matches!(result, Err(GenerationError::Provider(_))));
+    assert_eq!(provider.0.get(), 2);
+    assert_eq!(budget, 3);
+}

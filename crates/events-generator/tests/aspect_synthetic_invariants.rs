@@ -54,7 +54,12 @@ fn aspects_preserve_pair_order_rotation_epoch_and_signed_motion() {
     ];
     for (target, kind) in targets {
         for rate in [4.0, -4.0] {
-            for origin in [-2_200_000_000_000_000, 1_500_000_000_000_000] {
+            for origin in [
+                i64::MIN + DAY,
+                -2_200_000_000_000_000,
+                1_500_000_000_000_000,
+                i64::MAX - DAY,
+            ] {
                 for rotation in [0.0, 137.0] {
                     let model = LinearPair {
                         origin,

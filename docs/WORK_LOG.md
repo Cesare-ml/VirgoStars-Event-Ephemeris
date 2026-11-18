@@ -1,3 +1,12 @@
+## 2026-11-18 — Synthetic aspect edge and failure checks
+
+- Extended the synthetic invariants to 112 combinations, including windows
+  near both limits of signed microsecond timestamps. Added a failing second
+  provider: the started pair probe remains charged and no report is returned.
+- The complete locked Rust validator passed locally on Windows, with one
+  optional snapshot test ignored. These synthetic checks do not certify
+  astronomical accuracy or coverage.
+
 ## 2026-11-18 — Synthetic aspect invariants
 
 - Added a linear synthetic pair-provider check over 56 combinations: seven
