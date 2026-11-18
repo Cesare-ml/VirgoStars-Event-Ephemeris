@@ -120,16 +120,15 @@ No secret credentials, exported private DB copies, telemetry, interpretive horos
 
 ## Development status and first deliverable
 
-**Initial verification:** synthetic fixtures, schema, generator and tests are under review in [PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4). These are deliberately invented events; no real ephemeris data are included. Next: minimal Rust workspace, then a versioned binary format and reader with strict error handling. The real-data export/validator follows only on an *authorized* snapshot.
+**Development baseline:** synthetic fixtures, a schema, generator and tests provide deliberately invented events. The experimental Rust consumer and P0 reader are described above; their presence does not certify astronomical completeness or a production dataset.
 
 For work opportunities and acceptance criteria, use [the roadmap](docs/ROADMAP.md); do not claim feature completion until code, tests and documentation are merged.
 
-### Synthetic fixture checks (draft PR #4)
+### Synthetic fixture checks
 
-When the branch is checked out with Node.js 22+, verify the fabricated development fixtures:
+With Node.js 22+, verify the fabricated development fixtures:
 
 ~~~sh
-node tools/generate-synthetic-fixtures.mjs
 node --test test/synthetic-fixtures.test.mjs
 ~~~
 
