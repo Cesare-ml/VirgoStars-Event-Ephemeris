@@ -26,6 +26,7 @@ pub mod adaptive;
 pub mod gaps;
 pub mod latitude_crossings;
 pub mod latitude_extrema;
+pub mod latitude_provider_compare;
 pub mod lunar;
 pub mod provider_process;
 pub mod speed_crosscheck;
