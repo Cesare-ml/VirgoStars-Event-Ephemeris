@@ -1,3 +1,12 @@
+## 2026-11-18 — Synthetic aspect window boundaries
+
+- Checked direct and adaptive exact-aspect scans for invented linear motion in
+  both directions, with crossings at the inclusive start, grid and midpoint
+  boundaries and exclusive end. Each interior crossing is reported once;
+  the exclusive-end crossing is omitted. These cases do not certify coverage.
+- The full locked Rust validator passed locally on Windows, with one optional
+  snapshot test ignored.
+
 ## 2026-11-18 — Reject overflowing aspect pair arithmetic
 
 - Synthetic midpoint samples with individually finite inputs exposed two
