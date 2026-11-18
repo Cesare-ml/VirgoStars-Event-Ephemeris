@@ -923,6 +923,28 @@ astronomical coverage. The global Rust fmt gate remains outstanding.
 - **Risks / next:** Keep project implementation status *proposed*; reconcile with separate Europe/Rome contract PR #22 after it lands, run actual standard-library fixture tests and then cross-language Rust/WASM/Python boundary parity when implementations exist. No proprietary astronomical data, production integration, publication, release or merge.
 
 
+## 2026-11-18 — Rome local-day fixture integration review
+
+- Reconciled this branch with current main, preserving both work-log entries.
+  The Rome and Markdown checker suites passed 25/25 combined on Windows, the
+  repository-local link check and Rust format gate passed, and Node 22.18.0
+  ICU 77.1 / tzdb 2025b independently confirmed all seven UTC date boundaries.
+- These checks validate fixture boundaries only. The `onDate` adapter is
+  still proposed; no event data or astronomical coverage is implied.
+
+## 2026-11-18 — Synthetic fixtures and UTC microsecond integration
+
+- Reconciled PR #4 with main and incorporated the dependent PR #16 without
+  rewriting history. Conflicting documentation retains current Rust status
+  and the earlier fixture handoff.
+- Windows `core.autocrlf=true` changed checked-out JSON to CRLF, causing
+  the byte-for-byte generator check to fail. `.gitattributes` now fixes
+  the synthetic v0 JSON fixtures to LF. A fresh Windows worktree passed
+  all 6 fixture tests and the repository-local link check. The 7 additional
+  microsecond tests passed on their original branch and are retained here.
+- These are fabricated fixtures and do not establish scientific accuracy,
+  event coverage, or the availability of a timezone adapter.
+
 ## 2026-11-18 — Windows cross-volume link containment
 
 - A real Windows symlink from a temporary checkout on C: to a directory on
@@ -934,6 +956,16 @@ astronomical coverage. The global Rust fmt gate remains outstanding.
   rejects the outside target. This is an offline checker change only.
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
+
+## 2026-11-10 — P0.1 synthetic fixture contract (in review)
+
+- **Issue/PR/branch:** [#1](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/1) / [draft PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4) / `feat/p0-1-synthetic-fixtures`.
+- **Facts:** seven test-only fabricated fixtures (five valid, two deliberately invalid), no real astronomical dataset, no production DB access.
+- **Files:** `tools/generate-synthetic-fixtures.mjs`, `test/fixtures/schema-v0.json`, `test/fixtures/v0/*.json`, `test/fixtures/README.md`, `test/synthetic-fixtures.test.mjs`, roadmap and README.
+- **Checks performed:** fetched the exact generator, test module and committed JSON via GitHub; executed six test callbacks against fetched contents using a V8 JavaScript harness: **6/6 PASS**. These checks exercise deterministic byte generation, validation of valid/invalid records, signed microsecond timestamps, lunar phases, retrograde ingress repetition and UTC instants at a DST transition.
+- **Checks NOT RUN:** `node --test test/synthetic-fixtures.test.mjs` in a checked-out repository (local environment cannot access GitHub); Cargo checks (Rust workspace not implemented). GitHub Actions not used.
+- **Remaining:** run the exact Node test command in a normal checkout before merging. No phase/body coverage claims or binary decoding yet.
+- **Next smallest task:** issue #2 minimal Rust core/format workspace; #3 byte-level VSEPH golden header afterward. Do not mark P0.1 merged/done while PR #4 is draft.
 
 ## 2026-11-10 — Original PostgreSQL row-ID uniqueness enforced throughout experimental VSEPH-P0 (draft PR #5)
 
@@ -1048,6 +1080,15 @@ This is the shared state for agents. Add a dated brief entry **in each working d
 - **Seed GitHub issues:** [#1 — synthetic fixtures](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/1); [#2 — Rust workspace](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/2); [#3 — VSEPH format](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/3).
 - **Next recommended task:** P0.1 synthetic fixture contract, then P0.2 minimal Rust workspace. Keep dataset unpublished pending owner choice of license.
 - **Open question for maintainer:** what separate open-data license should govern published dataset binaries? Decision is required before first data release, **not** before local code work.
+
+## 2026-11-15 — P1 local-day UTC/DST golden fixtures (issue #20)
+
+- **Issue/PR/branch:** [#20](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/20), [PR #22](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/22), `agent/chat-8f2d9c4a/20-dst-local-day-goldens`, base `main`; agent session `chat-8f2d9c4a`.
+- **Scope:** `test/fixtures/local-day-utc-boundaries.json` (seven independently sourced UTC intervals), `test/local-day-utc-boundaries.test.mjs` (eight offline deterministic tests), and concise updates to the proposed API/validation contracts.
+- **Evidence:** Independently calculated each bound with Python 3 `zoneinfo` and the environment's system IANA timezone database: Europe/Rome spring-forward 2026-03-29 is 82,800 seconds; fall-back 2026-10-25 is 90,000 seconds. Source data are *calendar-time fixtures only*, not released astronomical events or a new timezone algorithm.
+- **Executed:** Node.js v22.16.0 local mirror: `node --check test/local-day-utc-boundaries.test.mjs` **PASS**; `node --test test/local-day-utc-boundaries.test.mjs` **8 passed, 0 failed**. Test logic and seven fixture records were copied into the GitHub branch via the GitHub connector. A full checkout command was **not** run; independent review remains required.
+- **Risk/blocker:** UTC bounds reflect current 2026 IANA rules and may need refresh if jurisdictional policies change. No `onDate` implementation, VSEPH dataset, native Rust engine, event query parity or production integration is claimed.
+- **Next:** independent exact-head reviewer validates source/fixture readback; a future actual `onDate` adapter must be tested against these golden values; owner decides integration.
 
 ## 2026-11-15 — offline Markdown link validator (agent chat-78b40c6e)
 
