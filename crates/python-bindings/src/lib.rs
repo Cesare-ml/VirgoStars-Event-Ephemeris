@@ -13,17 +13,13 @@ use pyo3::prelude::*;
 use serde_json::{json, Map, Value};
 use std::fs;
 use std::path::Path;
-use virgostars_events_core::{
-    Event, TimestampMicros, MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_MICROS,
-};
+use virgostars_events_core::{Event, TimestampMicros, MAX_CONTIGUOUS_MOON_ANCHOR_SPAN_MICROS};
 use virgostars_events_p0::{P0Archive, P0Error};
 
 fn as_py_error(err: P0Error) -> PyErr {
     match err {
         P0Error::Io(io) => PyOSError::new_err(io.to_string()),
-        P0Error::Invalid(message) | P0Error::Unsupported(message) => {
-            PyValueError::new_err(message)
-        }
+        P0Error::Invalid(message) | P0Error::Unsupported(message) => PyValueError::new_err(message),
     }
 }
 
@@ -106,7 +102,10 @@ impl NativeReader {
                         Some(record.source_id),
                         Some(synod.start().as_i64()),
                         synod.phases().map(|extras| {
-                            extras.iter().map(|extra| extra.at().as_i64()).collect::<Vec<_>>()
+                            extras
+                                .iter()
+                                .map(|extra| extra.at().as_i64())
+                                .collect::<Vec<_>>()
                         }),
                     ),
                     _ => return Err(PyValueError::new_err("invalid source synod family")),
