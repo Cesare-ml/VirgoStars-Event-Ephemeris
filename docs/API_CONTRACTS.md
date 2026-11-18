@@ -38,6 +38,8 @@ No runtime position calculation, hidden interpolation, invented source IDs, or i
 
 `onDate` accepts local ISO calendar dates (e.g. 2030-03-31) and IANA zone names; convert to [UTC start of local day, UTC start of next local day). No ambiguous local timestamp parsing. Functions that accept an instant require an explicit `Z` or offset. Expose a Rust UTC-range primitive; wrappers may use a versioned timezone implementation.
 
+**Proposed `onDate` UTC-boundary contract fixture (issue #20):** [`test/fixtures/local-day-utc-boundaries.json`](../test/fixtures/local-day-utc-boundaries.json) contains seven independent golden half-open intervals, including Europe/Rome's 2026-03-29 **23-hour** day (`2026-03-28T23:00:00Z` to `2026-03-29T22:00:00Z`) and 2026-10-25 **25-hour** day (`2026-10-24T22:00:00Z` to `2026-10-25T23:00:00Z`). The bounds were separately checked with Python `zoneinfo` using the available system IANA timezone data. They are **test oracles**, not the result of an implemented `onDate` function; future wrappers must produce the same intervals for the applicable tzdb rules, never assume all dates are 86,400 seconds or silently treat local midnight as UTC. The fixture and test intentionally do not implement IANA conversion or fetch event records.
+
 ## Date, boundary and failure policy
 
 - A query exactly at an event instant includes it in the current state and in a [start,end) range beginning at that instant. Next/previous skip exact equality.

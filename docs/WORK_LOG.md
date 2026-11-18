@@ -904,6 +904,15 @@ astronomical coverage. The global Rust fmt gate remains outstanding.
 
 # Agent work log and handoffs
 
+## 2026-11-18 — Rome local-day fixture integration review
+
+- Reconciled this branch with current main, preserving both work-log entries.
+  The Rome and Markdown checker suites passed 25/25 combined on Windows, the
+  repository-local link check and Rust format gate passed, and Node 22.18.0
+  ICU 77.1 / tzdb 2025b independently confirmed all seven UTC date boundaries.
+- These checks validate fixture boundaries only. The `onDate` adapter is
+  still proposed; no event data or astronomical coverage is implied.
+
 ## 2026-11-18 — Synthetic fixtures and UTC microsecond integration
 
 - Reconciled PR #4 with main and incorporated the dependent PR #16 without
@@ -1052,6 +1061,15 @@ This is the shared state for agents. Add a dated brief entry **in each working d
 - **Seed GitHub issues:** [#1 — synthetic fixtures](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/1); [#2 — Rust workspace](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/2); [#3 — VSEPH format](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/3).
 - **Next recommended task:** P0.1 synthetic fixture contract, then P0.2 minimal Rust workspace. Keep dataset unpublished pending owner choice of license.
 - **Open question for maintainer:** what separate open-data license should govern published dataset binaries? Decision is required before first data release, **not** before local code work.
+
+## 2026-11-15 — P1 local-day UTC/DST golden fixtures (issue #20)
+
+- **Issue/PR/branch:** [#20](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/20), [PR #22](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/22), `agent/chat-8f2d9c4a/20-dst-local-day-goldens`, base `main`; agent session `chat-8f2d9c4a`.
+- **Scope:** `test/fixtures/local-day-utc-boundaries.json` (seven independently sourced UTC intervals), `test/local-day-utc-boundaries.test.mjs` (eight offline deterministic tests), and concise updates to the proposed API/validation contracts.
+- **Evidence:** Independently calculated each bound with Python 3 `zoneinfo` and the environment's system IANA timezone database: Europe/Rome spring-forward 2026-03-29 is 82,800 seconds; fall-back 2026-10-25 is 90,000 seconds. Source data are *calendar-time fixtures only*, not released astronomical events or a new timezone algorithm.
+- **Executed:** Node.js v22.16.0 local mirror: `node --check test/local-day-utc-boundaries.test.mjs` **PASS**; `node --test test/local-day-utc-boundaries.test.mjs` **8 passed, 0 failed**. Test logic and seven fixture records were copied into the GitHub branch via the GitHub connector. A full checkout command was **not** run; independent review remains required.
+- **Risk/blocker:** UTC bounds reflect current 2026 IANA rules and may need refresh if jurisdictional policies change. No `onDate` implementation, VSEPH dataset, native Rust engine, event query parity or production integration is claimed.
+- **Next:** independent exact-head reviewer validates source/fixture readback; a future actual `onDate` adapter must be tested against these golden values; owner decides integration.
 
 ## 2026-11-15 — offline Markdown link validator (agent chat-78b40c6e)
 
