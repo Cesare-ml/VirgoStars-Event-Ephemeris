@@ -1,0 +1,72 @@
+{
+  "schema": "virgostars-local-day-utc-boundaries/1",
+  "status": "contract-fixture-only; no onDate implementation or event dataset",
+  "sourceLicense": "CPAL-1.0",
+  "attribution": "Powered by VirgoStars — https://www.virgostars.it/",
+  "provenance": "Independent UTC bounds calculated from Python 3 zoneinfo (system IANA tzdb) on 2026-11-15; 2026 legal timezone rules can be revised by authorities.",
+  "cases": [
+    {
+      "id": "utc-ordinary",
+      "localDate": "2026-11-15",
+      "timeZone": "UTC",
+      "startUtc": "2026-11-15T00:00:00Z",
+      "endUtc": "2026-11-16T00:00:00Z",
+      "durationSeconds": 86400,
+      "reference": "UTC Gregorian midnight to midnight"
+    },
+    {
+      "id": "rome-spring-before",
+      "localDate": "2026-03-28",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-03-27T23:00:00Z",
+      "endUtc": "2026-03-28T23:00:00Z",
+      "durationSeconds": 86400,
+      "reference": "CET UTC+01:00 on both local midnights; Python zoneinfo"
+    },
+    {
+      "id": "rome-spring-forward",
+      "localDate": "2026-03-29",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-03-28T23:00:00Z",
+      "endUtc": "2026-03-29T22:00:00Z",
+      "durationSeconds": 82800,
+      "reference": "CET to CEST: 23-hour civil day; Python zoneinfo"
+    },
+    {
+      "id": "rome-spring-after",
+      "localDate": "2026-03-30",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-03-29T22:00:00Z",
+      "endUtc": "2026-03-30T22:00:00Z",
+      "durationSeconds": 86400,
+      "reference": "CEST UTC+02:00 on both local midnights; Python zoneinfo"
+    },
+    {
+      "id": "rome-autumn-before",
+      "localDate": "2026-10-24",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-10-23T22:00:00Z",
+      "endUtc": "2026-10-24T22:00:00Z",
+      "durationSeconds": 86400,
+      "reference": "CEST UTC+02:00 on both local midnights; Python zoneinfo"
+    },
+    {
+      "id": "rome-fall-back",
+      "localDate": "2026-10-25",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-10-24T22:00:00Z",
+      "endUtc": "2026-10-25T23:00:00Z",
+      "durationSeconds": 90000,
+      "reference": "CEST to CET: 25-hour civil day; Python zoneinfo"
+    },
+    {
+      "id": "rome-autumn-after",
+      "localDate": "2026-10-26",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-10-25T23:00:00Z",
+      "endUtc": "2026-10-26T23:00:00Z",
+      "durationSeconds": 86400,
+      "reference": "CET UTC+01:00 on both local midnights; Python zoneinfo"
+    }
+  ]
+}

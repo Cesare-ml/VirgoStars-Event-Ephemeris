@@ -1,0 +1,14 @@
+[package]
+name = "virgostars-events-core"
+description = "Standalone, DB-free event ephemeris types and query engine foundations"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+virgostars-events-format = { path = "../events-format" }
+
+[lib]
+path = "src/lib.rs"

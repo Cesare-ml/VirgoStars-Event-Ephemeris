@@ -2,6 +2,8 @@
 
 Thanks for helping make independent event ephemerides accessible offline. **Read [AGENTS.md](AGENTS.md) before beginning**, including the no-publish/no-deploy/no-merge guardrails.
 
+**Want to expand the chronological range of the event library?** Start with the [step-by-step contribution guide for event intervals](docs/CONTRIBUTING_EVENT_RANGES.md) and the [public coverage / missing-intervals register](docs/COVERAGE_STATUS.md). A **read-only report tool** (`python3 tools/report_missing_intervals.py --format markdown STAGING.json`) converts the Rust planner's microsecond timestamps into explicit UTC intervals; no report certifies completeness.
+
 ## Development workflow
 
 - Look at [the roadmap](docs/ROADMAP.md), existing issues and draft PRs. Claim a small non-overlapping task. Prefer existing PRs for related changes.

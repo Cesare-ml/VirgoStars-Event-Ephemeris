@@ -1,0 +1,27 @@
+{
+  "schema": "vseph-synthetic-fixtures/v0",
+  "synthetic": true,
+  "id": "invalid-duplicate",
+  "expected": {
+    "valid": false,
+    "errorCode": "DUPLICATE_EVENT"
+  },
+  "records": [
+    {
+      "family": "motion",
+      "body": "Venus",
+      "at": "2050-01-01T00:00:00Z",
+      "atUs": "2524608000000000",
+      "direction": "direct",
+      "sign": 1
+    },
+    {
+      "family": "motion",
+      "body": "Venus",
+      "at": "2050-01-01T00:00:00Z",
+      "atUs": "2524608000000000",
+      "direction": "retrograde",
+      "sign": 1
+    }
+  ]
+}

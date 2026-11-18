@@ -23,7 +23,37 @@ Suggested (not yet frozen) types:
 | Ingresses | `onDate(date,tz)`, `between(start,end,bodies?)`, `next`, `previous`, `signAt(body,t)`, `lunarEvents(year,month,tz)` | Latest valid ingress determines sign, including retrograde re-entries |
 | Unified | `events.between(start,end,filter?,limit?)`, `events.onDate(date,tz,filter?)` | Stable chronological merge of all three families, with event type and body |
 
+## Requested event families beyond the current three — proposals only
+
+**Requested 2026-11-17; not implemented in the Rust offline reader or P0 format.** See the [algorithm and missing-work inventory](ASTRONOMICAL_EVENT_ALGORITHMS.md).
+
+| Proposed family | Proposed query (names not frozen) | Data/event semantics | Status |
+| --- | --- | --- | --- |
+| `aspects` | `aspects.between(start,end,bodyA?,bodyB?,types?)`, `next`, `previous` | Pair of canonical body IDs, exact longitude aspect 0°/60°/90°/120°, UTC instant, provenance and independently reviewed per-pair coverage; configurable orb windows later | **Requires new algorithm, schema and reader** |
+| `speed_extrema` | `motions.speedExtremaBetween(start,end,body?,kind?)`, `next`, `previous` | Body, positive local longitudinal speed maximum or most negative local retrograde speed (maximum retrograde magnitude), UTC instant, signed degrees/day, calculation version and coverage | **Requires new algorithm, schema and reader** |
+| `motions` (station labels) | Existing/target `motions.between`, `motions.stateAt` | A signed-speed zero crossing is **one station event**: `direction_after=retrograde` means stop of direct motion/start retrograde; `direction_after=direct` means end of retrograde/restart direct. Separate start/end of a near-zero-speed interval require a *new*, explicitly chosen threshold | **Rust candidate algorithm exists, scientific certification pending** |
+| `ingresses` | Existing/target `ingresses.between`, `ingresses.signAt` | Crossings of tropical longitude 0°,30°, ...330°, including retrograde re-entry with entered sign | **Rust candidate algorithm exists, scientific certification pending** |
+
+No runtime position calculation, hidden interpolation, invented source IDs, or inference of a fully covered interval from empty results. New families require a versioned binary/manifest extension and explicit «unreviewed/missing coverage» responses until authorized datasets and independent scientific checks exist.
+
 `onDate` accepts local ISO calendar dates (e.g. 2030-03-31) and IANA zone names; convert to [UTC start of local day, UTC start of next local day). No ambiguous local timestamp parsing. Functions that accept an instant require an explicit `Z` or offset. Expose a Rust UTC-range primitive; wrappers may use a versioned timezone implementation.
+
+### Entirely skipped IANA local calendar days (proposed, fail-closed)
+
+A requested local ISO date may **not exist at all** in its IANA zone. The future Rust UTC-day-range primitive and `motions.onDate`, `ingresses.onDate`, and `events.onDate` MUST return a **typed `NonexistentLocalDate { localDate, timeZone }` error**, not `[]`, `null`, an empty `[start,end)` interval, `MissingCoverage`, `InvalidTimeZone`, or a silently shifted query for a neighboring day. Distinguish this error from invalid calendar spelling, an unknown zone, or a real date with no events. JS/TS WASM and Python bindings must preserve the same error category and original user-supplied date/zone; this API and error type are **proposed only**.
+
+**Independent historical oracle:** `Pacific/Apia` crossed the international date line at the end of 2011-12-29, moving UTC−10 to UTC+14 and omitting **2011-12-30**. Under the reviewed IANA timezone rules:
+
+| Requested local date | UTC range / outcome |
+| --- | --- |
+| `2011-12-29` | `[2011-12-29T10:00:00Z, 2011-12-30T10:00:00Z)` |
+| `2011-12-30` | `NonexistentLocalDate` error; **no UTC range** |
+| `2011-12-31` | `[2011-12-30T10:00:00Z, 2011-12-31T10:00:00Z)` |
+
+The two existing local dates are **contiguous in UTC** even though one calendar label is absent; do not manufacture a 0-hour or 24-hour event search for the missing label. Other real civil days may have 23, 25 or non-midnight-start durations: first determine which UTC instants genuinely belong to the requested local calendar date, then apply the half-open `[start,end)` query. Never infer validity solely by constructing local `00:00` with a possibly imaginary offset. The exact proposed error and goldens are specified in [`test/fixtures/skipped-local-day.json`](../test/fixtures/skipped-local-day.json), checked by `node --test test/skipped-local-day.test.mjs`. Goldens are **contracts**, not a timezone engine or proof that an `onDate` implementation exists.
+
+
+**Proposed `onDate` UTC-boundary contract fixture (issue #20):** [`test/fixtures/local-day-utc-boundaries.json`](../test/fixtures/local-day-utc-boundaries.json) contains seven independent golden half-open intervals, including Europe/Rome's 2026-03-29 **23-hour** day (`2026-03-28T23:00:00Z` to `2026-03-29T22:00:00Z`) and 2026-10-25 **25-hour** day (`2026-10-24T22:00:00Z` to `2026-10-25T23:00:00Z`). The bounds were separately checked with Python `zoneinfo` using the available system IANA timezone data. They are **test oracles**, not the result of an implemented `onDate` function; future wrappers must produce the same intervals for the applicable tzdb rules, never assume all dates are 86,400 seconds or silently treat local midnight as UTC. The fixture and test intentionally do not implement IANA conversion or fetch event records.
 
 ## Date, boundary and failure policy
 
@@ -32,6 +62,33 @@ Suggested (not yet frozen) types:
 - Phase naming is **not the same as ordinary motion**. For supported planets D1/R2/R3/D4 phases have explicitly defined threshold semantics; Moon uses growing/waning quarter phases; nodes/apogees may have only an anchor. An absent phase must not be classified as D1.
 - The old backend sometimes uses lower-case `d1/r2/r3/d4` and other implementations uppercase. Canonical public values proposed: uppercase codes, with an **optional legacy adapter** preserving original case.
 - A return value should include `datasetVersion` and `coverage` when queries depend on incomplete data.
+
+## Python-first minimal API contract — highest delivery priority (NOT IMPLEMENTED)
+
+The project's first **usable** deliverable is the Python synod/new-moon query, **before** JS/TS and before full VSEPH v1. Authoritative schema, packaging and tests: [PYTHON_FIRST_MVP.md](PYTHON_FIRST_MVP.md). Delivery milestones: [DELIVERY_MILESTONES.md](DELIVERY_MILESTONES.md).
+
+**Proposed package:** local distribution `virgostars-event-ephemeris`; import as `virgostars_events`. Final public package naming remains subject to PyPI name availability and approved publication. Implementation should use PyO3/maturin over the **existing Rust** reader, not reimplement the event decoder in Python.
+
+```python
+from virgostars_events import VirgoStarsEvents
+
+reader = VirgoStarsEvents.open("local-dataset.vseph-p0", expected_sha256="<trusted digest>")
+snapshot = reader.get_synods_at("2026-11-11T12:00:00Z")
+planetary_cycles = snapshot["synods"]  # dict keyed by the bodies in this dataset
+moon = snapshot["new_moon"]             # same recorded Moon cycle data as synods["Moon"]
+current_mercury_phase = planetary_cycles["Mercury"]["phase"]["code"]
+```
+
+`get_synods_at(X)` must perform **one latest recorded synod `start <= X` per indexed body** (not "all events during the calendar day"), with original source row ID and full phase timestamp array, normalized ISO UTC timestamps, metadata identifying the dataset, and explicit unknown/coverage status. Default body set comes from the archive; a later optional subset parameter is allowed if it preserves identical semantics.
+
+- **Planet four-part cycle**, with three valid original phase thresholds: D1 at cycle start; R2 at first extra; R3 at second extra; D4 at third extra. Boundary equality selects the new phase. Do not confuse synodic phase R2/R3 with the `moto_pianeti` direct/retrograde state.
+- **Moon cycle:** Moon synod anchor is the latest *recorded* new moon (as defined by the source data convention); phase between that anchor, first quarter, full and last quarter maps to CRESC1 / CRESC2 / CAL1 / CAL2. These are **stage labels**, not a continuous illuminated-fraction calculation. Mark the source convention unverified if required by the release manifest.
+- **No sufficient phase thresholds:** return `phase.code = None` with a meaningful status; preserve SQL `NULL` separately from `[]`; body with no preceding anchor must return a predictable missing-data record, not a future or imaginary cycle. Avoid claiming a valid final D4/CAL2 period past an unreviewed gap if the next cycle is unavailable.
+- **Time input:** accept an ISO-8601 instant with `Z` or numeric offset, or a timezone-aware Python `datetime`, preserve microseconds; reject naive date-times with a typed error. Exact equality with a new-moon/synod anchor counts that anchor as current.
+- **Status:** the archive might contain recorded results but lack human-approved completeness windows; expose `coverage_certified=false` and warnings, do not present a historical phase as independently verified. The SHA-256 identifies file bytes, not scientific certainty.
+- **Output:** normal Python `dict` / list / int / str / bool / `None` suitable for `json.dumps`, with `synods`, `new_moon`, `requested_at_utc`, and `dataset`. These are **proposed** names until the binding and regression suite exist.
+
+Acceptance includes Python local `pip install .`, an installable wheel, actual `import virgostars_events` in a fresh virtual environment and tested parity against the backend's latest synod and phase logic. The separate dataset licensing decision gates public dataset redistribution, not a local install of the code for evaluation. **Do not report this API as available before it is implemented and tested.**
 
 ## Illustrative JS / TS API (not implemented)
 
