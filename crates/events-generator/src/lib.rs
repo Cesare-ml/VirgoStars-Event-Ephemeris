@@ -27,6 +27,7 @@ pub mod lunar;
 pub mod provider_process;
 pub mod speed_crosscheck;
 pub mod speed_extrema;
+pub mod speed_provider_compare;
 
 const MAX_SCAN_STEPS: i128 = 100_000;
 
