@@ -306,7 +306,9 @@ impl P0Archive {
                 .ok_or_else(|| invalid("compressed offset overflow"))?;
             let sha256 = string(entry, "raw_sha256")?.to_owned();
             if !canonical_lowercase_sha256(&sha256) {
-                return Err(invalid("bad block SHA-256 digest: expected 64 lower-case hex characters"));
+                return Err(invalid(
+                    "bad block SHA-256 digest: expected 64 lower-case hex characters",
+                ));
             }
             if let Some(previous) = blocks.get(&key).and_then(|series| series.last()) {
                 if previous.last >= first {
@@ -609,8 +611,10 @@ impl P0Archive {
         }
         if let Some(cursor) = after {
             if cursor.archive_id != self.archive_id
-                || cursor.start != start || cursor.end != end
-                || cursor.at < start || cursor.at >= end
+                || cursor.start != start
+                || cursor.end != end
+                || cursor.at < start
+                || cursor.at >= end
             {
                 return Err(invalid("chronological cursor outside interval"));
             }
@@ -630,10 +634,9 @@ impl P0Archive {
 
         // A single decoded block per active series and an ordered next-event
         // head. A block contains at most MAX_RECORDS events (512 in P0).
-        let mut heads: BTreeMap<
-            (TimestampMicros, EventFamily, BodyId),
-            (Vec<P0Record>, usize, usize),
-        > = BTreeMap::new();
+        type ChronologicalHeads =
+            BTreeMap<(TimestampMicros, EventFamily, BodyId), (Vec<P0Record>, usize, usize)>;
+        let mut heads: ChronologicalHeads = BTreeMap::new();
         for ((family, body), series) in &self.blocks {
             let threshold = after.map_or(start, |cursor| start.max(cursor.at));
             let mut block_index = series.partition_point(|block| block.last < threshold);
@@ -643,10 +646,10 @@ impl P0Archive {
                 }
                 let records = self.load_block(*family, body, block)?;
                 let position = records.partition_point(|record| {
-                    record.at() < start || after.is_some_and(|cursor| {
-                        (record.at(), *family, body)
-                            <= (cursor.at, cursor.family, &cursor.body)
-                    })
+                    record.at() < start
+                        || after.is_some_and(|cursor| {
+                            (record.at(), *family, body) <= (cursor.at, cursor.family, &cursor.body)
+                        })
                 });
                 let next_at = records.get(position).map(P0Record::at);
                 if let Some(next_at) = next_at {
@@ -664,7 +667,8 @@ impl P0Archive {
 
         let mut events = Vec::with_capacity(limit);
         while events.len() < limit {
-            let Some(((_, family, body), (records, position, block_index))) = heads.pop_first() else {
+            let Some(((_, family, body), (records, position, block_index))) = heads.pop_first()
+            else {
                 break;
             };
             events.push(records[position].clone());
@@ -677,18 +681,18 @@ impl P0Archive {
                     );
                 }
             } else {
-                let series = self.blocks.get(&(family, body.clone()))
+                let series = self
+                    .blocks
+                    .get(&(family, body.clone()))
                     .ok_or_else(|| invalid("chronological series disappeared"))?;
                 if let Some(next_block) = series.get(block_index + 1) {
                     if next_block.first < end {
                         let next_records = self.load_block(family, &body, next_block)?;
-                        let next_at = next_records.first()
+                        let next_at = next_records
+                            .first()
                             .ok_or_else(|| invalid("empty indexed P0 block"))?
                             .at();
-                        heads.insert(
-                            (next_at, family, body),
-                            (next_records, 0, block_index + 1),
-                        );
+                        heads.insert((next_at, family, body), (next_records, 0, block_index + 1));
                     }
                 }
             }
@@ -707,7 +711,10 @@ impl P0Archive {
                 source_id: last.source_id,
             })
         };
-        Ok(P0ChronologicalPage { events, next_cursor })
+        Ok(P0ChronologicalPage {
+            events,
+            next_cursor,
+        })
     }
 
     /// One latest recorded synod anchor for every body actually present in
@@ -924,7 +931,10 @@ mod canonical_varint_tests {
             (&[0x80, 0x01][..], 128),
             (&[0xff, 0x7f][..], 16_383),
             (&[0x80, 0x80, 0x01][..], 16_384),
-            (&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01][..], u64::MAX),
+            (
+                &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01][..],
+                u64::MAX,
+            ),
         ] {
             let mut pos = 0;
             assert_eq!(take_varint(bytes, &mut pos).unwrap(), expected);
@@ -962,7 +972,9 @@ mod canonical_varint_tests {
         let mut valid = base.to_vec();
         valid.extend_from_slice(&[4, 0, 0]);
         assert_eq!(
-            decode_records(EventFamily::Ingress, &body, &valid, 1).unwrap().len(),
+            decode_records(EventFamily::Ingress, &body, &valid, 1)
+                .unwrap()
+                .len(),
             1
         );
         for payload in [
@@ -971,8 +983,7 @@ mod canonical_varint_tests {
         ] {
             let mut bytes = base.to_vec();
             bytes.extend_from_slice(payload);
-            let error = decode_records(EventFamily::Ingress, &body, &bytes, 1)
-                .unwrap_err();
+            let error = decode_records(EventFamily::Ingress, &body, &bytes, 1).unwrap_err();
             assert!(error.to_string().contains("non-canonical unsigned varint"));
         }
     }
@@ -1044,7 +1055,10 @@ mod sha256_syntax_tests {
             "0".repeat(63) + "é",
             String::new(),
         ] {
-            assert!(!canonical_lowercase_sha256(&invalid), "incorrectly accepted: {invalid:?}");
+            assert!(
+                !canonical_lowercase_sha256(&invalid),
+                "incorrectly accepted: {invalid:?}"
+            );
         }
     }
 }

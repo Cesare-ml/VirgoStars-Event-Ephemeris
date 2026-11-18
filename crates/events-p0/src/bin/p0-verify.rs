@@ -68,7 +68,10 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
 
     let path = std::path::Path::new(&path);
-    let digest = expected.as_ref().map(|value| value.to_str().ok_or_else(usage)).transpose()?;
+    let digest = expected
+        .as_ref()
+        .map(|value| value.to_str().ok_or_else(usage))
+        .transpose()?;
     let report = verify_archive(path, digest)?;
     println!("{report}");
     Ok(())
@@ -144,7 +147,9 @@ mod tests {
         let error = verify_archive(&input.0, Some(FIXTURE_SHA))
             .expect_err("wrong trusted archive must fail");
         assert!(
-            error.to_string().contains("whole-file archive SHA-256 mismatch"),
+            error
+                .to_string()
+                .contains("whole-file archive SHA-256 mismatch"),
             "identity verification must precede block decode: {error}"
         );
     }

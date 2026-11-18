@@ -8,9 +8,8 @@
 //! Public external-crate tests for bounded chronological recorded-event pages.
 
 use virgostars_events_core::{
-    BodyId, ChronologicalQueryError, Event, EventFamily, EventIndex, IngressEvent,
-    MotionDirection, MotionEvent, SynodEvent, TimestampMicros, ZodiacSign,
-    MAX_CHRONOLOGICAL_PAGE_SIZE,
+    BodyId, ChronologicalQueryError, Event, EventFamily, EventIndex, IngressEvent, MotionDirection,
+    MotionEvent, SynodEvent, TimestampMicros, ZodiacSign, MAX_CHRONOLOGICAL_PAGE_SIZE,
 };
 
 fn body(value: &str) -> BodyId {
@@ -58,7 +57,9 @@ fn mixed_index() -> EventIndex {
 #[test]
 fn events_merge_by_time_family_and_body_with_deterministic_ties() {
     let index = mixed_index();
-    let page = index.chronological_between(time(-10), time(11), 100, None).unwrap();
+    let page = index
+        .chronological_between(time(-10), time(11), 100, None)
+        .unwrap();
     let observed: Vec<_> = page
         .events
         .iter()
@@ -105,10 +106,14 @@ fn stable_cursor_pages_do_not_duplicate_or_skip_tied_events() {
         assert!(page_count < 10, "cursor must make progress");
     }
 
-    let direct = index.chronological_between(time(-10), time(11), 100, None).unwrap();
-    let expected: Vec<_> = direct.events.iter().map(|event| {
-        (event.at(), event.family(), event.body().clone())
-    }).collect();
+    let direct = index
+        .chronological_between(time(-10), time(11), 100, None)
+        .unwrap();
+    let expected: Vec<_> = direct
+        .events
+        .iter()
+        .map(|event| (event.at(), event.family(), event.body().clone()))
+        .collect();
     assert_eq!(page_count, 4);
     assert_eq!(observed, expected);
 }
@@ -116,19 +121,26 @@ fn stable_cursor_pages_do_not_duplicate_or_skip_tied_events() {
 #[test]
 fn half_open_boundaries_and_pre_epoch_instants_are_exact() {
     let index = mixed_index();
-    let negative = index.chronological_between(time(-10), time(0), 3, None).unwrap();
+    let negative = index
+        .chronological_between(time(-10), time(0), 3, None)
+        .unwrap();
     assert_eq!(negative.events.len(), 1);
     assert_eq!(negative.events[0].at(), time(-10));
 
-    let at_zero = index.chronological_between(time(0), time(10), 10, None).unwrap();
+    let at_zero = index
+        .chronological_between(time(0), time(10), 10, None)
+        .unwrap();
     assert_eq!(at_zero.events.len(), 5);
     assert!(at_zero.events.iter().all(|event| event.at() == time(0)));
 
-    let empty = index.chronological_between(time(10), time(10), 10, None).unwrap();
+    let empty = index
+        .chronological_between(time(10), time(10), 10, None)
+        .unwrap();
     assert!(empty.events.is_empty());
     assert!(empty.next_cursor.is_none());
 
-    let unknown = EventIndex::default()
+    let empty_index = EventIndex::default();
+    let unknown = empty_index
         .chronological_between(time(-10), time(11), 10, None)
         .unwrap();
     assert!(unknown.events.is_empty());
@@ -138,12 +150,19 @@ fn half_open_boundaries_and_pre_epoch_instants_are_exact() {
 fn reversed_intervals_and_unsafe_page_sizes_fail_closed() {
     let index = mixed_index();
     assert_eq!(
-        index.chronological_between(time(10), time(0), 10, None).unwrap_err(),
-        ChronologicalQueryError::ReversedRange { start: time(10), end: time(0) }
+        index
+            .chronological_between(time(10), time(0), 10, None)
+            .unwrap_err(),
+        ChronologicalQueryError::ReversedRange {
+            start: time(10),
+            end: time(0)
+        }
     );
     for limit in [0, MAX_CHRONOLOGICAL_PAGE_SIZE + 1] {
         assert_eq!(
-            index.chronological_between(time(-10), time(11), limit, None).unwrap_err(),
+            index
+                .chronological_between(time(-10), time(11), limit, None)
+                .unwrap_err(),
             ChronologicalQueryError::InvalidLimit {
                 requested: limit,
                 max: MAX_CHRONOLOGICAL_PAGE_SIZE,
@@ -151,9 +170,11 @@ fn reversed_intervals_and_unsafe_page_sizes_fail_closed() {
         );
     }
     assert_eq!(
-        index.chronological_between(
-            time(-10), time(11), MAX_CHRONOLOGICAL_PAGE_SIZE, None
-        ).unwrap().events.len(),
+        index
+            .chronological_between(time(-10), time(11), MAX_CHRONOLOGICAL_PAGE_SIZE, None)
+            .unwrap()
+            .events
+            .len(),
         7
     );
 }
@@ -161,7 +182,9 @@ fn reversed_intervals_and_unsafe_page_sizes_fail_closed() {
 #[test]
 fn stale_or_out_of_interval_cursors_are_rejected() {
     let index = mixed_index();
-    let first = index.chronological_between(time(-10), time(11), 1, None).unwrap();
+    let first = index
+        .chronological_between(time(-10), time(11), 1, None)
+        .unwrap();
     let cursor = first.next_cursor.unwrap();
     assert_eq!(cursor.at(), time(-10));
     assert_eq!(cursor.interval_start(), time(-10));
@@ -170,13 +193,17 @@ fn stale_or_out_of_interval_cursors_are_rejected() {
     assert_eq!(cursor.body().as_str(), "Mars");
 
     assert_eq!(
-        index.chronological_between(time(0), time(11), 1, Some(&cursor)).unwrap_err(),
+        index
+            .chronological_between(time(0), time(11), 1, Some(&cursor))
+            .unwrap_err(),
         ChronologicalQueryError::InvalidCursor
     );
     // The cursor still falls within this changed interval, but the query
     // itself is different and cannot safely reuse the old pagination state.
     assert_eq!(
-        index.chronological_between(time(-11), time(11), 1, Some(&cursor)).unwrap_err(),
+        index
+            .chronological_between(time(-11), time(11), 1, Some(&cursor))
+            .unwrap_err(),
         ChronologicalQueryError::InvalidCursor
     );
     let another_index = EventIndex::from_events(vec![ingress("Venus", -10)]).unwrap();
@@ -218,16 +245,17 @@ fn cursor_cannot_cross_independent_indices_with_identical_events() {
 
 #[test]
 fn pagination_does_not_infer_missing_astronomical_events() {
-    let index = EventIndex::from_events(vec![
-        ingress("Moon", 0),
-        ingress("Moon", 10_000_000),
-    ])
-    .unwrap();
-    let page = index.chronological_between(time(1), time(10_000_000), 5, None).unwrap();
+    let index =
+        EventIndex::from_events(vec![ingress("Moon", 0), ingress("Moon", 10_000_000)]).unwrap();
+    let page = index
+        .chronological_between(time(1), time(10_000_000), 5, None)
+        .unwrap();
     // The index does not invent an ingress for the enormous gap.
     assert!(page.events.is_empty());
     assert!(page.next_cursor.is_none());
-    let after = index.chronological_between(time(1), time(10_000_001), 5, None).unwrap();
+    let after = index
+        .chronological_between(time(1), time(10_000_001), 5, None)
+        .unwrap();
     assert_eq!(after.events.len(), 1);
     assert_eq!(after.events[0].at(), time(10_000_000));
 }
