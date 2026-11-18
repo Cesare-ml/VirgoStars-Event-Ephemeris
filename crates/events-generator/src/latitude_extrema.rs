@@ -91,6 +91,26 @@ fn refine_sampled_peak<P: LatitudeProvider>(
         }
         let first_speed = checked_latitude_speed(provider, body, first, remaining_probes)?;
         let second_speed = checked_latitude_speed(provider, body, second, remaining_probes)?;
+        if first_speed == second_speed {
+            // Equal outer probes can mean a smooth symmetric peak or a flat
+            // top. Demand a strictly more extreme interior sample before
+            // narrowing under the existing unimodal assumption.
+            let center = midpoint(first, second);
+            if center <= first || center >= second {
+                return Err(GenerationError::AmbiguousLatitudeSpeedExtremum);
+            }
+            let middle_speed = checked_latitude_speed(provider, body, center, remaining_probes)?;
+            let strictly_more_extreme = match kind {
+                LatitudeSpeedExtremumKind::NorthwardMaximum => middle_speed > first_speed,
+                LatitudeSpeedExtremumKind::SouthwardMagnitudeMaximum => middle_speed < first_speed,
+            };
+            if !strictly_more_extreme {
+                return Err(GenerationError::AmbiguousLatitudeSpeedExtremum);
+            }
+            left = first;
+            right = second;
+            continue;
+        }
         let move_right = match kind {
             LatitudeSpeedExtremumKind::NorthwardMaximum => first_speed < second_speed,
             LatitudeSpeedExtremumKind::SouthwardMagnitudeMaximum => first_speed > second_speed,

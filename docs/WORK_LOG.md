@@ -1,3 +1,15 @@
+## 2026-11-18 — Fail closed on sampled flat speed peaks
+
+- Invented flat-top models exposed a misleading narrow bracket in both
+  speed refiners. Equal interior speeds now trigger a budgeted midpoint
+  sample: only a strictly more extreme midpoint permits narrowing under
+  the existing unimodal assumption; otherwise refinement returns ambiguity.
+- Synthetic tests cover both signs, both providers, base and adaptive scans,
+  a smooth symmetric peak, and exhaustion of the shared probe budget.
+  They do not establish physical accuracy or event coverage.
+- The complete locked Rust validator passed locally on Windows, with one
+  optional snapshot test ignored. No real astronomical provider was run.
+
 ## 2026-11-18 — Fail closed on unattainable peak precision
 
 - Two synthetic parabolic providers exposed that the longitude-speed and

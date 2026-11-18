@@ -87,6 +87,26 @@ fn measured_local_peak<P: LongitudeProvider>(
         }
         let v1 = checked_speed(provider, body, first, remaining_probes)?;
         let v2 = checked_speed(provider, body, second, remaining_probes)?;
+        if v1 == v2 {
+            // Equal outer probes can mean a smooth symmetric peak or a flat
+            // top. Only a strictly more extreme interior sample supports
+            // narrowing to the middle under the existing unimodal assumption.
+            let center = midpoint(first, second);
+            if center <= first || center >= second {
+                return Err(GenerationError::AmbiguousSpeedExtremum);
+            }
+            let middle = checked_speed(provider, body, center, remaining_probes)?;
+            let strictly_more_extreme = match kind {
+                SpeedExtremumKind::DirectMaximum => middle > v1,
+                SpeedExtremumKind::RetrogradeMagnitudeMaximum => middle < v1,
+            };
+            if !strictly_more_extreme {
+                return Err(GenerationError::AmbiguousSpeedExtremum);
+            }
+            left = first;
+            right = second;
+            continue;
+        }
         let move_right = match kind {
             SpeedExtremumKind::DirectMaximum => v1 < v2,
             SpeedExtremumKind::RetrogradeMagnitudeMaximum => v1 > v2,

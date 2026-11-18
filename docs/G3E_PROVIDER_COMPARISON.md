@@ -19,6 +19,13 @@ return an explicit ambiguity error instead of reporting a wider bracket as
 though it met the request. This can reject very fine precision settings.
 Numerical bracket width is not physical accuracy or coverage certification.
 
+When two refinement probes have equal speeds, the refiners spend one more
+provider probe at an interior midpoint. They narrow to the middle only if
+that sample is strictly more extreme; otherwise they return an ambiguity
+error. This preserves symmetric smooth peaks under the existing unimodal
+assumption while rejecting observed flat tops. Unsampled plateaus or other
+extrema can still be missed; this is not a completeness guarantee.
+
 `latitude_provider_compare::compare_latitude_event_providers` accepts two separately supplied implementations of `LatitudeProvider`, the same `BodyId`, a half-open UTC `SearchWindow`, an adaptive depth and separate probe budgets. The function never opens or modifies the original source data, P0 archive, database or offline consumer.
 
 ## What is actually compared
