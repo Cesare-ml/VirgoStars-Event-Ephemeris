@@ -26,6 +26,8 @@ fn main() {
         identity = identity.replace("virgostars.latitude.v1", "virgostars.longitude.v2");
     } else if mode.contains("missing_plane") {
         identity = identity.replace("\"mean-of-date\"", "\"\"");
+    } else if mode.contains("different_plane") {
+        identity = identity.replace("\"mean-of-date\"", "\"true-of-date\"");
     }
     println!("{identity}");
     io::stdout().flush().unwrap();
@@ -41,15 +43,26 @@ fn main() {
         } else {
             let response_body = if mode.contains("wrong_body") { "Moon" } else { body };
             let response_time = if mode.contains("wrong_time") { "0" } else { at };
-            let latitude = if mode.contains("invalid_latitude") {
-                "91.0"
+            let (latitude, speed) = if mode.contains("analytic") {
+                let days = at.parse::<i64>().unwrap() as f64 / 86_400_000_000.0;
+                let phase = 2.0 * std::f64::consts::PI * (days + 0.1);
+                let beta = 0.3 * phase.cos();
+                let speed = -0.3 * 2.0 * std::f64::consts::PI * phase.sin();
+                (beta.to_string(), speed.to_string())
             } else {
-                "1.25"
-            };
-            let speed = if mode.contains("invalid_speed") {
-                "1e999"
-            } else {
-                "-0.125"
+                let beta = if mode.contains("invalid_latitude") {
+                    "91.0"
+                } else if mode.contains("shifted") {
+                    "1.75"
+                } else {
+                    "1.25"
+                };
+                let velocity = if mode.contains("invalid_speed") {
+                    "1e999"
+                } else {
+                    "-0.125"
+                };
+                (beta.to_string(), velocity.to_string())
             };
             println!(
                 "{{\"body\":\"{response_body}\",\"utc_microseconds\":\"{response_time}\",\"latitude_degrees\":{latitude},\"latitude_speed_degrees_per_day\":{speed}}}"

@@ -33,3 +33,7 @@ path = "src/fill_gaps.rs"
 [[bin]]
 name = "vseph-review-candidates"
 path = "src/review_candidates.rs"
+
+[[bin]]
+name = "vseph-compare-latitudes"
+path = "src/compare_latitudes.rs"

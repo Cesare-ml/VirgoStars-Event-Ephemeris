@@ -61,19 +61,50 @@ The example numbers above are **synthetic**. The adapter rejects mismatched body
 
 Four cross-platform subprocess integration tests compile an independent, standalone Rust mock executable, exercise exact time echoes and negative velocity, refuse incompatible identities and six malformed/faulty reply modes, then run a real two-process sample comparison. They are **transport tests only**, not astronomical goldens. The next scientific step is to implement and separately validate one actual producer for this protocol (and then an independent reference), before adding a command-line scientific review workflow.
 
+## Bounded two-source CLI for experimental audits
+
+The new **development-only** `vseph-compare-latitudes` binary accepts two explicitly chosen `virgostars.latitude.v1` executables and can compare `samples`, observed directional `events` or `both`. No database, P0/CSV/archive reader or importer is involved. This is a transport/test harness, **not** a scientifically approved reviewer or source independence certificate.
+
+```bash
+cargo run --locked -p virgostars-events-generator --bin vseph-compare-latitudes -- \
+  --mode both --body Mars \
+  --start-us 0 --end-us 172800000000 \
+  --step-us 86400000000 --precision-us 1000000 \
+  --primary-program /path/to/trusted-primary \
+  --reference-program /path/to/trusted-reference \
+  --latitude-tolerance-deg 0.01 \
+  --speed-tolerance-deg-per-day 0.01 \
+  --event-time-tolerance-us 600000000 \
+  --peak-speed-tolerance-deg-per-day 0.1 \
+  --adaptive-depth 1 --max-probes 3000
+```
+
+All numeric values are **illustrative test parameters**, not approved planetary accuracy tolerances. Every option is explicit; both providers must self-declare the same ecliptic plane, frame, correction model, dynamical/input time scales and signed-speed definition. The CLI rejects mismatches **before sampling**. It uses bounded UTC grids (max 100,000 points), validated finite thresholds, adaptive depth 1–8, and separately allocated per-provider budgets for the sample and event passes. No automatic data download occurs. Only run executable paths that the operator explicitly trusts; a subprocess is arbitrary local code, and this protocol currently has no built-in wall-clock timeout.
+
+The emitted JSON includes source identities, UTC window/tolerances, sampled coordinate and signed-speed residuals, event candidate matches/unmatched events, per-pass probe counts and explicit flags: `provider_independence_verified:false`, `astronomical_accuracy_verified:false`, `coverage_certified:false`, `safe_to_import:false` **in every case**. Exact UTC integer times and offsets are encoded as **decimal strings** to preserve microsecond precision across JSON/JavaScript consumers.
+
+| Exit | Meaning | JSON stdout |
+| --- | --- | --- |
+| `0` | No observed discrepancies at sampled instants and configured tolerances; **not scientific agreement** | Complete report |
+| `1` | At least one sampled discrepancy or unmatched/discordant event candidate | Complete report |
+| `2` | Invalid request, incompatible declared conventions, provider failure, ambiguous scan or exhausted budget | **Empty**; diagnostic on stderr |
+
+Five subprocess CLI tests plus two argument-parser tests exercise the exit rules, complete-versus-atomic reports, genuine dual-process analytical candidate scanning, out-of-tolerance samples and malformed inputs. They use only a synthetic Rust fixture; actual independent source/kernel identity and UTC golden events remain untested.
+
 ## Requirements before real astronomical parity
 
 1. Implement two **separately substantiated, license-reviewed** `LatitudeProvider`s. State the ecliptic reference plane (mean/true, epoch/date), geocentric/apparent corrections, time scale, ephemeris/kernel exact version, algorithm and dependencies for **each**. Sharing one upstream kernel through two wrappers is not independent validation.
 2. Agree an explicit versioned observation convention and acceptable per-body numerical/time tolerances *before* comparing results. Time tolerances are UTC microseconds; signed-speed tolerances are degrees/day.
 3. Use bounded UTC intervals and adequate budgets; record every failure, including provider errors, ambiguous plateaus or densely clustered candidate events. Investigate both unmatched and matched-but-discrepant events. Run additional independently selected sample phases/cadences to challenge aliasing.
 4. Compare exact UTC timestamps and signed speeds against **independently authored per-body goldens**, not just the other provider's generated candidates. Review broad coverage only from independent evidence; each family/body UTC window remains `UNKNOWN` until explicitly approved.
-5. Add a programmatic CLI/reviewer integration only after the provider's source, setup, numerical precision and testing process have been reviewed. The offline reader must continue to read approved precomputed records, without an astronomical calculation dependency.
+5. The experimental CLI exists, but **promotion to a scientific reviewer** requires that the provider's source, setup, numerical precision and testing process first be reviewed. The offline reader must continue to read approved precomputed records, without an astronomical calculation dependency.
 
 ## Local synthetic gate
 
 ```bash
 cargo test --locked -p virgostars-events-generator latitude_provider_compare
 cargo test --locked -p virgostars-events-generator --test latitude_process
+cargo test --locked -p virgostars-events-generator --test latitude_cli
 cargo fmt -p virgostars-events-generator -- --check
 cargo test --locked --workspace --quiet
 cargo clippy --locked --workspace --all-targets -- -D warnings
