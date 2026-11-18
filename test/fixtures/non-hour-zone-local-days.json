@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "reference": "Python 3 zoneinfo on system IANA tzdb; independently checked 2026-11-15. Fixed golden dates, not runtime zone computation.",
+  "interval_semantics": "[start_utc, end_exclusive_utc)",
+  "cases": [
+    {
+      "id": "kathmandu-quarter-hour",
+      "local_date": "2026-11-15",
+      "iana_zone": "Asia/Kathmandu",
+      "start_utc": "2026-11-14T18:15:00Z",
+      "end_exclusive_utc": "2026-11-15T18:15:00Z",
+      "elapsed_seconds": 86400
+    },
+    {
+      "id": "chatham-summer-quarter-hour",
+      "local_date": "2026-01-15",
+      "iana_zone": "Pacific/Chatham",
+      "start_utc": "2026-01-14T10:15:00Z",
+      "end_exclusive_utc": "2026-01-15T10:15:00Z",
+      "elapsed_seconds": 86400
+    },
+    {
+      "id": "chatham-winter-quarter-hour",
+      "local_date": "2026-07-15",
+      "iana_zone": "Pacific/Chatham",
+      "start_utc": "2026-07-14T11:15:00Z",
+      "end_exclusive_utc": "2026-07-15T11:15:00Z",
+      "elapsed_seconds": 86400
+    },
+    {
+      "id": "lord-howe-fall-back-half-hour",
+      "local_date": "2026-04-05",
+      "iana_zone": "Australia/Lord_Howe",
+      "start_utc": "2026-04-04T13:00:00Z",
+      "end_exclusive_utc": "2026-04-05T13:30:00Z",
+      "elapsed_seconds": 88200
+    },
+    {
+      "id": "lord-howe-spring-forward-half-hour",
+      "local_date": "2026-10-04",
+      "iana_zone": "Australia/Lord_Howe",
+      "start_utc": "2026-10-03T13:30:00Z",
+      "end_exclusive_utc": "2026-10-04T13:00:00Z",
+      "elapsed_seconds": 84600
+    }
+  ]
+}

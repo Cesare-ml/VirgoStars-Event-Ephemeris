@@ -26,7 +26,10 @@ SOURCE_SUITES = (
 
 def run_suite(pattern: str, required: int, directory: Path) -> bool:
     """Never count skipped, expected-failed, missing or failed source tests as a pass."""
-    suite = unittest.defaultTestLoader.discover(
+    # TestLoader caches its discovery root. Each suite can live in a
+    # different directory, so sharing unittest.defaultTestLoader fails on the
+    # second root and prevents the CSV oracle from running.
+    suite = unittest.TestLoader().discover(
         start_dir=str(directory), pattern=pattern
     )
     found = suite.countTestCases()

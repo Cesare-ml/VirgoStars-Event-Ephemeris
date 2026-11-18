@@ -34,34 +34,79 @@ def _finite_json_float(token: str) -> float:
     return value
 
 
+# serde_json's integer transport is bounded by Rust i64 or u64. Never let
+# Python's arbitrary-precision ints conceal an impossible native JSON value.
+_I64_MIN = -(1 << 63)
+_U64_MAX = (1 << 64) - 1
+
+
+def _bounded_json_int(token: str) -> int:
+    value = int(token)
+    if not _I64_MIN <= value <= _U64_MAX:
+        raise ValueError("native synod response has integer outside Rust i64/u64 range")
+    return value
+
+
+def _require_unicode_scalars(value: Any) -> None:
+    """Reject lone UTF-16 surrogates in JSON keys and values, at any depth.
+
+    Python's json decoder accepts ``\\ud800`` on its own even though it
+    cannot be represented as a Unicode scalar in UTF-8. The Rust side emits
+    valid UTF-8, so accepting such strings would mask malformed test/native
+    transport data. Traverse iteratively to avoid a second recursion limit.
+    """
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            try:
+                item.encode("utf-8", errors="strict")
+            except UnicodeEncodeError as exc:
+                raise ValueError(
+                    "native synod response contains an unpaired Unicode surrogate"
+                ) from exc
+        elif isinstance(item, dict):
+            pending.extend(item.keys())
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+
+
 def decode_native_json(payload: str) -> Any:
     """Parse only standard, unambiguous JSON (including nested objects)."""
     if type(payload) is not str:
         raise ValueError("native synod response must be JSON text")
-    return json.loads(
+    result = json.loads(
         payload,
         object_pairs_hook=_unique_object,
         parse_constant=_reject_nonfinite,
         parse_float=_finite_json_float,
+        parse_int=_bounded_json_int,
     )
+    _require_unicode_scalars(result)
+    return result
 
 
 def same_json_value(left: Any, right: Any) -> bool:
-    """Compare native JSON structures without Python's bool/int/float coercion.
+    """Compare native JSON values exactly, without recursive Python calls.
 
-    In particular, True == 1 and 1 == 1.0 in Python, although Rust JSON
-    emits those as distinct values. Used to audit the Moon alias before it
-    is replaced by the canonical Moon record in the public Python response.
+    Python's equality treats True == 1 and 1 == 1.0 as equal, although Rust
+    emits different JSON scalar types. A stack avoids RecursionError on
+    valid deeply nested native responses before the Moon alias is checked.
     """
-    if type(left) is not type(right):
-        return False
-    if isinstance(left, dict):
-        return (
-            left.keys() == right.keys()
-            and all(same_json_value(value, right[key]) for key, value in left.items())
-        )
-    if isinstance(left, list):
-        return len(left) == len(right) and all(
-            same_json_value(item, other) for item, other in zip(left, right)
-        )
-    return left == right
+    pending = [(left, right)]
+    while pending:
+        current, expected = pending.pop()
+        if type(current) is not type(expected):
+            return False
+        if isinstance(current, dict):
+            if current.keys() != expected.keys():
+                return False
+            pending.extend((value, expected[key]) for key, value in current.items())
+        elif isinstance(current, list):
+            if len(current) != len(expected):
+                return False
+            pending.extend(zip(current, expected))
+        elif current != expected:
+            return False
+    return True

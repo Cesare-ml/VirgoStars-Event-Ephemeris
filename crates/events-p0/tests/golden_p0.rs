@@ -34,12 +34,20 @@ impl TempFile {
         // On Windows, multiple parallel tests can observe the same clock tick.
         // Include an atomic sequence and create exclusively so a fixture cannot
         // overwrite a live test's file and then delete it on Drop.
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let sequence = NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "virgostars-p0-fixture-{}-{nanos}-{sequence}.bin", std::process::id()
+            "virgostars-p0-fixture-{}-{nanos}-{sequence}.bin",
+            std::process::id()
         ));
-        let mut file = OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
         file.write_all(bytes).unwrap();
         Self(path)
     }
@@ -461,11 +469,7 @@ fn header_rejects_duplicate_and_unicode_escaped_json_keys() {
         bytes.extend_from_slice(br#","format":"VSEPH-P0-EXPERIMENTAL"}"#);
         bytes
     };
-    let nested = header.replacen(
-        r#""sections":{"#,
-        r#""sections":{"synod":0,"#,
-        1,
-    );
+    let nested = header.replacen(r#""sections":{"#, r#""sections":{"synod":0,"#, 1);
     assert_ne!(nested, header, "golden fixture must contain a sections map");
     let escaped_alias = {
         let mut bytes = header.as_bytes()[..header_len - 1].to_vec();

@@ -29,12 +29,20 @@ impl TestFile {
         // Windows clock resolution is not unique for concurrently running tests.
         // Combine process ID, clock tick and atomic counter, then create
         // exclusively so one test cannot overwrite/delete another's fixture.
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let sequence = NEXT_TEST_FILE_ID.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "vseph-coverage-{}-{nanos}-{sequence}-{name}", std::process::id()
+            "vseph-coverage-{}-{nanos}-{sequence}-{name}",
+            std::process::id()
         ));
-        let mut file = OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
         file.write_all(bytes).unwrap();
         Self(path)
     }
@@ -48,7 +56,9 @@ impl Drop for TestFile {
 
 #[test]
 fn policy_and_archive_fixtures_do_not_collide_under_parallel_allocation() {
-    let bytes = STANDARD.decode(include_str!("fixtures/synthetic.p0.base64").trim()).unwrap();
+    let bytes = STANDARD
+        .decode(include_str!("fixtures/synthetic.p0.base64").trim())
+        .unwrap();
     let fixtures: Vec<_> = (0..64)
         .map(|_| TestFile::new("synthetic.p0", &bytes))
         .collect();
@@ -257,11 +267,7 @@ fn duplicate_json_policy_keys_are_rejected_at_every_depth() {
     let invalid = [
         (
             "top-level",
-            valid.replacen(
-                "\"schema\":",
-                "\"schema\":\"other\",\"schema\":",
-                1,
-            ),
+            valid.replacen("\"schema\":", "\"schema\":\"other\",\"schema\":", 1),
         ),
         (
             "same-value",
@@ -273,11 +279,7 @@ fn duplicate_json_policy_keys_are_rejected_at_every_depth() {
         ),
         (
             "nested-window",
-            valid.replacen(
-                "\"start_us\":",
-                "\"start_us\":\"99\",\"start_us\":",
-                1,
-            ),
+            valid.replacen("\"start_us\":", "\"start_us\":\"99\",\"start_us\":", 1),
         ),
         (
             "unrecognized-nested-metadata",
@@ -289,11 +291,7 @@ fn duplicate_json_policy_keys_are_rejected_at_every_depth() {
         ),
         (
             "escaped-equivalent-key",
-            valid.replacen(
-                "\"schema\":",
-                "\"\\u0073chema\":\"other\",\"schema\":",
-                1,
-            ),
+            valid.replacen("\"schema\":", "\"\\u0073chema\":\"other\",\"schema\":", 1),
         ),
     ];
     for (name, json_text) in invalid {
@@ -303,7 +301,9 @@ fn duplicate_json_policy_keys_are_rejected_at_every_depth() {
             .err()
             .expect("ambiguous policy must be rejected");
         assert!(
-            error.to_string().contains("duplicate coverage policy JSON key"),
+            error
+                .to_string()
+                .contains("duplicate coverage policy JSON key"),
             "{name}: {error}"
         );
     }

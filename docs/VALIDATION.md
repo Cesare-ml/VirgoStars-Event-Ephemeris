@@ -286,6 +286,14 @@ Run `cargo generate-lockfile` after updating the `tempfile` Rust dependency (exi
 
 For a shared synthetic golden fixture, compare exact serialized results and error categories from Rust, JS/TS WASM and Python PyO3. Include UTC and Europe/Rome on both DST transitions, out-of-coverage dates, month containing multiple new moons, negative timestamps, missing phases and invalid input. Test browser and Node loading separately, and Python wheels on supported target platforms.
 
+### Calendar-date failure gate — entire skipped IANA day
+
+Future Rust `onDate(localDate, timeZone)` and thin bindings must be compared against [`test/fixtures/skipped-local-day.json`](../test/fixtures/skipped-local-day.json) using `node --test test/skipped-local-day.test.mjs` as an **offline golden/schema test**. The fixture covers `Pacific/Apia` 2011-12-29 and 2011-12-31 as adjacent continuous UTC half-open intervals, with the completely nonexistent 2011-12-30 yielding the proposed **typed `NonexistentLocalDate` error**, never an empty result or a query shifted into the next date. The Node test checks the contract only; a later independent Rust engine + timezone-provider integration test must prove actual conversion, failure propagation and cross-language parity against a recorded IANA tzdb version.
+
+Goldens checked independently on 2026-11-15 with Python 3 `zoneinfo` and system IANA tzdb **2025b**. This evidence does **not** establish a shipped timezone service or shipped event reader. Other DST boundaries are covered by the separate Europe/Rome fixture below.
+
+**Pre-implementation local-day acceptance oracle:** `node --test test/local-day-utc-boundaries.test.mjs` validates the independent UTC interval fixture for UTC and Europe/Rome on both 2026 DST transition days and adjacent days. Golden boundaries are hard-coded separately from fixture entries and checked for exact equality, half-open adjacency, positive durations and invalid fixture mutations. This validates **fixture integrity only**; after an IANA-zone `onDate` wrapper exists, add an integration test that compares **its actual output** to the oracle without reusing the algorithm under test. 2026 timezone law/tzdb data may change; keep provenance explicit.
+
 ## Gate E: backend behavior parity
 
 Use the [compatibility matrix](BACKEND_COMPATIBILITY.md), comparing at least:
@@ -302,6 +310,25 @@ Record deliberate legacy bug fixes separately rather than forcing the new engine
 Measure dataset bytes, memory use, random lookup p50/p95, cold open, repeated queries, interval iteration, Rust crate size, WASM gzip bytes and Python wheel sizes on specified hardware/runtime. No claimed throughput without executed benchmarks.
 
 **No releases, deployments, backend replacement, production DB write, automatic GitHub Actions or merge to main without maintainer's explicit decision and completed applicable gates.**
+
+## Supplemental local-day golden oracle — non-hour IANA offsets (2026-11-15)
+
+Issue [#23](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/23) adds offline, **fixed** reference intervals for proposed `onDate(localDate, IANAZone)` behavior. The source files are `test/fixtures/non-hour-zone-local-days.json` and `test/non-hour-zone-local-days.test.mjs`. The test command is `node --test test/non-hour-zone-local-days.test.mjs`; optional syntax preflight is `node --check test/non-hour-zone-local-days.test.mjs`.
+
+- `Asia/Kathmandu` (UTC+05:45) and `Pacific/Chatham` (UTC+12:45 or +13:45) detect mistaken whole-hour conversion. The two Chatham fixtures cover summer/winter offset differences.
+- `Australia/Lord_Howe` changes its clock by **30 minutes**: the fixed 2026-04-05 local day lasts **88,200 s (24.5 h)** and 2026-10-04 lasts **84,600 s (23.5 h)**, using half-open UTC intervals.
+- Reference instants were independently checked with Python 3 `zoneinfo` and installed IANA tzdb on **2026-11-15**. Runtime tests compare the checked-in JSON with separately transcribed fixed UTC strings, validate elapsed seconds, and reject duplicate zone/day keys, missing zones, reversed times and inappropriate whole-hour/23h/25h assumptions.
+- This is **only a test of the fixed fixture/oracle's integrity**. There is no implemented `onDate` wrapper on `main`; the eventual Rust/WASM/Python wrapper must be tested directly against these constants, **never** against expected values derived using the same function. Future tzdb changes can alter some local-day mappings: record the tzdb version and review differences before revising the oracle.
+
+**Verification:** Node.js **v22.16.0**, isolated local checkout containing **exact GitHub blobs** of the new test and fixture: `node --check test/non-hour-zone-local-days.test.mjs` → **PASS (exit 0)**; `node --test test/non-hour-zone-local-days.test.mjs` → **9/9 PASS (exit 0)**. The first draft's duplicate-key diagnostic test failed 1/9, was fixed, and the complete suite was rerun successfully. Tested file blob IDs: test `ad1e23558873edbd5d550d4c56a1133f594909c3`, fixture `4e8a6b8bcef7c188e9182b0040381ec786d7130e`.
+
+**Not run:** full-repository Node/Rust test suites, any real VSEPH dataset, native cross-language `onDate` parity, browser/mobile integrations, or source database export. Do not treat fixed example checks as a timezone API implementation, source-data validation, or accuracy certification.
+
+## Gate D supplement: synthetic Rome local-day event membership (issue #24)
+
+For the **proposed** `motions.onDate`, `ingresses.onDate` and `events.onDate` adapters, use [the synthetic UTC-microsecond membership fixture](../test/fixtures/local-day-event-membership.json) and its [offline Node tests](../test/local-day-event-membership.test.mjs). The fixture covers the Europe/Rome 2026 spring-forward **23-hour day** and autumn-back **25-hour day**, plus adjacent local dates. Its invented motion and ingress event IDs exercise exact inclusive start, exclusive end and ±1 µs neighboring instants; `BigInt` comparisons avoid JavaScript floating-point timestamp loss. The independent expected ID lists prevent an accidental matching implementation from silently updating the oracle.
+
+Run `node --check test/local-day-event-membership.test.mjs` and `node --test test/local-day-event-membership.test.mjs` from a complete checkout. This validates the **synthetic acceptance fixture only**. A future real Rust UTC-range primitive and IANA-zone wrapper must return the same event IDs and boundaries in native Rust, WASM and Python, with explicit coverage failures; no production `onDate` implementation is validated by this fixture. The equal-timestamp cross-family tie policy is not assumed here: fixture event instants are all distinct. These six UTC day bounds match the separately integrated [date-only golden fixture](../test/fixtures/local-day-utc-boundaries.json), checked against Node ICU tzdb 2025b; revalidate against the chosen timezone implementation and tzdb release. No real event data, astronomy calculations or dataset rights are changed.
 
 **Python CLI resource gate (2026-11-12):** `virgostars-events` must close its privately copied verified archive on successful JSON output, lookup error and JSON error. The independently executed GitHub-source **8 CLI + 15 API/time tests PASS** (Python 3.13.5, native mocked). The owner source CSV comparator and native smoke tests also close their readers; their scientific/native execution is still pending. The full mandatory acceptance is **44 cases**, not proof of native readiness.
 

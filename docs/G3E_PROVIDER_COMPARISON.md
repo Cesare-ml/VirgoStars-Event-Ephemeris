@@ -1,5 +1,15 @@
 # G3E — Comparison of latitude-event candidates from two providers
 
+**Owner direction, 2026-11-18:** prepare and test provider-neutral tooling,
+but do not use VirgoStars-Ephemeris as an event-calculation source here until
+that engine has been independently validated. A prior Windows owner smoke
+returned 83 real-kernel transport observations; its local kernel digest was
+not independently authenticated, the binary-to-source commit was not
+attested, and no independent reference was compared. This was a transport
+check only, not approval of the engine, event accuracy or coverage. Earlier
+dated statements below that no owner smoke had been run describe their
+historical checkpoints.
+
 **Status: experimental Rust generator code, no astronomical certification (2026-11-18).**
 
 `latitude_provider_compare::compare_latitude_event_providers` accepts two separately supplied implementations of `LatitudeProvider`, the same `BodyId`, a half-open UTC `SearchWindow`, an adaptive depth and separate probe budgets. The function never opens or modifies the original source data, P0 archive, database or offline consumer.

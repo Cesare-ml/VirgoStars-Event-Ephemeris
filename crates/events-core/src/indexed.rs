@@ -303,10 +303,14 @@ impl EventIndex {
                 && cursor.end == end
                 && cursor.at >= start
                 && cursor.at < end
-                && self.series(cursor.family, &cursor.body).is_some_and(|records| {
-                    let pos = records.partition_point(|event| event.at() < cursor.at);
-                    records.get(pos).is_some_and(|event| event.at() == cursor.at)
-                });
+                && self
+                    .series(cursor.family, &cursor.body)
+                    .is_some_and(|records| {
+                        let pos = records.partition_point(|event| event.at() < cursor.at);
+                        records
+                            .get(pos)
+                            .is_some_and(|event| event.at() == cursor.at)
+                    });
             if !valid {
                 return Err(ChronologicalQueryError::InvalidCursor);
             }
@@ -320,17 +324,14 @@ impl EventIndex {
 
         // Each map entry owns the current head of one (family, body) series;
         // advancing that head costs O(log number_of_series).
-        let mut heads: BTreeMap<
-            (TimestampMicros, EventFamily, &BodyId),
-            (&[Event], usize),
-        > = BTreeMap::new();
+        let mut heads: BTreeMap<(TimestampMicros, EventFamily, &BodyId), (&[Event], usize)> =
+            BTreeMap::new();
         for ((family, body), series) in &self.series {
             let records = series.as_slice();
             let pos = records.partition_point(|event| {
                 event.at() < start
                     || after.is_some_and(|cursor| {
-                        (event.at(), *family, body)
-                            <= (cursor.at, cursor.family, &cursor.body)
+                        (event.at(), *family, body) <= (cursor.at, cursor.family, &cursor.body)
                     })
             });
             if let Some(event) = records.get(pos) {
@@ -365,7 +366,10 @@ impl EventIndex {
                 body: event.body().clone(),
             })
         };
-        Ok(ChronologicalPage { events, next_cursor })
+        Ok(ChronologicalPage {
+            events,
+            next_cursor,
+        })
     }
 
     pub fn len(&self) -> usize {

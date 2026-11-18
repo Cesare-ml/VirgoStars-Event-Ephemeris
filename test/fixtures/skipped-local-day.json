@@ -1,0 +1,45 @@
+{
+  "schema": "virgostars-skipped-local-day/1",
+  "status": "proposed API contract and fixture only; no onDate implementation or dataset",
+  "sourceLicense": "CPAL-1.0",
+  "attribution": "Powered by VirgoStars — https://www.virgostars.it/",
+  "provenance": "Independently checked with Python 3 stdlib zoneinfo and system IANA tzdb 2025b (2026-11-15). Local date 2011-12-30 was skipped when Pacific/Apia moved from UTC-10 to UTC+14. Fixture timestamps are hard-coded review oracles, not a timezone conversion implementation.",
+  "expectedFailure": {
+    "code": "NonexistentLocalDate",
+    "kind": "typed error",
+    "message": "The requested IANA-zone local calendar date contains no UTC instant. Do not normalize to another date or query an adjacent day."
+  },
+  "cases": [
+    {
+      "id": "apia-last-day-before-skip",
+      "localDate": "2011-12-29",
+      "timeZone": "Pacific/Apia",
+      "outcome": "interval",
+      "startUtc": "2011-12-29T10:00:00Z",
+      "endUtc": "2011-12-30T10:00:00Z",
+      "durationSeconds": 86400,
+      "reference": "UTC-10:00 local calendar day"
+    },
+    {
+      "id": "apia-skipped-day",
+      "localDate": "2011-12-30",
+      "timeZone": "Pacific/Apia",
+      "outcome": "error",
+      "errorCode": "NonexistentLocalDate",
+      "startUtc": null,
+      "endUtc": null,
+      "durationSeconds": null,
+      "reference": "No local 2011-12-30: the next instant after 2011-12-29 23:59:59-10:00 is 2011-12-31 00:00:00+14:00"
+    },
+    {
+      "id": "apia-first-day-after-skip",
+      "localDate": "2011-12-31",
+      "timeZone": "Pacific/Apia",
+      "outcome": "interval",
+      "startUtc": "2011-12-30T10:00:00Z",
+      "endUtc": "2011-12-31T10:00:00Z",
+      "durationSeconds": 86400,
+      "reference": "UTC+14:00 local calendar day"
+    }
+  ]
+}
