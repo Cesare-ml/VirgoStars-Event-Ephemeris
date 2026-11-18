@@ -120,9 +120,19 @@ No secret credentials, exported private DB copies, telemetry, interpretive horos
 
 ## Development status and first deliverable
 
-**Next milestone:** approve public API, freeze a first **draft** format specification, build tiny synthetic fixtures, write an executable Rust reader prototype with strict error handling and tests, then implement a read-only exporter/validator that can prove exact parity on an *authorized* snapshot. This repository contains **specifications only** until these gates pass.
+**Development baseline:** synthetic fixtures, a schema, generator and tests provide deliberately invented events. The experimental Rust consumer and P0 reader are described above; their presence does not certify astronomical completeness or a production dataset.
 
 For work opportunities and acceptance criteria, use [the roadmap](docs/ROADMAP.md); do not claim feature completion until code, tests and documentation are merged.
+
+### Synthetic fixture checks
+
+With Node.js 22+, verify the fabricated development fixtures:
+
+~~~sh
+node --test test/synthetic-fixtures.test.mjs
+~~~
+
+The fixture generator is **test tooling only**, not a production decoder or astronomy engine. See [fixture documentation](test/fixtures/README.md) and [schema](test/fixtures/schema-v0.json). The Node tests check deterministic synthetic fixture generation and validation; they do not validate astronomical data.
 
 ### Rust prototype: recorded events and reviewed coverage
 

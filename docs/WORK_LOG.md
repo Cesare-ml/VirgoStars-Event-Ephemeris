@@ -904,6 +904,19 @@ astronomical coverage. The global Rust fmt gate remains outstanding.
 
 # Agent work log and handoffs
 
+## 2026-11-18 — Synthetic fixtures and UTC microsecond integration
+
+- Reconciled PR #4 with main and incorporated the dependent PR #16 without
+  rewriting history. Conflicting documentation retains current Rust status
+  and the earlier fixture handoff.
+- Windows `core.autocrlf=true` changed checked-out JSON to CRLF, causing
+  the byte-for-byte generator check to fail. `.gitattributes` now fixes
+  the synthetic v0 JSON fixtures to LF. A fresh Windows worktree passed
+  all 6 fixture tests and the repository-local link check. The 7 additional
+  microsecond tests passed on their original branch and are retained here.
+- These are fabricated fixtures and do not establish scientific accuracy,
+  event coverage, or the availability of a timezone adapter.
+
 ## 2026-11-18 — Windows cross-volume link containment
 
 - A real Windows symlink from a temporary checkout on C: to a directory on
@@ -915,6 +928,16 @@ astronomical coverage. The global Rust fmt gate remains outstanding.
   rejects the outside target. This is an offline checker change only.
 
 This is the shared state for agents. Add a dated brief entry **in each working draft PR**, link issues and PRs, and update the roadmap only when completed. Avoid duplicate PRs by checking GitHub before starting.
+
+## 2026-11-10 — P0.1 synthetic fixture contract (in review)
+
+- **Issue/PR/branch:** [#1](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/issues/1) / [draft PR #4](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/4) / `feat/p0-1-synthetic-fixtures`.
+- **Facts:** seven test-only fabricated fixtures (five valid, two deliberately invalid), no real astronomical dataset, no production DB access.
+- **Files:** `tools/generate-synthetic-fixtures.mjs`, `test/fixtures/schema-v0.json`, `test/fixtures/v0/*.json`, `test/fixtures/README.md`, `test/synthetic-fixtures.test.mjs`, roadmap and README.
+- **Checks performed:** fetched the exact generator, test module and committed JSON via GitHub; executed six test callbacks against fetched contents using a V8 JavaScript harness: **6/6 PASS**. These checks exercise deterministic byte generation, validation of valid/invalid records, signed microsecond timestamps, lunar phases, retrograde ingress repetition and UTC instants at a DST transition.
+- **Checks NOT RUN:** `node --test test/synthetic-fixtures.test.mjs` in a checked-out repository (local environment cannot access GitHub); Cargo checks (Rust workspace not implemented). GitHub Actions not used.
+- **Remaining:** run the exact Node test command in a normal checkout before merging. No phase/body coverage claims or binary decoding yet.
+- **Next smallest task:** issue #2 minimal Rust core/format workspace; #3 byte-level VSEPH golden header afterward. Do not mark P0.1 merged/done while PR #4 is draft.
 
 ## 2026-11-10 — Original PostgreSQL row-ID uniqueness enforced throughout experimental VSEPH-P0 (draft PR #5)
 
