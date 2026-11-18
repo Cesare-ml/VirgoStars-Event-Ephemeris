@@ -904,6 +904,19 @@ astronomical coverage. The global Rust fmt gate remains outstanding.
 
 # Agent work log and handoffs
 
+## 2026-11-18 — Synthetic fixtures and UTC microsecond integration
+
+- Reconciled PR #4 with main and incorporated the dependent PR #16 without
+  rewriting history. Conflicting documentation retains current Rust status
+  and the earlier fixture handoff.
+- Windows `core.autocrlf=true` changed checked-out JSON to CRLF, causing
+  the byte-for-byte generator check to fail. `.gitattributes` now fixes
+  the synthetic v0 JSON fixtures to LF. A fresh Windows worktree passed
+  all 6 fixture tests and the repository-local link check. The 7 additional
+  microsecond tests passed on their original branch and are retained here.
+- These are fabricated fixtures and do not establish scientific accuracy,
+  event coverage, or the availability of a timezone adapter.
+
 ## 2026-11-18 — Windows cross-volume link containment
 
 - A real Windows symlink from a temporary checkout on C: to a directory on
