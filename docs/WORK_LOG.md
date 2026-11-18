@@ -1,3 +1,20 @@
+## 2026-11-18 — Windows Python discovery roots
+
+On Windows/Python 3.12, the source preflight stopped after 26 tests because
+`unittest.defaultTestLoader` retained the first discovery root and refused
+the separate `tools` directory. The wheel gate used the same shared loader.
+Both now instantiate a fresh loader per suite; real sequential discovery in
+distinct temporary directories is covered for each gate.
+
+With the local fix, source preflight passed 42/42; gate regressions passed
+11/11 and 14/14, and the synthetic CSV/P0 suite passed 16/16. The original
+branch lockfile was stale; a Cargo-generated offline lockfile in the isolated
+checkout allowed maturin 1.16.0 to build a Windows abi3 wheel. Offline
+installation in a clean venv passed 51/51 mandatory tests, including 9
+compiled-native fixture tests. The generated lockfile has not been reviewed
+for integration. This does not establish real-source CSV/P0 parity or
+astronomical coverage. The global Rust fmt gate remains outstanding.
+
 ## 2026-11-14 — Reject Win32 superscript COM/LPT device names in Python wheels (draft PR #5)
 
 - **Confirmed portability gap:** the existing case-insensitive ZIP wheel path policy rejected ASCII device basenames `COM1`…`COM9` / `LPT1`…`LPT9`, but not `COM¹`, `COM²`, `COM³`, `LPT¹`, `LPT²`, `LPT³`. Microsoft officially documents that Windows treats the ISO-8859-1 superscript digits as reserved device-name suffixes, even in subdirectories and before filename extensions (`https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file`). Those ZIP members could therefore bypass the wheel preflight while being invalid/ambiguous on Windows.

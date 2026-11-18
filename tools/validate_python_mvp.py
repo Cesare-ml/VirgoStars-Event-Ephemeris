@@ -25,7 +25,8 @@ TOOLS_TESTS = ROOT / "tools"
 
 
 def run_tests(pattern: str, minimum_tests: int, test_dir: Path = TESTS) -> bool:
-    suite = unittest.defaultTestLoader.discover(
+    # Every suite needs its own discovery root, including the tools directory.
+    suite = unittest.TestLoader().discover(
         start_dir=str(test_dir),
         pattern=pattern,
     )
