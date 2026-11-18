@@ -1,3 +1,13 @@
+## 2026-11-18 — Synthetic adaptive-aspect blind spot
+
+- A continuous invented oscillation has opposite signs at intermediate
+  instants while endpoints and midpoint all appear at the aspect target.
+  Both direct and adaptive scans return no candidates; the adaptive risk
+  heuristic does not subdivide. This reproducible limitation demonstrates
+  that an empty result cannot certify absence or interval coverage.
+- The targeted test, workspace format check and generator all-targets
+  Clippy passed locally on Windows.
+
 ## 2026-11-18 — Synthetic aspect window boundaries
 
 - Checked direct and adaptive exact-aspect scans for invented linear motion in
