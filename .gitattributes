@@ -1,0 +1,2 @@
+# Synthetic fixture generator compares canonical bytes on every platform.
+/test/fixtures/v0/*.json text eol=lf
