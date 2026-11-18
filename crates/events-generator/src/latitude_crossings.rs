@@ -98,6 +98,24 @@ fn checked_value<P: LatitudeProvider>(
     Ok(root.scalar(sample))
 }
 
+/// Validated signed ecliptic-latitude speed, sharing the caller's probe budget.
+/// Kept in one place so station/plane-crossing and speed-peak searches reject
+/// the same malformed or physically impossible latitude samples.
+pub(crate) fn checked_latitude_speed<P: LatitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    at_us: i64,
+    remaining_probes: &mut usize,
+) -> Result<f64, GenerationError> {
+    checked_value(
+        provider,
+        body,
+        at_us,
+        RootOf::LatitudeSpeed,
+        remaining_probes,
+    )
+}
+
 fn refine_opposite_signs<P: LatitudeProvider>(
     provider: &P,
     body: &BodyId,

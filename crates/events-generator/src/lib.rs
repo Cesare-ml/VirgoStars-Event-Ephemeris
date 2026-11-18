@@ -25,6 +25,7 @@ use virgostars_events_core::{BodyId, MotionDirection, TimestampMicros, ZodiacSig
 pub mod adaptive;
 pub mod gaps;
 pub mod latitude_crossings;
+pub mod latitude_extrema;
 pub mod lunar;
 pub mod provider_process;
 pub mod speed_crosscheck;
@@ -99,6 +100,7 @@ pub enum GenerationError {
     AmbiguousLunarStep,
     AmbiguousSpeedExtremum,
     AmbiguousLatitudeCrossing,
+    AmbiguousLatitudeSpeedExtremum,
     InsufficientSpeedSamples,
     Provider(String),
 }
@@ -116,6 +118,9 @@ impl fmt::Display for GenerationError {
             }
             Self::AmbiguousLatitudeCrossing => f.write_str(
                 "ambiguous latitude/latitude-speed zero; insufficient sign context or plateau",
+            ),
+            Self::AmbiguousLatitudeSpeedExtremum => f.write_str(
+                "ambiguous latitude-speed peak; reduce scan step or investigate plateau",
             ),
             Self::InsufficientSpeedSamples => {
                 f.write_str("speed extrema search needs at least three sample times")
