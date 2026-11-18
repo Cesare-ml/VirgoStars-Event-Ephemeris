@@ -16,6 +16,19 @@
 - **Verification:** 6 synthetic unit tests cover all requested exact aspect types, reversed pairs, wrap, retrograde movement, inclusivity, coarse-grid refusal, invalid samples and a tangent case which is deliberately **not** asserted as a discovered event. Linux Rust 1.90 `cargo fmt -p virgostars-events-generator -- --check`, `cargo test --locked --workspace --quiet` (all executed pass, one pre-existing ignored), `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo build --locked --workspace --release --quiet`, and `git diff --check` all **PASS**. No real ephemeris-provider execution, independently validated astronomical timestamps, missing-span completeness or source data have been verified.
 - **Unfinished:** tangential contacts, hidden repeated crossings/adaptive sampling and independent scientific parity; generator CLI, reviewed per-pair/type coverage, versioned aspect archive and offline reader. No P0/DB/source archive mutation, deployment or release; the draft PR must remain unmerged until reviewed.
 
+## 2026-11-18 — Count all adaptive aspect provider probes
+
+- A synthetic counting provider showed that a budget of one pair-probe could
+  still invoke the provider ten times: endpoint, leaf and bisection samples
+  bypassed the adaptive midpoint counter.
+- The adaptive scan now charges one shared unit before each pair of
+  same-instant provider calls, including repeated endpoints and root
+  refinement, and fails without a partial report on exhaustion. This can
+  exhaust older budget settings sooner. The non-adaptive API is unchanged.
+- Three synthetic regressions cover initial endpoints, leaf resampling and
+  root refinement; all pass on Windows alongside 13 aspect tests. No real
+  astronomical provider, coverage claim or event import is involved.
+
 ## 2026-11-17 — Event-family audit: planet-pair aspects, stations and speed extrema (draft)
 
 - Owner requests all pairwise exact conjunctions 0°, sextiles 60°, squares 90°, trines 120°; ingress into signs; station/return-to-direct moments; and maximum apparent longitude speed, with missing algorithms explicitly tracked.

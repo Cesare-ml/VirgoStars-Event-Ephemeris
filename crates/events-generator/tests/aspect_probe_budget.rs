@@ -1,0 +1,111 @@
+/*
+ * Common Public Attribution License Version 1.0 (CPAL-1.0).
+ * Original Developer: Cesare-ml (VirgoStars project).
+ * Copyright (c) 2026 Cesare-ml. All Rights Reserved.
+ * Powered by VirgoStars — https://www.virgostars.it/
+ */
+use std::cell::Cell;
+use virgostars_events_core::{BodyId, TimestampMicros};
+use virgostars_events_generator::{
+    aspects::adaptive_exact_aspect_scan, GenerationError, LongitudeProvider, LongitudeSample,
+    SearchWindow,
+};
+
+struct CountingProvider(Cell<usize>);
+
+impl LongitudeProvider for CountingProvider {
+    fn sample(&self, body: &BodyId, _at: TimestampMicros) -> Result<LongitudeSample, String> {
+        self.0.set(self.0.get() + 1);
+        Ok(LongitudeSample {
+            longitude_degrees: if body.as_str() == "Mars" { 0.0 } else { 1.0 },
+            longitude_speed_degrees_per_day: 0.0,
+        })
+    }
+}
+
+#[test]
+fn one_pair_probe_budget_does_not_permit_unbounded_provider_calls() {
+    let provider = CountingProvider(Cell::new(0));
+    let mut budget = 1;
+    let result = adaptive_exact_aspect_scan(
+        &provider,
+        &BodyId::try_from("Mars").unwrap(),
+        &BodyId::try_from("Venus").unwrap(),
+        SearchWindow {
+            start_us: 0,
+            end_us: 100,
+            step_us: 100,
+            precision_us: 1,
+        },
+        1,
+        &mut budget,
+    );
+    assert_eq!(result.unwrap_err(), GenerationError::TooManySteps);
+    assert_eq!(provider.0.get(), 2);
+    assert_eq!(budget, 0);
+}
+
+#[test]
+fn quiet_leaf_endpoint_samples_consume_budget() {
+    for (initial, succeeds, calls) in [(4, false, 8), (5, true, 10)] {
+        let provider = CountingProvider(Cell::new(0));
+        let mut budget = initial;
+        let result = adaptive_exact_aspect_scan(
+            &provider,
+            &BodyId::try_from("Mars").unwrap(),
+            &BodyId::try_from("Venus").unwrap(),
+            SearchWindow {
+                start_us: 0,
+                end_us: 100,
+                step_us: 100,
+                precision_us: 1,
+            },
+            1,
+            &mut budget,
+        );
+        assert_eq!(result.is_ok(), succeeds);
+        if let Err(error) = result {
+            assert_eq!(error, GenerationError::TooManySteps);
+        }
+        assert_eq!(provider.0.get(), calls);
+        assert_eq!(budget, 0);
+    }
+}
+
+struct CrossingProvider(Cell<usize>);
+
+impl LongitudeProvider for CrossingProvider {
+    fn sample(&self, body: &BodyId, at: TimestampMicros) -> Result<LongitudeSample, String> {
+        self.0.set(self.0.get() + 1);
+        Ok(LongitudeSample {
+            longitude_degrees: if body.as_str() == "Mars" {
+                0.0
+            } else {
+                59.0 + 2.0 * (at.as_i64() as f64) / 100.0
+            },
+            longitude_speed_degrees_per_day: 0.0,
+        })
+    }
+}
+
+#[test]
+fn root_refinement_cannot_bypass_the_shared_budget() {
+    let provider = CrossingProvider(Cell::new(0));
+    let mut budget = 5;
+    let result = adaptive_exact_aspect_scan(
+        &provider,
+        &BodyId::try_from("Mars").unwrap(),
+        &BodyId::try_from("Venus").unwrap(),
+        SearchWindow {
+            start_us: 0,
+            end_us: 100,
+            step_us: 100,
+            precision_us: 1,
+        },
+        1,
+        &mut budget,
+    );
+    assert_eq!(result.unwrap_err(), GenerationError::TooManySteps);
+    assert_eq!(provider.0.get(), 10);
+    assert_eq!(budget, 0);
+}

@@ -80,6 +80,24 @@ fn sample_pair<P: LongitudeProvider>(
     })
 }
 
+// A probe is one pair of same-instant body samples. Charge it before either
+// provider call so exhaustion cannot launch a partial or unaccounted pair.
+fn sample_pair_with_budget<P: LongitudeProvider>(
+    provider: &P,
+    a: &BodyId,
+    b: &BodyId,
+    t: i64,
+    budget: Option<&mut usize>,
+) -> Result<PairSample, GenerationError> {
+    if let Some(remaining) = budget {
+        if *remaining == 0 {
+            return Err(GenerationError::TooManySteps);
+        }
+        *remaining -= 1;
+    }
+    sample_pair(provider, a, b, t)
+}
+
 fn short_delta(a: f64, b: f64) -> f64 {
     let mut delta = (b - a).rem_euclid(360.0);
     if delta > 180.0 {
@@ -114,6 +132,16 @@ pub fn exact_aspect_candidates<P: LongitudeProvider>(
     body_b: &BodyId,
     window: SearchWindow,
 ) -> Result<Vec<ExactAspectCandidate>, GenerationError> {
+    exact_aspect_candidates_with_budget(provider, body_a, body_b, window, None)
+}
+
+fn exact_aspect_candidates_with_budget<P: LongitudeProvider>(
+    provider: &P,
+    body_a: &BodyId,
+    body_b: &BodyId,
+    window: SearchWindow,
+    mut budget: Option<&mut usize>,
+) -> Result<Vec<ExactAspectCandidate>, GenerationError> {
     window.validate()?;
     if body_a == body_b {
         return Err(GenerationError::InvalidBodyPair);
@@ -125,11 +153,11 @@ pub fn exact_aspect_candidates<P: LongitudeProvider>(
     };
     let mut found = Vec::new();
     let mut t = window.start_us;
-    let mut before = sample_pair(provider, a, b, t)?;
+    let mut before = sample_pair_with_budget(provider, a, b, t, budget.as_deref_mut())?;
 
     while t < window.end_us {
         let end = next_time(t, window);
-        let after = sample_pair(provider, a, b, end)?;
+        let after = sample_pair_with_budget(provider, a, b, end, budget.as_deref_mut())?;
         let delta = short_delta(before.separation, after.separation);
         let days = (end as i128 - t as i128) as f64 / MICROS_PER_DAY;
         let maximum_estimated_sweep =
@@ -171,7 +199,8 @@ pub fn exact_aspect_candidates<P: LongitudeProvider>(
                 let mut right = end;
                 while needs_refinement(left, right, window.precision_us) {
                     let mid = midpoint(left, right);
-                    let midpoint_sample = sample_pair(provider, a, b, mid)?;
+                    let midpoint_sample =
+                        sample_pair_with_budget(provider, a, b, mid, budget.as_deref_mut())?;
                     let middle_delta = short_delta(before.separation, midpoint_sample.separation);
                     if middle_delta.abs() >= MAX_RELATIVE_STEP_DEGREES {
                         return Err(GenerationError::AmbiguousAspectStep);
@@ -387,12 +416,14 @@ impl<P: LongitudeProvider> AdaptiveAspectScan<'_, P> {
         if depth_remaining > 0 && needs_refinement(start_us, end_us, self.precision_us) {
             let mid_us = midpoint(start_us, end_us);
             if mid_us > start_us && mid_us < end_us {
-                if *self.remaining_probes == 0 {
-                    return Err(GenerationError::TooManySteps);
-                }
-                *self.remaining_probes -= 1;
+                let mid = sample_pair_with_budget(
+                    self.provider,
+                    self.body_a,
+                    self.body_b,
+                    mid_us,
+                    Some(self.remaining_probes),
+                )?;
                 self.report.midpoint_probes += 1;
-                let mid = sample_pair(self.provider, self.body_a, self.body_b, mid_us)?;
 
                 let left_delta = short_delta(before.separation, mid.separation);
                 let right_delta = short_delta(mid.separation, after.separation);
@@ -438,18 +469,24 @@ impl<P: LongitudeProvider> AdaptiveAspectScan<'_, P> {
             step_us: span_us,
             precision_us: self.precision_us.min(span_us),
         };
-        self.report.candidates.extend(exact_aspect_candidates(
-            self.provider,
-            self.body_a,
-            self.body_b,
-            leaf_window,
-        )?);
+        self.report
+            .candidates
+            .extend(exact_aspect_candidates_with_budget(
+                self.provider,
+                self.body_a,
+                self.body_b,
+                leaf_window,
+                Some(self.remaining_probes),
+            )?);
         Ok(())
     }
 }
 
 /// Midpoint-rescan potentially risky aspect intervals, with a strict shared
-/// probe budget and bounded recursion depth (1..=8). A phase excursion between
+/// probe budget and bounded recursion depth (1..=8). One probe is one pair
+/// of provider samples; all endpoint, midpoint, leaf and refinement samples
+/// consume the shared budget, including repeated samples. Exhaustion fails
+/// without returning a partial report. A phase excursion between
 /// samples can still be missed when all three samples look quiet. In
 /// particular, exact tangential contacts remain unimplemented and a zero
 /// candidate count never implies audited absence.
@@ -486,10 +523,22 @@ pub fn adaptive_exact_aspect_scan<P: LongitudeProvider>(
         report: AdaptiveAspectReport::default(),
     };
     let mut start_us = window.start_us;
-    let mut before = sample_pair(provider, body_a, body_b, start_us)?;
+    let mut before = sample_pair_with_budget(
+        provider,
+        body_a,
+        body_b,
+        start_us,
+        Some(scan.remaining_probes),
+    )?;
     while start_us < window.end_us {
         let end_us = next_time(start_us, window);
-        let after = sample_pair(provider, body_a, body_b, end_us)?;
+        let after = sample_pair_with_budget(
+            provider,
+            body_a,
+            body_b,
+            end_us,
+            Some(scan.remaining_probes),
+        )?;
         scan.segment(start_us, end_us, before, after, max_depth)?;
         start_us = end_us;
         before = after;

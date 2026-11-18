@@ -24,6 +24,13 @@
 
 `crates/events-generator/src/aspects.rs` espone `exact_aspect_candidates` e il controllo aggiuntivo **euristico** `adaptive_exact_aspect_scan` (funzioni Rust, **non ancora CLI**, formato P0 o API lettore). Il secondo usa campioni intermedi e suddivisione limitata da profondità/budget per individuare anche **due attraversamenti nascosti fra estremi uguali**: questo scenario è verificato con dati sintetici.
 
+Nel controllo adattivo una sonda è una coppia di campioni dei due corpi allo
+stesso istante. Il budget condiviso viene consumato anche per estremi,
+campioni ripetuti nelle foglie e raffinamenti; all'esaurimento la funzione
+restituisce un errore senza rapporto parziale. Un budget configurato per le
+vecchie sole sonde intermedie può quindi esaurirsi prima. Il rilevatore
+non adattivo mantiene il proprio contratto precedente.
+
 `potential_aspect_tangencies(provider, body_a, body_b, window, tolerance_degrees)` aggiunge una **lista separata di avvisi**, cercando inversioni campionate della velocità longitudinale *relativa* e verificando quanto il punto stazionario si avvicini a 0°/60°/90°/120° (entrambi gli orientamenti). Il parametro esplicito `tolerance_degrees` è compreso fra 0 e **0,01°** ed è **solo una soglia di segnalazione**, non la precisione garantita dell'effemeride. Ogni avviso contiene il bracket temporale e il `residual_degrees` misurato: **residuo non nullo significa possibile quasi-aspetto, NON aspetto esatto**. Anche un residuo numericamente nullo richiede controllo indipendente. Gli estremi della finestra privi di informazioni su entrambi i lati e le inversioni multiple non campionate possono essere assenti dagli avvisi.
 
 **Mancano ancora** la rilevazione sistematica e completa dei contatti tangenti, le ripetizioni invisibili anche ai campioni intermedi, una prova di completezza, la verifica scientifica indipendente e l'integrazione nell'archivio. Non interpretare un risultato vuoto come assenza verificata di aspetti.
