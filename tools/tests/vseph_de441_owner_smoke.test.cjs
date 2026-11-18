@@ -49,6 +49,14 @@ function run(f, extra = [], sha = f.sha, rev = revision) {
   });
 }
 
+function requests(f, probes) {
+  const file = path.join(path.dirname(f.report), 'requests.json');
+  const bytes = JSON.stringify({ schema: 'vseph.g3e.owner-probe-requests.v1', probes }) + '\n';
+  writeFileSync(file, bytes);
+  const sha = createHash('sha256').update(bytes).digest('hex');
+  return { file, sha };
+}
+
 test('cross-platform synthetic owner smoke captures three signed-speed probes and explicit uncertified flags', t => {
   const f = fixture(t);
   const result = run(f, ['--report', f.report]);
@@ -96,4 +104,57 @@ test('report is create-only: existing report is not overwritten', t => {
   assert.equal(result.status, 2);
   assert.equal(result.stdout, '');
   assert.equal(readFileSync(f.report, 'utf8'), 'original material');
+});
+
+test('owner smoke accepts bounded pinned UTC probes without calling them independent goldens', t => {
+  const f = fixture(t);
+  const extra = requests(f, [
+    { body: 'Venus', utc_microseconds: '-2208988800000000' },
+    { body: 'Saturn', utc_microseconds: '1514764800000000' },
+  ]);
+  const result = run(f, ['--probe-requests', extra.file,
+    '--probe-requests-sha256', extra.sha, '--report', f.report]);
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.schema, 'vseph.g3e.owner-smoke.v2');
+  assert.equal(report.fixed_probe_count, 3);
+  assert.equal(report.requested_probe_count, 2);
+  assert.equal(report.probe_requests_sha256, extra.sha);
+  assert.equal(report.executed_utc_probes.length, 5);
+  assert.deepEqual(report.executed_utc_probes.slice(3).map(p => p.body), ['Venus', 'Saturn']);
+  assert.equal(report.result.independent_provider_compared, false);
+  assert.equal(report.result.astronomical_accuracy_verified, false);
+  assert.equal(report.result.coverage_certified, false);
+  assert.equal(readFileSync(f.report, 'utf8'), result.stdout);
+});
+
+test('missing request SHA and altered correctly-shaped requests fail before provider output', t => {
+  const f = fixture(t);
+  const extra = requests(f, [{ body: 'Mars', utc_microseconds: '946684800000000' }]);
+  let result = run(f, ['--probe-requests', extra.file]);
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+  writeFileSync(extra.file, JSON.stringify({ schema: 'vseph.g3e.owner-probe-requests.v1',
+    probes: [{ body: 'Moon', utc_microseconds: '946684800000000' }] }));
+  result = run(f, ['--probe-requests', extra.file, '--probe-requests-sha256', extra.sha]);
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, '');
+});
+
+test('duplicate, out-of-policy, malformed and fixed-probe repeats fail closed', t => {
+  const f = fixture(t);
+  const cases = [
+    [{ body: 'Mars', utc_microseconds: '-315619200000000' }],
+    [{ body: 'Moon', utc_microseconds: '1814313600000000' }],
+    [{ body: 'Mars', utc_microseconds: '0946684800000000' }],
+    [{ body: 'Unknown', utc_microseconds: '946684800000000' }],
+    [{ body: 'Mars', utc_microseconds: '946684800000000' },
+      { body: 'Mars', utc_microseconds: '946684800000000' }],
+  ];
+  for (const probes of cases) {
+    const extra = requests(f, probes);
+    const result = run(f, ['--probe-requests', extra.file, '--probe-requests-sha256', extra.sha]);
+    assert.equal(result.status, 2, result.stdout);
+    assert.equal(result.stdout, '');
+  }
 });

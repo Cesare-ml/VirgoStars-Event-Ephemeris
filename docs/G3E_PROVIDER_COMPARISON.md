@@ -132,7 +132,33 @@ node .\tools\vseph_de441_owner_smoke.cjs --binding $module --kernel $kernel --ke
 node .\tools\vseph_virgostars_latitude_provider.cjs $module $kernel $trustedKernelHash $sourceCommit
 ```
 
-Example stdin line after the lower-level producer handshake: `{"body":"Mars","utc_microseconds":"1795000000000000"}`; the response must echo the string and supply **finite** latitude/speed. This is not an independent golden test. On Linux/macOS the same script accepts positional arguments in a `node` command. The higher-level owner smoke exits `0` only after three expected UTC/body echoes and finite coordinate checks; it exits `2` **without JSON** on invalid pin, native error or invalid responses. If `--report` is supplied, it uses create-only (`wx`) semantics and refuses an already-existing path. Its `result` contains `native_binary_source_commit_attested:false`, `independent_provider_compared:false`, `astronomical_accuracy_verified:false`, `coverage_certified:false`, `safe_to_import:false` even on success. This owner-machine run is **pending**: the real DE441 and native addon are absent from this Linux checkout.
+Example stdin line after the lower-level producer handshake: `{"body":"Mars","utc_microseconds":"1795000000000000"}`; the response must echo the string and supply **finite** latitude/speed. This is not an independent golden test. On Linux/macOS the same script accepts positional arguments in a `node` command. With only the fixed probes, the higher-level owner smoke exits `0` after three expected UTC/body echoes and finite coordinate checks; with custom probes, it additionally validates every requested echo. It exits `2` **without JSON** on invalid pin, native error or invalid responses. If `--report` is supplied, it uses create-only (`wx`) semantics and refuses an already-existing path. Its `result` contains `native_binary_source_commit_attested:false`, `independent_provider_compared:false`, `astronomical_accuracy_verified:false`, `coverage_certified:false`, `safe_to_import:false` even on success. This owner-machine run is **pending**: the real DE441 and native addon are absent from this Linux checkout.
+
+### Optional operator-selected DE441 probe requests
+
+To collect additional **observations**, not independently verified goldens, the owner smoke can accept a SHA-pinned JSON request file. The original three probes always run first; `--probe-requests` adds **1–256 distinct** body/UTC pairs. The file must have exactly the following keys and supported bodies (`Sun`, `Moon`, `Mercury`, `Venus`, `Mars`, `Jupiter`, `Saturn`, `Uranus`, `Neptune`, `Pluto`):
+
+```json
+{
+  "schema": "vseph.g3e.owner-probe-requests.v1",
+  "probes": [
+    { "body": "Venus", "utc_microseconds": "-2208988800000000" },
+    { "body": "Saturn", "utc_microseconds": "1514764800000000" }
+  ]
+}
+```
+
+Values are canonical signed UTC/POSIX **microsecond strings**, accepted from `1900-01-01T00:00:00Z` inclusive to `2027-06-28T00:00:00Z` exclusive—the current native bridge's documented civil-time policy. Duplicate body/time pairs, including repeats of the fixed smoke probes, invalid bodies, overly deep or ambiguously keyed JSON, and malformed/out-of-range timestamps fail closed. The request file is read with a 128 KiB cap and a separately retained lowercase SHA-256 pin. On Windows, after setting `$module`, `$kernel`, `$trustedKernelHash`, `$sourceCommit` as above:
+
+```powershell
+$requests = 'D:\astronomy-reference\my-g3e-probe-requests.json'
+# Record this SHA separately; computing it from the same local file is only a
+# transport integrity check, not proof of independent scientific provenance.
+$requestsSha = (Get-FileHash -Algorithm SHA256 $requests).Hash.ToLowerInvariant()
+node .\tools\vseph_de441_owner_smoke.cjs --binding $module --kernel $kernel --kernel-sha256 $trustedKernelHash --source-commit $sourceCommit --probe-requests $requests --probe-requests-sha256 $requestsSha --report "$env:TEMP\vseph-g3e-smoke-custom.json"
+```
+
+With no custom requests the output remains `vseph.g3e.owner-smoke.v1`. With requests it is `vseph.g3e.owner-smoke.v2` and adds `fixed_probe_count`, `requested_probe_count`, and `probe_requests_sha256`, retaining the ordered `executed_utc_probes` and all the explicit **false** scientific-approval flags. A successful owner run proves only that the configured native bridge returned finite values and exact UTC echoes, not that the values or intervals are astronomically correct. Independently authored references and a coverage/missed-event audit are still required.
 
 ### Scope of the native binding fingerprint
 
@@ -152,7 +178,7 @@ For a **real cross-provider audit**, point `vseph-compare-latitudes` to Node wit
 
 The rest of the audit CLI's required window/precision/tolerance options still apply. The reference must declare **identical** frame, ecliptic plane, correction and time conventions (not merely similar human descriptions). Comparing two copies of this adapter, or two programs sharing DE441, is **not** an independent reference. A correct handshake, even with a real kernel, is **not a claim of scientific accuracy or coverage**. Its `kernel_digest` is measured and pinned, `version` is operator-declared, and `source_digest` measures local binding bytes but is **not** a source-commit proof. The report remains `safe_to_import:false`.
 
-Run the reproducible **synthetic bridge and owner-smoke tests** with `node --test tools/tests/vseph_virgostars_latitude_provider.test.cjs tools/tests/vseph_de441_owner_smoke.test.cjs`. They supply a tiny **fake** `.eph` file, fake addon bytes and a fake Node `Engine` only to check process plumbing, kernel/binding fingerprints, three calendar epochs, exact UTC echoes, civil-time policy, malformed native replies and create-only reports. **Ten tests** pass on Linux; these are **not** a real DE441 integration, Windows runtime check or source-independent astronomical comparison. A real-kernel owner smoke and independently authored goldens remain pending.
+Run the reproducible **synthetic bridge and owner-smoke tests** with `node --test tools/tests/vseph_virgostars_latitude_provider.test.cjs tools/tests/vseph_de441_owner_smoke.test.cjs`. They supply a tiny **fake** `.eph` file, fake addon bytes and a fake Node `Engine` only to check process plumbing, kernel/binding fingerprints, three calendar epochs, optional pinned custom probes, exact UTC echoes, civil-time policy, malformed native replies and create-only reports. **Thirteen tests** pass on Linux; these are **not** a real DE441 integration, Windows runtime check or source-independent astronomical comparison. A real-kernel owner smoke and independently authored goldens remain pending.
 
 ## G3E SHA-pinned coordinate-golden comparison (experimental)
 
