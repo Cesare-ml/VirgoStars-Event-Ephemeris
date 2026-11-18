@@ -1,0 +1,178 @@
+{
+  "schema": "virgostars-local-day-event-membership/1",
+  "status": "synthetic acceptance oracle only; onDate Rust/WASM/Python adapters are not implemented",
+  "sourceLicense": "CPAL-1.0",
+  "attribution": "Powered by VirgoStars — https://www.virgostars.it/",
+  "provenance": "Synthetic, invented event IDs; day bounds from hand-reviewed Europe/Rome 2026 UTC golden cases in PR #22 (Python zoneinfo/IANA rules, checked 2026-11-15; tzdb may change). No real events or dataset.",
+  "tiePolicy": "No two events share an instant; canonical cross-family same-instant tie ordering remains unspecified in draft API_CONTRACTS.md.",
+  "events": [
+    {
+      "id": "spring-prev-start",
+      "family": "motion",
+      "atUtc": "2026-03-27T23:00:00.000000Z"
+    },
+    {
+      "id": "spring-before-start",
+      "family": "ingress",
+      "atUtc": "2026-03-28T22:59:59.999999Z"
+    },
+    {
+      "id": "spring-at-start",
+      "family": "motion",
+      "atUtc": "2026-03-28T23:00:00.000000Z"
+    },
+    {
+      "id": "spring-after-start",
+      "family": "ingress",
+      "atUtc": "2026-03-28T23:00:00.000001Z"
+    },
+    {
+      "id": "spring-middle",
+      "family": "motion",
+      "atUtc": "2026-03-29T12:00:00.000000Z"
+    },
+    {
+      "id": "spring-before-end",
+      "family": "ingress",
+      "atUtc": "2026-03-29T21:59:59.999999Z"
+    },
+    {
+      "id": "spring-at-end",
+      "family": "motion",
+      "atUtc": "2026-03-29T22:00:00.000000Z"
+    },
+    {
+      "id": "spring-after-end",
+      "family": "ingress",
+      "atUtc": "2026-03-29T22:00:00.000001Z"
+    },
+    {
+      "id": "spring-next-before-end",
+      "family": "motion",
+      "atUtc": "2026-03-30T21:59:59.999999Z"
+    },
+    {
+      "id": "spring-next-at-end",
+      "family": "ingress",
+      "atUtc": "2026-03-30T22:00:00.000000Z"
+    },
+    {
+      "id": "autumn-prev-start",
+      "family": "motion",
+      "atUtc": "2026-10-23T22:00:00.000000Z"
+    },
+    {
+      "id": "autumn-before-start",
+      "family": "ingress",
+      "atUtc": "2026-10-24T21:59:59.999999Z"
+    },
+    {
+      "id": "autumn-at-start",
+      "family": "motion",
+      "atUtc": "2026-10-24T22:00:00.000000Z"
+    },
+    {
+      "id": "autumn-after-start",
+      "family": "ingress",
+      "atUtc": "2026-10-24T22:00:00.000001Z"
+    },
+    {
+      "id": "autumn-middle",
+      "family": "motion",
+      "atUtc": "2026-10-25T10:00:00.000000Z"
+    },
+    {
+      "id": "autumn-before-end",
+      "family": "ingress",
+      "atUtc": "2026-10-25T22:59:59.999999Z"
+    },
+    {
+      "id": "autumn-at-end",
+      "family": "motion",
+      "atUtc": "2026-10-25T23:00:00.000000Z"
+    },
+    {
+      "id": "autumn-after-end",
+      "family": "ingress",
+      "atUtc": "2026-10-25T23:00:00.000001Z"
+    },
+    {
+      "id": "autumn-next-before-end",
+      "family": "motion",
+      "atUtc": "2026-10-26T22:59:59.999999Z"
+    },
+    {
+      "id": "autumn-next-at-end",
+      "family": "ingress",
+      "atUtc": "2026-10-26T23:00:00.000000Z"
+    }
+  ],
+  "days": [
+    {
+      "localDate": "2026-03-28",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-03-27T23:00:00.000000Z",
+      "endUtc": "2026-03-28T23:00:00.000000Z",
+      "expectedEventIds": [
+        "spring-prev-start",
+        "spring-before-start"
+      ]
+    },
+    {
+      "localDate": "2026-03-29",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-03-28T23:00:00.000000Z",
+      "endUtc": "2026-03-29T22:00:00.000000Z",
+      "expectedEventIds": [
+        "spring-at-start",
+        "spring-after-start",
+        "spring-middle",
+        "spring-before-end"
+      ]
+    },
+    {
+      "localDate": "2026-03-30",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-03-29T22:00:00.000000Z",
+      "endUtc": "2026-03-30T22:00:00.000000Z",
+      "expectedEventIds": [
+        "spring-at-end",
+        "spring-after-end",
+        "spring-next-before-end"
+      ]
+    },
+    {
+      "localDate": "2026-10-24",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-10-23T22:00:00.000000Z",
+      "endUtc": "2026-10-24T22:00:00.000000Z",
+      "expectedEventIds": [
+        "autumn-prev-start",
+        "autumn-before-start"
+      ]
+    },
+    {
+      "localDate": "2026-10-25",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-10-24T22:00:00.000000Z",
+      "endUtc": "2026-10-25T23:00:00.000000Z",
+      "expectedEventIds": [
+        "autumn-at-start",
+        "autumn-after-start",
+        "autumn-middle",
+        "autumn-before-end"
+      ]
+    },
+    {
+      "localDate": "2026-10-26",
+      "timeZone": "Europe/Rome",
+      "startUtc": "2026-10-25T23:00:00.000000Z",
+      "endUtc": "2026-10-26T23:00:00.000000Z",
+      "expectedEventIds": [
+        "autumn-at-end",
+        "autumn-after-end",
+        "autumn-next-before-end"
+      ]
+    }
+  ]
+}
