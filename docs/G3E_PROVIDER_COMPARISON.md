@@ -219,6 +219,60 @@ The example tolerances are **arbitrary CLI placeholders**, **not** scientificall
 
 The JSON deliberately keeps `reference_independence_scientifically_established:false`, `astronomical_accuracy_verified:false`, `coverage_certified:false`, and `safe_to_import:false` **regardless of exit status**. A matching oracle set establishes only an observed numerical check at its supplied instants; no continuous-time completeness, independent physical correctness, node/station/peak timestamp parity, P0 acceptance or database import follows. The executable's **six tests use synthetic fake Engine and fake `.eph` only**; an owner-run real DE441 and truly independently authored reference vectors remain **NOT RUN**.
 
+## G3E event-time golden reviewer (experimental, not coverage certification)
+
+`tools/vseph_review_latitude_event_goldens.cjs` adds the **event-timestamp** counterpart to the coordinate reviewer. It consumes:
+
+1. An existing `vseph-compare-latitudes --mode events|both` JSON audit, optionally containing observed disagreements between two provider processes; and
+2. A **separately authored** exact-body/UTC list of independently established event times, with explicit reference metadata and numerical signed speeds for the two peak types.
+
+Both input files must have **operator-supplied, independently retained lowercase SHA-256 trust pins**. Their bytes are verified before parsing. The reviewer does **not** query a planetary ephemeris itself, manufacture reference timestamps, change the original event dataset or turn candidate brackets into approved records. Audit JSON is limited to 2 MiB, goldens JSON to 512 KiB and both observed/golden event counts to 10,000.
+
+The golden JSON must use this exact schema and field inventory. **Numbers shown below are synthetic examples, not actual astronomical events**:
+
+```json
+{
+  "schema": "vseph.g3e.latitude-event-goldens.v1",
+  "body": "Mars",
+  "window": { "start_us": "0", "end_us": "172800000000" },
+  "reference": {
+    "provider": "SYNTHETIC-NOT-A-REAL-REFERENCE",
+    "version": "fixture-v1",
+    "origin": "synthetic-test-only",
+    "method": "invented-for-parser-tests",
+    "source_license": "synthetic-test-data",
+    "frame": "geocentric-ecliptic-latitude-degrees",
+    "ecliptic_plane": "true-ecliptic-and-equinox-of-date (IAU-2006/2000B)",
+    "position_corrections": "one-way-light-time;solar-deflection;annual-aberration;date-frame-rotation",
+    "dynamical_time_scale": "TDB (approximate from civil UTC; signed rate per TDB day)",
+    "input_time_scale": "utc-posix-microseconds",
+    "speed_definition": "signed-d-beta-dt-degrees-per-day"
+  },
+  "events": [
+    { "kind": "PlaneAscending", "at_us": "86400000000", "signed_speed_degrees_per_day": null },
+    { "kind": "NorthwardSpeedMaximum", "at_us": "100000000000", "signed_speed_degrees_per_day": 0.25 }
+  ]
+}
+```
+
+Allowed kinds are **exactly** `PlaneAscending`, `PlaneDescending`, `StationNorthward`, `StationSouthward`, `NorthwardSpeedMaximum`, `SouthwardSpeedMagnitudeMaximum`. Speeds must be **null** for nodes and stations, **strictly positive** for northward peaks and **strictly negative** for southward peaks. Reference frame, apparent corrections and scales must match the report's **primary provider identity** string-for-string after independent scientific review; the audit and golden file must use the same body and half-open UTC window. Duplicate/ambiguous same-kind events at or inside **twice the selected UTC tolerance** are rejected, not arbitrarily paired. Exact UTC is represented as canonical decimal-string signed 64-bit microseconds and never rounded to JavaScript `Number`.
+
+```powershell
+# Run from the VirgoStars-Event-Ephemeris checkout, after generating a
+# real G3E comparison audit and obtaining a SEPARATELY authored event oracle.
+$audit = 'D:\g3e-review\real-provider-comparison.json'
+$goldens = 'D:\g3e-review\independent-event-goldens.json'
+$auditSha = '<independently-retained-lowercase-64-hex-SHA256-of-audit>'
+$goldenSha = '<independently-retained-lowercase-64-hex-SHA256-of-goldens>'
+
+# Values below are illustrative CLI thresholds only; they do NOT establish accuracy.
+node .\tools\vseph_review_latitude_event_goldens.cjs --audit $audit --audit-sha256 $auditSha --goldens $goldens --goldens-sha256 $goldenSha --time-tolerance-us 600000000 --speed-tolerance-deg-per-day 0.01
+```
+
+An optional `--report <unused-path>` saves the output **without overwriting** any existing file. Exit `0` means only that the **observed** primary candidates and supplied goldens match one-to-one by event kind within operator-defined timing/peak-speed tolerances; `1` means a missing golden event, extra observed candidate or discrepant signed peak speed **with full JSON evidence**; `2` means invalid source/metadata/ambiguous matching, with **no JSON**. The timestamp difference is **candidate bracket midpoint minus golden UTC**—not a newly refined exact astronomical root. Goldens outside the window and candidates whose brackets leave the window are refused. An audit with both event lists empty and empty goldens may return exit `0`, **but cannot prove no hidden events occurred between samples**.
+
+All reports explicitly keep `reference_independence_scientifically_established:false`, `astronomical_accuracy_verified:false`, `coverage_certified:false`, `safe_to_import:false`. Seven synthetic Node tests exercise the six event kinds, missing/extra observations, signed-speed disagreements, duplicate/ambiguous timestamps, hash and frame rejection, empty scans and create-only report behavior. **Real owner DE441, actual independent event timestamps, scientific tolerance justification and Windows end-to-end execution remain NOT RUN.**
+
 ## Requirements before real astronomical parity
 
 1. Implement two **separately substantiated, license-reviewed** `LatitudeProvider`s. State the ecliptic reference plane (mean/true, epoch/date), geocentric/apparent corrections, time scale, ephemeris/kernel exact version, algorithm and dependencies for **each**. Sharing one upstream kernel through two wrappers is not independent validation.
@@ -236,6 +290,7 @@ cargo test --locked -p virgostars-events-generator --test latitude_cli
 node --test tools/tests/vseph_virgostars_latitude_provider.test.cjs
 node --test tools/tests/vseph_de441_owner_smoke.test.cjs
 node --test tools/tests/vseph_review_latitude_goldens.test.cjs
+node --test tools/tests/vseph_review_latitude_event_goldens.test.cjs
 cargo fmt -p virgostars-events-generator -- --check
 cargo test --locked --workspace --quiet
 cargo clippy --locked --workspace --all-targets -- -D warnings
