@@ -1,3 +1,21 @@
+## 2026-11-18 — Combined Python gate and Windows temporary-fixture audit
+
+- Reconciled PR #14 and dependent PR #31 with main. Removed a duplicated Moon
+  gap warning from a test fixture: main and the older PR had each added it.
+  No phase, coverage or scientific data semantics were relaxed.
+- The first full Windows Rust run exposed a pre-existing race: parallel
+  `p0-verify` unit tests could obtain the same clock tick and silently
+  overwrite each other's temporary file. Added an atomic suffix, exclusive
+  file creation and a 64-live-archive isolation regression.
+- Windows/Python 3.12: 42/42 source tests, 9 focused Unicode tests, 16
+  synthetic CSV/P0 tests and runner regressions 11/11 and 14/14 passed.
+  The official Rust validator passed fmt, locked Clippy, workspace tests
+  (one separately handled optional snapshot test ignored) and release build.
+  A freshly built Windows wheel installed offline in a clean venv passed
+  51/51 mandatory cases and 3/3 snapshot smoke cases; 5,115 synod probes
+  matched the reconstructed PR #6 CSV. Its manifest is not an independent
+  trust anchor. No astronomical coverage was certified.
+
 ## 2026-11-18 — Windows Rust workspace formatting validation
 
 - Applied `cargo fmt --all` to the existing workspace so the documented
@@ -33,6 +51,23 @@
 - **Regression:** extended the existing `test_case_insensitive_windows_wheel_paths_must_not_collide` method in `tools/test_wheel_contents_policy.py` with composed/decomposed accented names, both traversal orders of a file/implicit-directory alias, and a safe distinct-name positive case. Test method count remains **16**; no change to the existing **54-test** packaging preflight minimum.
 - **Actually checked:** 5/5 focused Python 3.13.5 ZIP cases **PASS** in a local isolated reproduction of the exact normalization and path-collision logic, with real `zipfile.ZipFile` member names. GitHub connector readback confirms the committed code and test additions. **Not run:** the full committed `tools/test_wheel_contents_policy.py` suite, all 54 packaging preflight tests, Python 42 source tests, 51 installed-wheel tests, Rust/Cargo/PyO3, or authorized owner-data parity.
 - **Next:** on a full branch checkout run `python -m unittest discover -s tools -p test_wheel_contents_policy.py -v`, `python tools/validate_wheel_preflight.py`, then the locked Rust/wheel and independent original CSV/P0 gates. Keep PR **draft**; no GitHub Actions, release, merge, dataset edits or scientific-completeness claim.
+
+## 2026-11-18 — Windows Python discovery roots
+
+On Windows/Python 3.12, the source preflight stopped after 26 tests because
+`unittest.defaultTestLoader` retained the first discovery root and refused
+the separate `tools` directory. The wheel gate used the same shared loader.
+Both now instantiate a fresh loader per suite; real sequential discovery in
+distinct temporary directories is covered for each gate.
+
+With the local fix, source preflight passed 42/42; gate regressions passed
+11/11 and 14/14, and the synthetic CSV/P0 suite passed 16/16. The original
+branch lockfile was stale; a Cargo-generated offline lockfile in the isolated
+checkout allowed maturin 1.16.0 to build a Windows abi3 wheel. Offline
+installation in a clean venv passed 51/51 mandatory tests, including 9
+compiled-native fixture tests. The generated lockfile has not been reviewed
+for integration. This does not establish real-source CSV/P0 parity or
+astronomical coverage. The global Rust fmt gate remains outstanding.
 
 ## 2026-11-14 — Reject Win32 superscript COM/LPT device names in Python wheels (draft PR #5)
 
@@ -1095,6 +1130,41 @@ The existing Python wrapper only checked that every record claimed unreviewed co
 
 Reviewed `pyproject.toml`, Rust binding manifest, `Cargo.lock`, existing `check_m0_build_env.py`, the build orchestrator and its required wheel preflight. **Confirmed blocker:** tracked `Cargo.lock` has no package sections for `pyo3`, `tempfile` or `virgostars-events-python` even though the binding manifest requires them. A `cargo --locked` build cannot yet succeed. The separate read-only checker already reports these issues, but the main builder previously launched the 42 source tests, P0 audit tests and wheel suite before recognizing its missing prerequisites. Connected the existing `check_m0_build_env.problems(ROOT)` at the start of `build_python_mvp.main`, fail-closed before invoking maturin, any test subprocess or creating a local wheel. Added a new mocked regression for stale-lock/missing-Cargo early failure; existing 17 mocked builder methods share a controlled no-issues readiness seam. Updated `validate_wheel_preflight.py` 17→18 method minimum and matching self-tests. **Actual execution:** four locally isolated Python simulations of this new decision flow **4/4 PASS**, bytecode compilation PASS. The full *exact repository* 18-method builder test module and 4-suite preflight **not run**; the simulations do not prove native-wheel readiness. Cargo/rustc unavailable locally, no genuine lockfile regeneration, 42-case source/51-case native acceptance, wheel installation or owner-scientific parity. **No merge, Github Actions, dataset changes or release.**
 
+## 2026-11-14 — PR #14 integrated into mandatory 42-case Python source gate
+
+- **Scope / branch:** Added the positive paired-Unicode and three negative surrogate wire mutations to the existing `test_response_is_json_serializable_and_new_moon_same_object` method in `python/tests/test_python_api.py`. `tools/validate_python_sources.py` already discovers this module, requiring exactly 18 tests; the method count remains 18 and the configured combined 18+8+16 source gate remains **42**. The standalone `test_native_json_unicode.py` remains as a focused five-case check.
+- **Conflict resolution:** Read the latest upstream draft #5 and reconciled the branch using a two-parent Git commit with the latest Rust/Python source tree as the base; retained upstream additions to `test_python_api.py`, wheel-preflight gates and work log. Changed only four feature files relative to that upstream snapshot: `_wire.py`, `test_python_api.py`, `test_native_json_unicode.py`, `docs/WORK_LOG.md`. No force updates.
+- **Actually executed (Python 3.13.5, exact GitHub-blob-matching helper and standalone test):** `PYTHONPATH=python python -m unittest discover -s python/tests -p test_native_json_unicode.py -v` → **5/5 PASS**; `python -m py_compile python/virgostars_events/_wire.py python/tests/test_native_json_unicode.py` → **PASS**. Separately ran one valid-escape and three mutated canonical JSON decode checks locally → **4/4 PASS**; these **do not** substitute for the full facade suite. Exact Git blob SHA verified: `_wire.py` `7bd9aa9a0fb5d2aa92b7eb26dd77742c4a6d6d17`, standalone test `c48f33e9bdfd3de00bad27576d47ed173b705754`.
+- **Not executed / next:** run the full `python tools/validate_python_sources.py` **42-case** gate from a proper checkout, the native 51-case wheel suite and Cargo fmt/Clippy/test/release, and authorized original-data audit. Neither full Python gate nor scientific parity is claimed to pass. No dataset, astronomical core, GitHub Actions, main merge, deployment or release changes.
+- **Review:** https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/14 (stacked draft against PR #5).
+
+## 2026-11-14 — Reject lone Unicode surrogates in native synod JSON (stacked draft PR #14)
+
+- **Task / PR:** Isolated transport-hardening patch on `fix/python-native-json-unicode-scalars-20261114`, stacked on Rust/Python draft PR #5 at base commit `471a7dafe7e7dbc9ff8a9287aed6cf6f657e2899`; review at https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/14. Does not claim pilot issue #13.
+- **Reproduced defect:** Python `json.loads` accepts a lone `\\ud800` escaped surrogate in a nested synod response, even though it cannot be encoded as Unicode scalar UTF-8. The pre-fix source matched Git blob `f34f8c5ab8bf0b1de0cfe2489010f423eee09398`.
+- **Fix:** `python/virgostars_events/_wire.py` now rejects any unpaired surrogate within JSON keys/values using a nonrecursive traversal, while retaining the strict duplicate-key and nonfinite-number parser. Adds `python/tests/test_native_json_unicode.py` for valid paired characters, invalid high/low surrogates, raw Python surrogate text, and previous guardrails.
+- **Actually executed:** isolated Python `PYTHONPATH=python python3 -m unittest discover -s python/tests -p test_native_json_unicode.py -v` **5/5 PASS** and `python3 -m py_compile python/virgostars_events/_wire.py python/tests/test_native_json_unicode.py` **PASS**. Local mirror contained the exact source helper and test plus a stub package initializer, **not** the full repository checkout. GitHub byte identity confirmed by blob SHA-1: helper `7bd9aa9a0fb5d2aa92b7eb26dd77742c4a6d6d17`, test `c48f33e9bdfd3de00bad27576d47ed173b705754`.
+- **Not run / blockers:** complete Python source suite, compiled PyO3 wheel and Rust Cargo checks, original owner data parity. `cargo`/`rustc` unavailable in local runtime; no scientific accuracy or release claim.
+- **Next:** run full Python tests and native acceptance on a clean checkout; review and incorporate this stacked PR into #5 only after CI-equivalent checks. No production, dataset, GitHub Actions, merge or release changes.
+
+## 2026-11-14 — Replace recursive new_moon JSON alias comparison (stacked draft PR #14)
+
+- **Confirmed bug:** `same_json_value` recursively invoked itself on nested native JSON dictionaries and lists. On Python 3.13.5 with standard recursion limit 1000, two identical ~650-level nested structures raised `RecursionError` (reproduced with the previous algorithm). The helper is used to validate the Rust `new_moon` alias against the Moon record, before the Python facade projects the data.
+- **Fix:** `python/virgostars_events/_wire.py` now compares pairs iteratively with an explicit stack; validates exact scalar types at every level and checks dictionary keys / list lengths. It continues rejecting `True` vs `1` and `1` vs `1.0`, preserves order-insensitive JSON objects, and handles deeply nested valid values without recursive Python calls.
+- **Tests:** extended `python/tests/test_native_json_unicode.py` from 5 to **8** methods for type-exact nested aliases, equality through 700 list levels and unequal leaf after 700 dictionary levels; embedded deep/type assertions inside an existing `python/tests/test_python_api.py` method, keeping that mandatory suite's **18** declared methods. Source gate remains configured at **42** cases; this gate was **not run**.
+- **Actually run:** CPython **3.13.5** `PYTHONPATH=. python -m unittest discover -s tests -p 'test_native_json_unicode.py' -v` **8/8 PASS** in an isolated directory with exact GitHub source blobs and stub package initializer; `python -m compileall -q virgostars_events/_wire.py tests/test_native_json_unicode.py` **PASS**. `git hash-object` matched GitHub blobs: `_wire.py` **bb0ae72b2dce2d677300cd98a638aeb3a6f3befe**, test **944ea650fd36728bd83531ed5ff513887debb8b6**.
+- **Remaining:** full 42-case source gate, 51-case native wheel, Cargo fmt/Clippy/build/tests and original owner-data parity **not run**. No Rust algorithm/astronomy, dataset, packaging policy, GitHub Actions, release, deploy or main merge modified. Review: https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/14.
+
+## 2026-11-14 — Fail closed on native JSON integers beyond Rust bounds (draft PR #14)
+
+- **Scope:** Python-only strict transport hardening for the experimental P0 Rust-backed synod facade. Python `json.loads` ordinarily accepts arbitrary-precision JSON integer literals; Rust event transport uses `i64` timestamps and `u64` source identifiers. The `decode_native_json` parser now uses `parse_int=_bounded_json_int` and rejects any integer outside signed i64 minimum through unsigned u64 maximum. This does not infer astronomy or mutate archived events.
+- **Boundaries:** exact signed minimum `-9223372036854775808` and unsigned maximum `18446744073709551615` preserved; lower/higher and very large decimal literals rejected without float conversion. Existing duplicate-key, surrogate and non-finite-number checks retained.
+- **Code/tests:** `python/virgostars_events/_wire.py`, `python/tests/test_native_json_unicode.py` (8 → **9** methods), plus integer boundary checks inside an **existing** `python/tests/test_python_api.py` method so the mandatory 18-method API suite and 42-test source gate retain their configured counts.
+- **Actually executed:** Python **3.13.5** `PYTHONPATH=. python -m unittest discover -s tests -p test_native_json_unicode.py -v` **9/9 PASS** in an isolated helper/test mirror; `python -m compileall -q virgostars_events/_wire.py tests/test_native_json_unicode.py` **PASS**. The tested local Git blobs match GitHub post-push: helper `6a8396b06b1947453ed5d07c3f0354754d91c5b1` and tests `b978b840cc4e0b08b4cd59d36660846369a3e03e`.
+- **Not run:** complete 42-case Python source suite, compiled 51-case PyO3 wheel suite, Cargo fmt/Clippy/build/tests, authorized original CSV/P0 archive parity. GitHub direct clone unavailable from local runtime (DNS). A helper-only pass is not proof of full native acceptance or astronomical coverage.
+- **Next:** execute complete Python source and native gates on a full checkout; inspect PR #5's latest updates before integration. No dataset changes, GitHub Actions, main merge, deployment or release. https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/14
+
+
 ## 2026-11-17 — Rust-first consumer and replaceable regeneration source ([draft PR #32](https://github.com/Cesare-ml/VirgoStars-Event-Ephemeris/pull/32))
 
 - **Owner change:** prioritize one Rust native API for Desktop + Mobile; Python/WASM later. Add a development-only route to regenerate missing event intervals from existing backend astrology algorithms, using Swiss temporarily and VirgoStars-Ephemeris after validated parity.
@@ -1195,3 +1265,12 @@ Reviewed `pyproject.toml`, Rust binding manifest, `Cargo.lock`, existing `check_
 - **Windows operator integration:** `tools/compute-missing-intervals.ps1 -ReferenceProviderSha256` forwards the independently supplied hash, validates exact lowercase syntax and provider requirement, demands matching reviewer digest/report flags before saving and uses `_sha` plus its first 12 characters in the staging filename. A changed reference-file pin therefore cannot be accidentally skipped because an older unpinned/differently pinned report already exists. Added a native PowerShell `Get-FileHash` example and documented the requirement to lowercase the result.
 - **Regression:** the existing standalone synthetic Rust mock provider is hashed and checked with a finer rescan; wrong digest, invalid/uppercase digest, missing provider and symlinked executable (Unix) all fail closed. Prior unpinned behavior remains opt-in and reports null/no authenticated executable. End-to-end Rust `review_cli`: **24/24 PASS**. Linux Rust 1.90 `cargo fmt -p virgostars-events-generator -- --check`, `cargo test --locked --workspace --quiet` (all runnable tests PASS, 1 pre-existing ignored), `cargo clippy --locked --workspace --all-targets -- -D warnings` and `cargo build --locked --workspace --release --quiet` all **PASS**; `git diff --check` pending commit.
 - **Unverified limits:** the SHA only confirms local bytes *at check time*. It cannot authenticate wrapper dependencies/imports, dynamic libraries, NASA kernels, runtime flags, author signatures, genuine scientific independence, or prevent a file replacement between check and launch; no source data or astronomical accuracy can be certified. Real authorized Swiss/DE441 golden comparisons, original CSV/P0 parity, actual Windows PowerShell 5.1/7 syntax and end-to-end execution, mobile/desktop builds, source licensing and owner approval remain pending. No archive/DB write, source ID invention, GitHub Actions, merge, release or deployment; draft PR #32 stacked on #5.
+
+## 2026-11-17 — Complete-checkout Python gate repair (stacked on PR #14)
+
+- **Base and scope:** `fix/python-native-json-unicode-scalars-20261114` at `aede3f6`, stacked on draft PR #14 and draft PR #5; two test files only, plus this log. No Rust runtime, scientific dataset, archive encoding or public API changes.
+- **Reproduced on a fresh full Git checkout, Python 3.12.14:** `python tools/validate_python_sources.py` initially failed with two assertions and two errors in the 18-method API suite. `python -m unittest discover -s tools -p 'test_*.py' -q` initially failed with twelve subtest errors in the CSV/P0 varint regression (251 test methods discovered, one optional skip).
+- **Cause and fix:** the P0 parity fixture encoder shadowed the imported `verify_csv_p0.uvar` decoder, so canonical/invalid-varint tests called the wrong function. Renamed only the local encoder to `encode_uvar`. API fixtures were stale after stricter JSON integer, stage-reason and Moon gap-warning validation; retained the fail-closed production checks and corrected fixture status, coverage warnings and assertions of the earlier transport rejection layer. The fixed regression still verifies strict u64/i64 boundaries and exactly recorded Moon status/gap disclosures.
+- **Full-checkout commands passed:** `python tools/validate_python_sources.py` **42/42 PASS** (18 API + 8 CLI + 16 CSV oracle); `python -m unittest discover -s tools -p 'test_*.py' -q` **251 tests OK, one skipped optional case**; `python tools/validate_p0_synthetic.py` **15/15 PASS**; `PYTHONPATH=python python -m unittest discover -s python/tests -p 'test_native_json_unicode.py' -q` **9/9 PASS**; `python -m compileall -q python/virgostars_events python/tests tools` **PASS**; `git diff --check` **PASS**. All run without authentic owner archive or native Rust extension.
+- **Unverified:** this host has no `cargo`/`rustc`, so locked Rust fmt/Clippy/test/release, PyO3/maturin wheel installation and 51-case native acceptance are **not run**. The owner dataset's full CSV/P0 equality and astronomical coverage remain unverified here. One skipped tools case is not silently counted as a pass.
+- **Next:** regenerate/review the known-stale `Cargo.lock` with Rust installed, run `python tools/validate_rust.py` and native wheel acceptance against an explicitly trusted local P0 archive; independently review this stacked PR before integrating the draft chain. No main merge, release, dataset edits, GitHub Actions or production changes.
