@@ -102,22 +102,41 @@ The producer explicitly declares the **geocentric apparent true ecliptic and equ
 ### Preparation on the owner's computer
 
 1. Compile `VirgoStars-Ephemeris/bindings/node` with its documented `npm run build` command; the native `.node` addon must load successfully. This bridge **does not** compile or copy that repository.
-2. Select and inspect the exact source Git commit from the local `VirgoStars-Ephemeris` checkout and compute an **independently trusted** SHA-256 for the classic DE441 file. The SHA-256 is checked by streaming the file **before emitting the identity**; no 2.8 GB memory allocation. The source commit is an **operator-supplied claim**; it is not cryptographically measured against the compiled `.node` addon.
+2. Select and inspect the exact source Git commit from the local `VirgoStars-Ephemeris` checkout and obtain an **independently trusted** SHA-256 for the classic DE441 file (for example, from an independently reviewed, preserved manifest). The SHA-256 is checked by streaming the file **before emitting the identity**; no multi-GB memory allocation. Recomputing the same file's hash moments before launch is useful for inspection but **does not independently establish that the kernel is authentic**. The source commit is an **operator-supplied claim**; it is not cryptographically measured against the compiled `.node` addon.
 3. Confirm the kernel/license provenance separately. The bridge's CPAL-1.0 declaration applies to code, **not automatically to the DE441 data**.
 
 ```powershell
 # Example paths: adjust to your local checkouts; do not paste secrets.
 $ephemeris = 'D:\GitHub\VirgoStars-Ephemeris'
 $kernel = 'D:\GitHub\virgo-stars\database\effemeridi\astrodienst\de441.eph'
-$kernelHash = (Get-FileHash -Algorithm SHA256 $kernel).Hash.ToLowerInvariant()
 $sourceCommit = (git -C $ephemeris rev-parse HEAD)
 $module = Join-Path $ephemeris 'bindings\node\index.js'
 
-# Self-contained development producer smoke: prints identity, then awaits JSONL on stdin.
-node .\tools\vseph_virgostars_latitude_provider.cjs $module $kernel $kernelHash $sourceCommit
+# Inspect the measured hash and compare with a separately reviewed source manifest.
+Get-FileHash -Algorithm SHA256 $kernel
+$trustedKernelHash = '<64-character lowercase SHA256 verified independently>'
+
+# If you have no independently reviewed manifest, you may instead run a
+# TRANSPORT-ONLY exploratory smoke with the local hash shown above:
+# $trustedKernelHash = (Get-FileHash -Algorithm SHA256 $kernel).Hash.ToLowerInvariant()
+# This establishes only consistency of the same local file, not trusted provenance.
+
+# Owner smoke: checks DE441, fingerprints binding, probes Mars (1960),
+# Moon (2000) and Jupiter (2026); outputs an UNCERTIFIED JSON report.
+node .\tools\vseph_de441_owner_smoke.cjs --binding $module --kernel $kernel --kernel-sha256 $trustedKernelHash --source-commit $sourceCommit
+
+# Optional create-only report (existing report is never overwritten):
+node .\tools\vseph_de441_owner_smoke.cjs --binding $module --kernel $kernel --kernel-sha256 $trustedKernelHash --source-commit $sourceCommit --report "$env:TEMP\vseph-g3e-smoke-20261118.json"
+
+# Lower-level interactive producer when individual sample requests are needed:
+node .\tools\vseph_virgostars_latitude_provider.cjs $module $kernel $trustedKernelHash $sourceCommit
 ```
 
-Example stdin line after handshake: `{"body":"Mars","utc_microseconds":"1795000000000000"}`; the response must echo the string and supply **finite** latitude/speed. This is not an independent golden test. On Linux/macOS the same script accepts positional arguments in a `node` command.
+Example stdin line after the lower-level producer handshake: `{"body":"Mars","utc_microseconds":"1795000000000000"}`; the response must echo the string and supply **finite** latitude/speed. This is not an independent golden test. On Linux/macOS the same script accepts positional arguments in a `node` command. The higher-level owner smoke exits `0` only after three expected UTC/body echoes and finite coordinate checks; it exits `2` **without JSON** on invalid pin, native error or invalid responses. If `--report` is supplied, it uses create-only (`wx`) semantics and refuses an already-existing path. Its `result` contains `native_binary_source_commit_attested:false`, `independent_provider_compared:false`, `astronomical_accuracy_verified:false`, `coverage_certified:false`, `safe_to_import:false` even on success. This owner-machine run is **pending**: the real DE441 and native addon are absent from this Linux checkout.
+
+### Scope of the native binding fingerprint
+
+The bridge now sets `source_digest` to SHA-256 over the following concatenation of raw ASCII/UTF-8 bytes: `virgostars-node-binding-v1`, one NUL byte, the **lowercase SHA-256 hex** of the operator-selected `index.js`, one NUL byte, and the **lowercase SHA-256 hex** of `native/virgostars_ephemeris.node` beside that loader. Both files are stream-hashed **before the JSON identity**; a missing addon fails before handshake. The owner smoke separately recomputes the same local fingerprint and compares it against the handshake. This identifies file bytes observed during the check; it **does not prove** that the addon was compiled from the self-declared Git commit, that native dependencies or compiler flags match, or that the source math and ephemeris are scientifically independent. The kernel has a separate measured, required SHA trust pin.
 
 For a **real cross-provider audit**, point `vseph-compare-latitudes` to Node with literal arguments, and to a separately implemented and scientifically reviewed reference program:
 
@@ -131,9 +150,9 @@ For a **real cross-provider audit**, point `vseph-compare-latitudes` to Node wit
 --reference-program /absolute/path/to/INDEPENDENT-REVIEWED-REFERENCE
 ```
 
-The rest of the audit CLI's required window/precision/tolerance options still apply. The reference must declare **identical** frame, ecliptic plane, correction and time conventions (not merely similar human descriptions). Comparing two copies of this adapter, or two programs sharing DE441, is **not** an independent reference. A correct handshake, even with a real kernel, is **not a claim of scientific accuracy or coverage**. Its `kernel_digest` is measured; `version` is operator-declared, `source_digest` is null. The report remains `safe_to_import:false`.
+The rest of the audit CLI's required window/precision/tolerance options still apply. The reference must declare **identical** frame, ecliptic plane, correction and time conventions (not merely similar human descriptions). Comparing two copies of this adapter, or two programs sharing DE441, is **not** an independent reference. A correct handshake, even with a real kernel, is **not a claim of scientific accuracy or coverage**. Its `kernel_digest` is measured and pinned, `version` is operator-declared, and `source_digest` measures local binding bytes but is **not** a source-commit proof. The report remains `safe_to_import:false`.
 
-Run the reproducible **synthetic bridge tests** with `node --test tools/tests/vseph_virgostars_latitude_provider.test.cjs`. They supply a tiny **fake** `.eph` file and a fake Node `Engine` only to check CLI/process plumbing, hash preflight, exact UTC echo, civil-time policy and rejection of malformed native responses. They are **not** a real DE441 integration or a source-independent astronomical comparison. A real-kernel owner smoke and independently authored goldens remain pending.
+Run the reproducible **synthetic bridge and owner-smoke tests** with `node --test tools/tests/vseph_virgostars_latitude_provider.test.cjs tools/tests/vseph_de441_owner_smoke.test.cjs`. They supply a tiny **fake** `.eph` file, fake addon bytes and a fake Node `Engine` only to check process plumbing, kernel/binding fingerprints, three calendar epochs, exact UTC echoes, civil-time policy, malformed native replies and create-only reports. **Ten tests** pass on Linux; these are **not** a real DE441 integration, Windows runtime check or source-independent astronomical comparison. A real-kernel owner smoke and independently authored goldens remain pending.
 
 ## Requirements before real astronomical parity
 
@@ -150,6 +169,7 @@ cargo test --locked -p virgostars-events-generator latitude_provider_compare
 cargo test --locked -p virgostars-events-generator --test latitude_process
 cargo test --locked -p virgostars-events-generator --test latitude_cli
 node --test tools/tests/vseph_virgostars_latitude_provider.test.cjs
+node --test tools/tests/vseph_de441_owner_smoke.test.cjs
 cargo fmt -p virgostars-events-generator -- --check
 cargo test --locked --workspace --quiet
 cargo clippy --locked --workspace --all-targets -- -D warnings

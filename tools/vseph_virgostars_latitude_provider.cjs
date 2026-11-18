@@ -34,6 +34,20 @@ async function hashFile(file) {
   return hash.digest('hex');
 }
 
+async function bindingDigest(bindingPath) {
+  // Fingerprint the loader and the native addon that this binding loads.
+  // This is a measurement of local files, NOT an attestation of their origin,
+  // their build flags or any dependencies loaded by the addon.
+  const loaderSha = await hashFile(bindingPath);
+  const nativeSha = await hashFile(path.join(path.dirname(bindingPath), 'native', 'virgostars_ephemeris.node'));
+  return createHash('sha256')
+    .update('virgostars-node-binding-v1\0', 'utf8')
+    .update(loaderSha, 'ascii')
+    .update('\0', 'utf8')
+    .update(nativeSha, 'ascii')
+    .digest('hex');
+}
+
 function sample(engine, request) {
   if (!request || typeof request !== 'object' || Array.isArray(request) ||
       Object.keys(request).length !== 2 ||
@@ -88,7 +102,9 @@ async function main() {
   const kernelPath = path.resolve(kernelArg);
   const actualSha = await hashFile(kernelPath);
   if (actualSha !== expectedKernelSha) fail('DE441 kernel SHA-256 does not match trust anchor');
-  const binding = require(path.resolve(bindingArg));
+  const bindingPath = path.resolve(bindingArg);
+  const sourceDigest = await bindingDigest(bindingPath);
+  const binding = require(bindingPath);
   if (typeof binding.Engine !== 'function') fail('native VirgoStars-Ephemeris Engine missing');
   const engine = new binding.Engine(kernelPath);
 
@@ -105,7 +121,7 @@ async function main() {
     flags: 'SEFLG_JPLEPH|SEFLG_SPEED;UTC~UT1;native-civil-policy-1900-to-2027',
     source_license: 'CPAL-1.0 code; kernel redistribution rights NOT asserted',
     kernel_digest: actualSha,
-    source_digest: null, // Commit is operator-declared, not cryptographically proven.
+    source_digest: sourceDigest, // Measured loader+addon bytes, NOT a source-commit attestation.
   };
   process.stdout.write(JSON.stringify(identity) + '\n');
   const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
