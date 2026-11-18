@@ -25,6 +25,7 @@ pub mod adaptive;
 pub mod gaps;
 pub mod lunar;
 pub mod provider_process;
+pub mod speed_crosscheck;
 pub mod speed_extrema;
 
 const MAX_SCAN_STEPS: i128 = 100_000;
