@@ -1,3 +1,12 @@
+## 2026-11-18 — Late synthetic provider failure
+
+- An invented provider produces a candidate in the first interval and fails
+  during a later interval. Both direct and adaptive scans return the provider
+  error rather than a partial candidate list; adaptive pair probes, including
+  the failing pair, remain charged.
+- All five aspect probe-budget integration tests, workspace format check and
+  generator all-targets Clippy passed locally on Windows.
+
 ## 2026-11-18 — Synthetic adaptive-aspect blind spot
 
 - A continuous invented oscillation has opposite signs at intermediate
