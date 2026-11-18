@@ -94,6 +94,7 @@ test('all six synthetic G3E kinds match UTC brackets without certifying coverage
   assert.equal(report.matched.length, 6);
   assert.deepEqual(report.matched.map(row => row.kind), kinds);
   assert.ok(report.matched.every(row => row.candidate_midpoint_minus_golden_us === '0'));
+  assert.ok(report.matched.every(row => row.golden_within_candidate_bracket === true));
   assert.equal(report.missing_observed_goldens.length, 0);
   assert.equal(report.unmatched_observed_candidates.length, 0);
   assert.equal(report.conclusions.observed_events_within_supplied_tolerances, true);
@@ -114,6 +115,29 @@ test('peak signed-speed difference reports exit 1 with full review JSON', t => {
   assert.ok(northPeak.candidate_minus_golden_speed_degrees_per_day > 0.19);
   assert.equal(northPeak.speed_within_tolerance, false);
   assert.equal(report.conclusions.safe_to_import, false);
+});
+
+test('midpoint tolerance cannot accept a golden instant outside its candidate bracket', t => {
+  const f = fixture(t);
+  // The candidate spans [999990, 1000010], but the 100-us midpoint
+  // tolerance alone would incorrectly admit this reference at 1000050.
+  f.goldens.events[0].at_us = '1000050';
+  let result = run(f, f.save());
+  assert.equal(result.status, 1, result.stderr);
+  let report = JSON.parse(result.stdout);
+  const crossing = report.matched.find(row => row.kind === 'PlaneAscending');
+  assert.equal(crossing.candidate_midpoint_minus_golden_us, '-50');
+  assert.equal(crossing.golden_within_candidate_bracket, false);
+  assert.equal(report.conclusions.observed_events_within_supplied_tolerances, false);
+  assert.equal(report.conclusions.coverage_certified, false);
+
+  // A root exactly at the bracket's last endpoint remains admissible.
+  f.goldens.events[0].at_us = '1000010';
+  result = run(f, f.save());
+  assert.equal(result.status, 0, result.stderr);
+  report = JSON.parse(result.stdout);
+  assert.equal(report.matched.find(row => row.kind === 'PlaneAscending')
+    .golden_within_candidate_bracket, true);
 });
 
 test('missing golden and unpaired observed candidate are both retained', t => {

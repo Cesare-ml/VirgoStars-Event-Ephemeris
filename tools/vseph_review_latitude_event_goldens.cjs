@@ -214,6 +214,9 @@ function reconcile(primary, goldens, opts) {
         candidate_bracket_start_us: actual.bracket_start_us,
         candidate_bracket_end_us: actual.bracket_end_us,
         candidate_midpoint_minus_golden_us: (actual.midpoint - target.at).toString(),
+        golden_within_candidate_bracket:
+          target.at >= BigInt(actual.bracket_start_us) &&
+          target.at <= BigInt(actual.bracket_end_us),
         candidate_signed_speed_degrees_per_day: actual.signed_speed_degrees_per_day,
         golden_signed_speed_degrees_per_day: target.signed_speed_degrees_per_day,
         candidate_minus_golden_speed_degrees_per_day: speedDelta,
@@ -237,7 +240,8 @@ async function main() {
   const expected = validateGoldenEvents(goldenEvents, audit);
   const result = reconcile(observed, expected, opts);
   const disagreement = result.missedGolden.length > 0 || result.extraObserved.length > 0 ||
-    result.matches.some(match => match.speed_within_tolerance === false);
+    result.matches.some(match => match.speed_within_tolerance === false ||
+      match.golden_within_candidate_bracket === false);
   const report = {
     schema: 'vseph.g3e.latitude-event-golden-review.v1',
     audit_sha256: opts.auditSha,
@@ -259,7 +263,7 @@ async function main() {
       coverage_certified: false,
       safe_to_import: false,
     },
-    warning: 'Observed candidates only. Matching or empty lists never establish continuous-time coverage, exact event roots or reference independence.',
+    warning: 'Observed candidates only. Golden instants outside candidate brackets are discrepancies even within midpoint tolerance. Matching or empty lists never establish continuous-time coverage, exact event roots or reference independence.',
   };
   const encoded = JSON.stringify(report, null, 2) + '\n';
   if (opts.report) writeFileSync(opts.report, encoded, { encoding: 'utf8', flag: 'wx' });
