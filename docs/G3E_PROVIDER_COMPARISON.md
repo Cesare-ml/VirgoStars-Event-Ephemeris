@@ -156,7 +156,7 @@ Run the reproducible **synthetic bridge and owner-smoke tests** with `node --tes
 
 ## G3E SHA-pinned coordinate-golden comparison (experimental)
 
-`tools/vseph_review_latitude_goldens.cjs` compares actual Node-bridge **geocentric ecliptic latitude** and **signed latitude speed** at *explicit owner-supplied UTC instants* against a bounded JSON reference file. Unlike the owner smoke's three fixed dates, this accepts **1–256 distinct body/UTC samples** selected by a reference author. It requires separate lowercase SHA-256 pins for **both** the existing DE441 and the reference file and reports the measured binding fingerprint alongside the source identity. It does not invent event times or generate goldens. No new source data is included in this repository.
+`tools/vseph_review_latitude_goldens.cjs` compares actual Node-bridge **geocentric ecliptic latitude** and **signed latitude speed** at *explicit owner-supplied UTC instants* against a bounded JSON reference file. Unlike the owner smoke's three fixed dates, this accepts **1–256 distinct body/UTC samples** selected by a reference author. It requires separate lowercase SHA-256 pins for **both** the existing DE441 and the reference file and reports the measured binding fingerprint alongside the source identity. The golden JSON is authenticated from the same bounded bytes it parses (256 KiB cap), rather than reopening the path after hashing. It does not invent event times or generate goldens. No new source data is included in this repository.
 
 ### Reference file contract
 
@@ -226,7 +226,7 @@ The JSON deliberately keeps `reference_independence_scientifically_established:f
 1. An existing `vseph-compare-latitudes --mode events|both` JSON audit, optionally containing observed disagreements between two provider processes; and
 2. A **separately authored** exact-body/UTC list of independently established event times, with explicit reference metadata and numerical signed speeds for the two peak types.
 
-Both input files must have **operator-supplied, independently retained lowercase SHA-256 trust pins**. Their bytes are verified before parsing. The reviewer does **not** query a planetary ephemeris itself, manufacture reference timestamps, change the original event dataset or turn candidate brackets into approved records. Audit JSON is limited to 2 MiB, goldens JSON to 512 KiB and both observed/golden event counts to 10,000.
+Both input files must have **operator-supplied, independently retained lowercase SHA-256 trust pins**. The JSON reviewers now read each bounded input once through a single file descriptor and hash **the exact bytes subsequently parsed**, rejecting size overruns, invalid UTF-8 and mismatched SHA-256 before any comparison. This prevents a path-based hash-then-reopen race from authenticating different content than the parser consumed; it does not attest that the independently supplied trust pin or reference author is scientifically reliable. The reviewer does **not** query a planetary ephemeris itself, manufacture reference timestamps, change the original event dataset or turn candidate brackets into approved records. Audit JSON is limited to 2 MiB, goldens JSON to 512 KiB and both observed/golden event counts to 10,000.
 
 The golden JSON must use this exact schema and field inventory. **Numbers shown below are synthetic examples, not actual astronomical events**:
 

@@ -11,8 +11,9 @@
 // useful evidence, NOT proof that the reference is independent or correct.
 const { spawnSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
-const { createReadStream, readFileSync, statSync, writeFileSync } = require('node:fs');
+const { createReadStream, writeFileSync } = require('node:fs');
 const path = require('node:path');
+const { readPinnedJson } = require('./pinned_json.cjs');
 
 const BRIDGE = path.resolve(__dirname, 'vseph_virgostars_latitude_provider.cjs');
 const REQUIRED = ['--binding', '--kernel', '--kernel-sha256', '--source-commit',
@@ -108,10 +109,7 @@ function validateGolden(golden) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const digest = await hashFile(options.goldens);
-  if (digest !== options.goldensSha) fail('golden file SHA-256 does not match independently pinned trust anchor');
-  if (statSync(options.goldens).size > 256 * 1024) fail('goldens exceed bounded 256 KiB');
-  const golden = JSON.parse(readFileSync(options.goldens, 'utf8'));
+  const golden = readPinnedJson(options.goldens, options.goldensSha, 256 * 1024, 'goldens');
   validateGolden(golden);
   const loaderSha = await hashFile(options.binding);
   const addonSha = await hashFile(path.join(path.dirname(options.binding), 'native', 'virgostars_ephemeris.node'));
@@ -175,7 +173,7 @@ async function main() {
   const result = {
     schema: 'vseph.g3e.latitude-golden-review.v1',
     source_identity: identity,
-    golden_sha256: digest,
+    golden_sha256: options.goldensSha,
     reference: golden.reference,
     tolerances: { latitude_degrees: options.latitudeTolerance,
       signed_speed_degrees_per_day: options.speedTolerance },

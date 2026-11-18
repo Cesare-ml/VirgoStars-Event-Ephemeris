@@ -9,9 +9,9 @@
 
 // Development-only review of observed LATITUDE EVENT CANDIDATES. Never an
 // astronomical completeness proof, source attestation or approved data import.
-const { createHash } = require('node:crypto');
-const { createReadStream, readFileSync, statSync, writeFileSync } = require('node:fs');
+const { writeFileSync } = require('node:fs');
 const path = require('node:path');
+const { readPinnedJson } = require('./pinned_json.cjs');
 
 const REQUIRED = ['--audit', '--audit-sha256', '--goldens', '--goldens-sha256',
   '--time-tolerance-us', '--speed-tolerance-deg-per-day'];
@@ -68,17 +68,6 @@ function parseArgs(argv) {
     speedTolerance: nonnegativeFinite(m.get('--speed-tolerance-deg-per-day'), 'speed tolerance'),
     report: m.has('--report') ? path.resolve(m.get('--report')) : null,
   };
-}
-async function sha256(file) {
-  const digest = createHash('sha256');
-  for await (const chunk of createReadStream(file)) digest.update(chunk);
-  return digest.digest('hex');
-}
-async function pinnedJson(file, trusted, maxBytes, label) {
-  if (statSync(file).size > maxBytes) fail(`${label} exceeds ${maxBytes} bytes`);
-  if (await sha256(file) !== trusted) fail(`${label} SHA-256 differs from pinned trust anchor`);
-  try { return JSON.parse(readFileSync(file, 'utf8')); }
-  catch { fail(`invalid ${label} JSON`); }
 }
 function isPeak(kind) { return PEAKS.has(kind); }
 function checkedSpeed(kind, speed, label) {
@@ -232,9 +221,9 @@ function reconcile(primary, goldens, opts) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const rawAudit = await pinnedJson(opts.audit, opts.auditSha, 2 * 1024 * 1024, 'latitude audit');
+  const rawAudit = readPinnedJson(opts.audit, opts.auditSha, 2 * 1024 * 1024, 'latitude audit');
   const audit = readAudit(rawAudit);
-  const golden = await pinnedJson(opts.goldens, opts.goldensSha, 512 * 1024, 'event goldens');
+  const golden = readPinnedJson(opts.goldens, opts.goldensSha, 512 * 1024, 'event goldens');
   const goldenEvents = readGoldens(golden, audit);
   const observed = validateObserved(audit.observed, audit);
   const expected = validateGoldenEvents(goldenEvents, audit);
