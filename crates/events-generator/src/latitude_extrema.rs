@@ -12,6 +12,7 @@
 //! the refinement assumes unimodality within an observed candidate bracket.
 //! No data is written to the source archive or exposed by the offline reader.
 
+use std::collections::BTreeMap;
 use virgostars_events_core::BodyId;
 
 use crate::{
@@ -37,6 +38,17 @@ pub struct LatitudeSpeedExtremumCandidate {
     pub bracket_end_us: i64,
     /// Signed geocentric ecliptic-latitude speed, degrees/day.
     pub sampled_signed_speed_degrees_per_day: f64,
+}
+
+/// Diagnostics for a bounded, heuristic quarter-point latitude-speed rescan.
+/// These counters and candidates are not a completeness certificate.
+#[derive(Debug, Default)]
+pub struct AdaptiveLatitudeSpeedExtremaReport {
+    pub candidates: Vec<LatitudeSpeedExtremumCandidate>,
+    /// Unique probes inside coarse grid intervals (excludes refinement probes).
+    pub interior_probes: usize,
+    pub refined_segments: usize,
+    pub leaf_segments: usize,
 }
 
 fn classify_three_speeds(
@@ -148,6 +160,152 @@ pub fn latitude_speed_extremum_candidates<P: LatitudeProvider>(
     }
     result.sort_by_key(|candidate| candidate.bracket_start_us);
     Ok(result)
+}
+
+fn suspicious_latitude_speed_half(before: f64, mid: f64, after: f64) -> bool {
+    let reversal = (before < mid && mid > after) || (before > mid && mid < after);
+    let secant_mid = before / 2.0 + after / 2.0;
+    reversal || (mid - secant_mid).abs() > (after - before).abs() / 2.0
+}
+
+struct AdaptiveLatitudeSpeedScan<'a, P> {
+    provider: &'a P,
+    body: &'a BodyId,
+    remaining_probes: &'a mut usize,
+    sampled: BTreeMap<i64, f64>,
+    report: AdaptiveLatitudeSpeedExtremaReport,
+}
+
+impl<P: LatitudeProvider> AdaptiveLatitudeSpeedScan<'_, P> {
+    fn sample(&mut self, at_us: i64, interior: bool) -> Result<f64, GenerationError> {
+        if let Some(speed) = self.sampled.get(&at_us) {
+            return Ok(*speed);
+        }
+        let speed = checked_latitude_speed(self.provider, self.body, at_us, self.remaining_probes)?;
+        self.sampled.insert(at_us, speed);
+        if interior {
+            self.report.interior_probes += 1;
+        }
+        Ok(speed)
+    }
+
+    fn segment(
+        &mut self,
+        start_us: i64,
+        end_us: i64,
+        start_speed: f64,
+        end_speed: f64,
+        depth_remaining: u8,
+        precision_us: i64,
+    ) -> Result<(), GenerationError> {
+        let span = end_us as i128 - start_us as i128;
+        if depth_remaining == 0 || span <= precision_us as i128 * 4 {
+            self.report.leaf_segments += 1;
+            return Ok(());
+        }
+        let quarter = (start_us as i128 + span / 4) as i64;
+        let center = midpoint(start_us, end_us);
+        let three_quarters = (start_us as i128 + span * 3 / 4) as i64;
+        if !(start_us < quarter
+            && quarter < center
+            && center < three_quarters
+            && three_quarters < end_us)
+        {
+            self.report.leaf_segments += 1;
+            return Ok(());
+        }
+
+        // Quarters, not just the midpoint: two opposing extrema can both be
+        // invisible at the endpoints and midpoint of the coarse interval.
+        let q1 = self.sample(quarter, true)?;
+        let mid = self.sample(center, true)?;
+        let q3 = self.sample(three_quarters, true)?;
+        for (left, right, a, b, c) in [
+            (start_us, center, start_speed, q1, mid),
+            (center, end_us, mid, q3, end_speed),
+        ] {
+            if depth_remaining > 1 && suspicious_latitude_speed_half(a, b, c) {
+                self.report.refined_segments += 1;
+                self.segment(left, right, a, c, depth_remaining - 1, precision_us)?;
+            } else {
+                self.report.leaf_segments += 1;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Bounded, **uncertified** quarter-point latitude-speed rescan.
+///
+/// Each coarse step gets 1/4, 1/2 and 3/4 samples. A sampled turning point or
+/// pronounced secant deviation prompts recursive half-interval inspection,
+/// with `max_depth` in 1..=8. Chronologically deduplicated speed samples are
+/// classified into strict signed peaks and refined under the *same* caller
+/// budget. An empty report or two agreeing scans cannot prove completeness:
+/// sub-quarter or periodic peaks can still be missed. The window is half-open;
+/// the end instant is used only as a probe, never as a candidate center.
+pub fn adaptive_latitude_speed_extrema_scan<P: LatitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    window: SearchWindow,
+    max_depth: u8,
+    remaining_probes: &mut usize,
+) -> Result<AdaptiveLatitudeSpeedExtremaReport, GenerationError> {
+    window.validate()?;
+    if !(1..=8).contains(&max_depth)
+        || (window.step_us as i128) / (1_i128 << (max_depth as u32 + 2))
+            < window.precision_us as i128
+    {
+        return Err(GenerationError::InvalidWindow);
+    }
+
+    let mut scan = AdaptiveLatitudeSpeedScan {
+        provider,
+        body,
+        remaining_probes,
+        sampled: BTreeMap::new(),
+        report: AdaptiveLatitudeSpeedExtremaReport::default(),
+    };
+    let mut start = window.start_us;
+    let mut start_speed = scan.sample(start, false)?;
+    while start < window.end_us {
+        let end = next_time(start, window);
+        let end_speed = scan.sample(end, false)?;
+        scan.segment(
+            start,
+            end,
+            start_speed,
+            end_speed,
+            max_depth,
+            window.precision_us,
+        )?;
+        start = end;
+        start_speed = end_speed;
+    }
+
+    let ordered: Vec<_> = scan.sampled.into_iter().collect();
+    if ordered.len() < 3 {
+        return Err(GenerationError::InsufficientSpeedSamples);
+    }
+    for triple in ordered.windows(3) {
+        let [(first_at, first), (_, center), (last_at, last)] = triple else {
+            unreachable!("windows(3) yields exactly three items")
+        };
+        if let Some(kind) = classify_three_speeds(*first, *center, *last)? {
+            scan.report.candidates.push(refine_sampled_peak(
+                provider,
+                body,
+                (*first_at, *last_at),
+                window.precision_us,
+                kind,
+                scan.remaining_probes,
+            )?);
+        }
+    }
+    scan.report
+        .candidates
+        .sort_by_key(|candidate| candidate.bracket_start_us);
+    Ok(scan.report)
 }
 
 #[cfg(test)]
@@ -339,5 +497,149 @@ mod tests {
         // Speeds at 0,1,2 days are floating-point approximations of zero;
         // they cannot establish the intervening 1/8 and 3/8-day peaks.
         assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn adaptive_quarter_probes_reveal_hidden_northward_and_southward_peaks() {
+        let model = Model(|d: f64| {
+            let phase = 2.0 * std::f64::consts::PI * d;
+            (
+                (1.0 - phase.cos()) / (2.0 * std::f64::consts::PI),
+                phase.sin(),
+            )
+        });
+        let mut budget = 100;
+        let coarse =
+            latitude_speed_extremum_candidates(&model, &body(), window(2 * DAY, DAY), &mut budget)
+                .unwrap();
+        assert!(coarse.is_empty());
+
+        let mut budget = 500;
+        let report = adaptive_latitude_speed_extrema_scan(
+            &model,
+            &body(),
+            window(2 * DAY, DAY),
+            1,
+            &mut budget,
+        )
+        .unwrap();
+        assert_eq!(report.candidates.len(), 4);
+        assert_eq!(report.interior_probes, 6);
+        for (candidate, (day_numerator, kind)) in report.candidates.iter().zip([
+            (1, LatitudeSpeedExtremumKind::NorthwardMaximum),
+            (3, LatitudeSpeedExtremumKind::SouthwardMagnitudeMaximum),
+            (5, LatitudeSpeedExtremumKind::NorthwardMaximum),
+            (7, LatitudeSpeedExtremumKind::SouthwardMagnitudeMaximum),
+        ]) {
+            let at = DAY * day_numerator / 4;
+            assert_eq!(candidate.kind, kind);
+            assert!(candidate.bracket_start_us <= at && at <= candidate.bracket_end_us);
+            assert!(candidate.bracket_end_us - candidate.bracket_start_us <= 1_000_000);
+            assert!(candidate.sampled_signed_speed_degrees_per_day.abs() > 0.99999);
+        }
+    }
+
+    #[test]
+    fn adaptive_recursion_counts_refinement_and_shares_the_budget() {
+        let model = Model(|d: f64| {
+            let phase = 2.0 * std::f64::consts::PI * d;
+            (
+                (1.0 - phase.cos()) / (2.0 * std::f64::consts::PI),
+                phase.sin(),
+            )
+        });
+        let mut budget = 500;
+        let report = adaptive_latitude_speed_extrema_scan(
+            &model,
+            &body(),
+            window(2 * DAY, DAY),
+            3,
+            &mut budget,
+        )
+        .unwrap();
+        assert_eq!(report.candidates.len(), 4);
+        assert!(report.refined_segments > 0);
+        assert!(report.interior_probes > 6);
+        assert!(report.leaf_segments >= 4);
+        assert!(budget < 500);
+    }
+
+    #[test]
+    fn adaptive_rejects_invalid_depth_or_too_coarse_resolution() {
+        let model = Model(|d: f64| (d * d / 2.0, d));
+        for depth in [0, 9] {
+            let mut budget = 100;
+            assert_eq!(
+                adaptive_latitude_speed_extrema_scan(
+                    &model,
+                    &body(),
+                    window(2 * DAY, DAY),
+                    depth,
+                    &mut budget,
+                )
+                .err(),
+                Some(GenerationError::InvalidWindow)
+            );
+            assert_eq!(budget, 100);
+        }
+        let mut budget = 100;
+        assert_eq!(
+            adaptive_latitude_speed_extrema_scan(
+                &model,
+                &body(),
+                window(5_000_000, 1_000_000),
+                2,
+                &mut budget,
+            )
+            .err(),
+            Some(GenerationError::InvalidWindow)
+        );
+    }
+
+    #[test]
+    fn adaptive_budget_exhaustion_is_explicit() {
+        let model = Model(|d: f64| (d * d / 2.0, d));
+        let mut budget = 3;
+        assert_eq!(
+            adaptive_latitude_speed_extrema_scan(
+                &model,
+                &body(),
+                window(2 * DAY, DAY),
+                1,
+                &mut budget,
+            )
+            .err(),
+            Some(GenerationError::TooManySteps)
+        );
+        assert_eq!(budget, 0);
+    }
+
+    #[test]
+    fn adaptive_plateau_fails_closed_and_monotone_speed_is_empty() {
+        let flat = Model(|d: f64| (d, 1.0));
+        let mut budget = 100;
+        assert_eq!(
+            adaptive_latitude_speed_extrema_scan(
+                &flat,
+                &body(),
+                window(2 * DAY, DAY),
+                1,
+                &mut budget,
+            )
+            .err(),
+            Some(GenerationError::AmbiguousLatitudeSpeedExtremum)
+        );
+
+        let monotone = Model(|d: f64| (d * d / 2.0, d));
+        let mut budget = 100;
+        let report = adaptive_latitude_speed_extrema_scan(
+            &monotone,
+            &body(),
+            window(2 * DAY, DAY),
+            1,
+            &mut budget,
+        )
+        .unwrap();
+        assert!(report.candidates.is_empty());
     }
 }

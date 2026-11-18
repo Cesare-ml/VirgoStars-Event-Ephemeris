@@ -13,6 +13,7 @@
 //! certified by a successful (including empty) scan. A single coarse step
 //! can conceal two roots; independently verify real planetary timestamps.
 
+use std::collections::BTreeMap;
 use virgostars_events_core::BodyId;
 
 use crate::{
@@ -51,6 +52,27 @@ pub struct LatitudeStationCandidate {
     /// The direction *after* beta speed crosses zero. Stop and restart share
     /// this same mathematical event; no later timestamp is fabricated.
     pub direction_after: LatitudeMotionDirection,
+}
+
+/// Diagnostics for a bounded heuristic rescan of one signed latitude root.
+/// Neither a nonempty nor an empty report certifies astronomical coverage.
+#[derive(Debug)]
+pub struct AdaptiveLatitudeRootsReport<T> {
+    pub candidates: Vec<T>,
+    pub interior_probes: usize,
+    pub refined_segments: usize,
+    pub leaf_segments: usize,
+}
+
+impl<T> AdaptiveLatitudeRootsReport<T> {
+    fn map<U>(self, f: impl FnMut(T) -> U) -> AdaptiveLatitudeRootsReport<U> {
+        AdaptiveLatitudeRootsReport {
+            candidates: self.candidates.into_iter().map(f).collect(),
+            interior_probes: self.interior_probes,
+            refined_segments: self.refined_segments,
+            leaf_segments: self.leaf_segments,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -278,6 +300,269 @@ pub fn latitude_station_candidates<P: LatitudeProvider>(
     })
 }
 
+fn suspicious_signed_root_half(before: f64, mid: f64, after: f64) -> bool {
+    // A zero/changed sign at any sampled point or marked curvature motivates
+    // subdividing the half. This cannot bound unsampled oscillation frequency.
+    let sign_change = before == 0.0
+        || mid == 0.0
+        || after == 0.0
+        || before.is_sign_positive() != mid.is_sign_positive()
+        || mid.is_sign_positive() != after.is_sign_positive();
+    let secant_mid = before / 2.0 + after / 2.0;
+    sign_change || (mid - secant_mid).abs() > (after - before).abs() / 2.0
+}
+
+struct AdaptiveLatitudeRootScan<'a, P> {
+    provider: &'a P,
+    body: &'a BodyId,
+    root: RootOf,
+    remaining_probes: &'a mut usize,
+    sampled: BTreeMap<i64, f64>,
+    interior_probes: usize,
+    refined_segments: usize,
+    leaf_segments: usize,
+}
+
+impl<P: LatitudeProvider> AdaptiveLatitudeRootScan<'_, P> {
+    fn sample(&mut self, at_us: i64, interior: bool) -> Result<f64, GenerationError> {
+        if let Some(value) = self.sampled.get(&at_us) {
+            return Ok(*value);
+        }
+        let value = checked_value(
+            self.provider,
+            self.body,
+            at_us,
+            self.root,
+            self.remaining_probes,
+        )?;
+        self.sampled.insert(at_us, value);
+        if interior {
+            self.interior_probes += 1;
+        }
+        Ok(value)
+    }
+
+    fn segment(
+        &mut self,
+        start_us: i64,
+        end_us: i64,
+        start_value: f64,
+        end_value: f64,
+        depth_remaining: u8,
+        precision_us: i64,
+    ) -> Result<(), GenerationError> {
+        let span = end_us as i128 - start_us as i128;
+        if depth_remaining == 0 || span <= precision_us as i128 * 4 {
+            self.leaf_segments += 1;
+            return Ok(());
+        }
+        let quarter = (start_us as i128 + span / 4) as i64;
+        let center = midpoint(start_us, end_us);
+        let three_quarters = (start_us as i128 + span * 3 / 4) as i64;
+        if !(start_us < quarter
+            && quarter < center
+            && center < three_quarters
+            && three_quarters < end_us)
+        {
+            self.leaf_segments += 1;
+            return Ok(());
+        }
+        let q1 = self.sample(quarter, true)?;
+        let mid = self.sample(center, true)?;
+        let q3 = self.sample(three_quarters, true)?;
+        for (left, right, a, b, c) in [
+            (start_us, center, start_value, q1, mid),
+            (center, end_us, mid, q3, end_value),
+        ] {
+            if depth_remaining > 1 && suspicious_signed_root_half(a, b, c) {
+                self.refined_segments += 1;
+                self.segment(left, right, a, c, depth_remaining - 1, precision_us)?;
+            } else {
+                self.leaf_segments += 1;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn roots_from_ordered_samples<P: LatitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    window: SearchWindow,
+    root: RootOf,
+    ordered: &[(i64, f64)],
+    remaining_probes: &mut usize,
+) -> Result<Vec<SignedZeroBracket>, GenerationError> {
+    if ordered.first().map_or(true, |(_, value)| *value == 0.0) {
+        return Err(GenerationError::AmbiguousLatitudeCrossing);
+    }
+    let mut result = Vec::new();
+    for i in 0..ordered.len() {
+        let (at, value) = ordered[i];
+        if value == 0.0 {
+            if i > 0 && ordered[i - 1].1 == 0.0 {
+                return Err(GenerationError::AmbiguousLatitudeCrossing);
+            }
+            if at == window.end_us {
+                continue; // exclusive-end exact zero is probe-only
+            }
+            if i + 1 >= ordered.len() || ordered[i + 1].1 == 0.0 {
+                return Err(GenerationError::AmbiguousLatitudeCrossing);
+            }
+            if ordered[i - 1].1.is_sign_positive() != ordered[i + 1].1.is_sign_positive() {
+                result.push(SignedZeroBracket {
+                    start_us: at,
+                    end_us: at,
+                    positive_after: ordered[i + 1].1.is_sign_positive(),
+                });
+            }
+        }
+        if let Some((end_at, end_value)) = ordered.get(i + 1).copied() {
+            if value != 0.0
+                && end_value != 0.0
+                && value.is_sign_positive() != end_value.is_sign_positive()
+            {
+                let (start_us, end_us) = refine_opposite_signs(
+                    provider,
+                    body,
+                    (at, end_at),
+                    value.is_sign_positive(),
+                    root,
+                    window.precision_us,
+                    remaining_probes,
+                )?;
+                result.push(SignedZeroBracket {
+                    start_us,
+                    end_us,
+                    positive_after: end_value.is_sign_positive(),
+                });
+            }
+        }
+    }
+    Ok(result)
+}
+
+fn adaptive_signed_zero_scan<P: LatitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    window: SearchWindow,
+    root: RootOf,
+    max_depth: u8,
+    remaining_probes: &mut usize,
+) -> Result<AdaptiveLatitudeRootsReport<SignedZeroBracket>, GenerationError> {
+    window.validate()?;
+    if !(1..=8).contains(&max_depth)
+        || (window.step_us as i128) / (1_i128 << (max_depth as u32 + 2))
+            < window.precision_us as i128
+    {
+        return Err(GenerationError::InvalidWindow);
+    }
+    let mut scan = AdaptiveLatitudeRootScan {
+        provider,
+        body,
+        root,
+        remaining_probes,
+        sampled: BTreeMap::new(),
+        interior_probes: 0,
+        refined_segments: 0,
+        leaf_segments: 0,
+    };
+    let mut start = window.start_us;
+    let mut before = scan.sample(start, false)?;
+    if before == 0.0 {
+        return Err(GenerationError::AmbiguousLatitudeCrossing);
+    }
+    while start < window.end_us {
+        let end = next_time(start, window);
+        let after = scan.sample(end, false)?;
+        scan.segment(start, end, before, after, max_depth, window.precision_us)?;
+        start = end;
+        before = after;
+    }
+    let ordered: Vec<_> = scan.sampled.into_iter().collect();
+    let candidates = roots_from_ordered_samples(
+        provider,
+        body,
+        window,
+        root,
+        &ordered,
+        scan.remaining_probes,
+    )?;
+    Ok(AdaptiveLatitudeRootsReport {
+        candidates,
+        interior_probes: scan.interior_probes,
+        refined_segments: scan.refined_segments,
+        leaf_segments: scan.leaf_segments,
+    })
+}
+
+/// Uncertified quarter-point/adaptive rescan of `β=0` plane crossings.
+///
+/// Coarse intervals receive 1/4, 1/2 and 3/4 probes, with optional recursive
+/// subdivision of suspicious halves (`max_depth` 1..=8). This can reveal
+/// two hidden crossings with same-sign coarse endpoints, but the heuristic
+/// cannot prove that no higher-frequency crossings remain. Caller budget
+/// includes grid, quarters, refinement and repeat-free cached samples.
+pub fn adaptive_ecliptic_plane_crossings_scan<P: LatitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    window: SearchWindow,
+    max_depth: u8,
+    remaining_probes: &mut usize,
+) -> Result<AdaptiveLatitudeRootsReport<EclipticPlaneCrossingCandidate>, GenerationError> {
+    adaptive_signed_zero_scan(
+        provider,
+        body,
+        window,
+        RootOf::Latitude,
+        max_depth,
+        remaining_probes,
+    )
+    .map(|report| {
+        report.map(|root| EclipticPlaneCrossingCandidate {
+            body: body.clone(),
+            bracket_start_us: root.start_us,
+            bracket_end_us: root.end_us,
+            direction: if root.positive_after {
+                EclipticPlaneDirection::Ascending
+            } else {
+                EclipticPlaneDirection::Descending
+            },
+        })
+    })
+}
+
+/// The same bounded rescan for signed `dβ/dt=0` latitude-motion stations.
+/// Stop and restart remain one mathematical event with `direction_after`.
+pub fn adaptive_latitude_stations_scan<P: LatitudeProvider>(
+    provider: &P,
+    body: &BodyId,
+    window: SearchWindow,
+    max_depth: u8,
+    remaining_probes: &mut usize,
+) -> Result<AdaptiveLatitudeRootsReport<LatitudeStationCandidate>, GenerationError> {
+    adaptive_signed_zero_scan(
+        provider,
+        body,
+        window,
+        RootOf::LatitudeSpeed,
+        max_depth,
+        remaining_probes,
+    )
+    .map(|report| {
+        report.map(|root| LatitudeStationCandidate {
+            body: body.clone(),
+            bracket_start_us: root.start_us,
+            bracket_end_us: root.end_us,
+            direction_after: if root.positive_after {
+                LatitudeMotionDirection::Northward
+            } else {
+                LatitudeMotionDirection::Southward
+            },
+        })
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -502,5 +787,216 @@ mod tests {
                 .unwrap();
         // This is an explicit limitation, NOT evidence that the interval is complete.
         assert!(roots.is_empty());
+    }
+
+    fn periodic_model() -> Model<impl Fn(f64) -> (f64, f64)> {
+        Model(|d: f64| {
+            let phase = 2.0 * std::f64::consts::PI * (d + 0.1);
+            (phase.cos(), -2.0 * std::f64::consts::PI * phase.sin())
+        })
+    }
+
+    #[test]
+    fn adaptive_scan_finds_four_plane_crossings_in_same_sign_coarse_steps() {
+        let model = periodic_model();
+        let mut budget = 100;
+        let coarse = ecliptic_plane_crossing_candidates(
+            &model,
+            &body(),
+            window(0, 2 * DAY, DAY),
+            &mut budget,
+        )
+        .unwrap();
+        assert!(coarse.is_empty());
+
+        let mut budget = 500;
+        let report = adaptive_ecliptic_plane_crossings_scan(
+            &model,
+            &body(),
+            window(0, 2 * DAY, DAY),
+            1,
+            &mut budget,
+        )
+        .unwrap();
+        assert_eq!(report.candidates.len(), 4);
+        assert_eq!(report.interior_probes, 6);
+        for (candidate, (time, direction)) in report.candidates.iter().zip([
+            (0.15, EclipticPlaneDirection::Descending),
+            (0.65, EclipticPlaneDirection::Ascending),
+            (1.15, EclipticPlaneDirection::Descending),
+            (1.65, EclipticPlaneDirection::Ascending),
+        ]) {
+            let target = (time * DAY as f64) as i64;
+            assert_eq!(candidate.direction, direction);
+            assert!(candidate.bracket_start_us <= target + 1_000_000);
+            assert!(target - 1_000_000 <= candidate.bracket_end_us);
+            assert!(candidate.bracket_end_us - candidate.bracket_start_us <= 1_000_000);
+        }
+    }
+
+    #[test]
+    fn adaptive_scan_finds_four_hidden_latitude_speed_stations() {
+        let model = periodic_model();
+        let mut budget = 100;
+        let coarse =
+            latitude_station_candidates(&model, &body(), window(0, 2 * DAY, DAY), &mut budget)
+                .unwrap();
+        assert!(coarse.is_empty());
+
+        let mut budget = 500;
+        let report = adaptive_latitude_stations_scan(
+            &model,
+            &body(),
+            window(0, 2 * DAY, DAY),
+            1,
+            &mut budget,
+        )
+        .unwrap();
+        assert_eq!(report.candidates.len(), 4);
+        for (candidate, (time, direction)) in report.candidates.iter().zip([
+            (0.4, LatitudeMotionDirection::Northward),
+            (0.9, LatitudeMotionDirection::Southward),
+            (1.4, LatitudeMotionDirection::Northward),
+            (1.9, LatitudeMotionDirection::Southward),
+        ]) {
+            let target = (time * DAY as f64) as i64;
+            assert_eq!(candidate.direction_after, direction);
+            assert!(candidate.bracket_start_us <= target + 1_000_000);
+            assert!(target - 1_000_000 <= candidate.bracket_end_us);
+        }
+    }
+
+    #[test]
+    fn adaptive_exact_root_and_tangency_are_handled_without_duplicates() {
+        let exact = Model(|d: f64| (d - 1.0, 1.0));
+        let mut budget = 100;
+        let roots = adaptive_ecliptic_plane_crossings_scan(
+            &exact,
+            &body(),
+            window(0, 2 * DAY, DAY),
+            1,
+            &mut budget,
+        )
+        .unwrap();
+        assert_eq!(roots.candidates.len(), 1);
+        assert_eq!(roots.candidates[0].bracket_start_us, DAY);
+        assert_eq!(roots.candidates[0].bracket_end_us, DAY);
+        assert_eq!(
+            roots.candidates[0].direction,
+            EclipticPlaneDirection::Ascending
+        );
+
+        let tangent = Model(|d: f64| ((d - 1.0).powi(2), 2.0 * (d - 1.0)));
+        let mut budget = 100;
+        assert!(adaptive_ecliptic_plane_crossings_scan(
+            &tangent,
+            &body(),
+            window(0, 2 * DAY, DAY),
+            1,
+            &mut budget,
+        )
+        .unwrap()
+        .candidates
+        .is_empty());
+    }
+
+    #[test]
+    fn adaptive_rejects_plateaus_and_zero_at_inclusive_start() {
+        let plateau = Model(|_d: f64| (0.5, 0.0));
+        let mut budget = 100;
+        assert_eq!(
+            adaptive_latitude_stations_scan(
+                &plateau,
+                &body(),
+                window(0, 2 * DAY, DAY),
+                1,
+                &mut budget,
+            )
+            .err(),
+            Some(GenerationError::AmbiguousLatitudeCrossing)
+        );
+        let starts_zero = Model(|d: f64| (d, 1.0));
+        let mut budget = 100;
+        assert_eq!(
+            adaptive_ecliptic_plane_crossings_scan(
+                &starts_zero,
+                &body(),
+                window(0, 2 * DAY, DAY),
+                1,
+                &mut budget,
+            )
+            .err(),
+            Some(GenerationError::AmbiguousLatitudeCrossing)
+        );
+    }
+
+    #[test]
+    fn adaptive_depth_and_probe_limits_fail_closed() {
+        let model = periodic_model();
+        for depth in [0, 9] {
+            let mut budget = 100;
+            assert_eq!(
+                adaptive_ecliptic_plane_crossings_scan(
+                    &model,
+                    &body(),
+                    window(0, 2 * DAY, DAY),
+                    depth,
+                    &mut budget,
+                )
+                .err(),
+                Some(GenerationError::InvalidWindow)
+            );
+            assert_eq!(budget, 100);
+        }
+        let mut budget = 2;
+        assert_eq!(
+            adaptive_ecliptic_plane_crossings_scan(
+                &model,
+                &body(),
+                window(0, 2 * DAY, DAY),
+                1,
+                &mut budget,
+            )
+            .err(),
+            Some(GenerationError::TooManySteps)
+        );
+        assert_eq!(budget, 0);
+    }
+
+    #[test]
+    fn adaptive_exclusive_end_zero_is_not_an_event() {
+        let model = Model(|d: f64| (d - 2.0, 1.0));
+        let mut budget = 100;
+        let report = adaptive_ecliptic_plane_crossings_scan(
+            &model,
+            &body(),
+            window(0, 2 * DAY, DAY),
+            1,
+            &mut budget,
+        )
+        .unwrap();
+        assert!(report.candidates.is_empty());
+    }
+
+    #[test]
+    fn adaptive_quarter_sampling_still_cannot_certify_unseen_fast_oscillations() {
+        // Eight real beta=0 crossings lie in one day, but every quarter-point
+        // latitude sample sees the same positive sign. This is an intentional
+        // demonstration that adaptive heuristics do not certify coverage.
+        let model = Model(|d: f64| {
+            let phase = 8.0 * std::f64::consts::PI * d;
+            (phase.cos(), -8.0 * std::f64::consts::PI * phase.sin())
+        });
+        let mut budget = 80;
+        let report = adaptive_ecliptic_plane_crossings_scan(
+            &model,
+            &body(),
+            window(0, DAY, DAY),
+            1,
+            &mut budget,
+        )
+        .unwrap();
+        assert!(report.candidates.is_empty());
+        assert_eq!(report.interior_probes, 3);
     }
 }
