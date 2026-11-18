@@ -19,6 +19,12 @@ fn main() {
         .unwrap()
         .to_string_lossy()
         .to_string();
+    if mode.contains("args_required")
+        && std::env::args().skip(1).collect::<Vec<_>>() != ["--source", "path with spaces"]
+    {
+        eprintln!("literal source arguments were not forwarded as separate argv entries");
+        std::process::exit(77);
+    }
     let mut identity = String::from(
         r#"{"protocol":"virgostars.latitude.v1","provider":"synthetic-latitude-fixture","version":"1","frame":"geocentric-ecliptic-latitude-degrees","ecliptic_plane":"mean-of-date","position_corrections":"geometric","dynamical_time_scale":"TT","input_time_scale":"utc-posix-microseconds","speed_definition":"signed-d-beta-dt-degrees-per-day","flags":"synthetic-only","source_license":"test-fixture","kernel_digest":null,"source_digest":null}"#,
     );

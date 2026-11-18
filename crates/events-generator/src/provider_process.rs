@@ -8,6 +8,7 @@
 //! Optional out-of-process adapter for a separately licensed ephemeris source.
 //! It is a development-only JSON-lines protocol, not an in-process Swiss link.
 
+use std::ffi::OsString;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -54,8 +55,9 @@ struct Session {
     output: BufReader<ChildStdout>,
 }
 
-fn spawn_session(executable: &Path) -> Result<Session, String> {
+fn spawn_session(executable: &Path, args: &[OsString]) -> Result<Session, String> {
     let mut child = Command::new(executable)
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -137,7 +139,7 @@ fn request_position(
 
 impl ProcessLongitudeProvider {
     pub fn spawn(executable: &Path) -> Result<Self, String> {
-        let mut session = spawn_session(executable)?;
+        let mut session = spawn_session(executable, &[])?;
         let hello = read_bounded_line(&mut session.output)?;
         let identity: ProviderIdentity = serde_json::from_str(&hello)
             .map_err(|error| format!("invalid provider identity: {error}"))?;
@@ -236,7 +238,13 @@ pub struct ProcessLatitudeProvider {
 
 impl ProcessLatitudeProvider {
     pub fn spawn(executable: &Path) -> Result<Self, String> {
-        let mut session = spawn_session(executable)?;
+        Self::spawn_with_args(executable, &[])
+    }
+
+    /// Spawn an explicitly selected program with literal arguments (no shell).
+    /// Useful for interpreters such as `node` whose script is not a native exe.
+    pub fn spawn_with_args(executable: &Path, args: &[OsString]) -> Result<Self, String> {
+        let mut session = spawn_session(executable, args)?;
         let hello = read_bounded_line(&mut session.output)?;
         let identity: LatitudeProviderIdentity = serde_json::from_str(&hello)
             .map_err(|error| format!("invalid latitude provider identity: {error}"))?;

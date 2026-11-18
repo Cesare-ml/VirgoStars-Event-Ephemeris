@@ -8,6 +8,7 @@
 //! Development-only two-source latitude audit. NEVER publishes or imports data.
 
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 use serde_json::{json, Value};
@@ -26,6 +27,7 @@ const USAGE: &str = "Usage: vseph-compare-latitudes \
 --mode samples|events|both --body NAME --start-us I64 --end-us I64 \
 --step-us POSITIVE_I64 --precision-us POSITIVE_I64 \
 --primary-program PATH --reference-program PATH \
+[--primary-arg VALUE ...] [--reference-arg VALUE ...] \
 --latitude-tolerance-deg NONNEGATIVE_F64 \
 --speed-tolerance-deg-per-day NONNEGATIVE_F64 \
 --event-time-tolerance-us NONNEGATIVE_I64 \
@@ -65,7 +67,9 @@ struct Request {
     body: BodyId,
     window: SearchWindow,
     primary_program: PathBuf,
+    primary_args: Vec<OsString>,
     reference_program: PathBuf,
+    reference_args: Vec<OsString>,
     latitude_tolerance: f64,
     speed_tolerance: f64,
     event_time_tolerance: i64,
@@ -76,12 +80,32 @@ struct Request {
 
 fn parse_request(args: impl IntoIterator<Item = String>) -> Result<Request, String> {
     let mut values = BTreeMap::new();
+    let mut primary_args = Vec::new();
+    let mut reference_args = Vec::new();
     let mut args = args.into_iter();
     while let Some(option) = args.next() {
-        if !option.starts_with("--") || values.contains_key(&option) {
+        if !option.starts_with("--") {
             return Err(format!("invalid or repeated option: {option}"));
         }
         let value = args.next().ok_or(format!("missing value for {option}"))?;
+        if option == "--primary-arg" || option == "--reference-arg" {
+            if value.is_empty() {
+                return Err(format!("empty argument for {option}"));
+            }
+            let target = if option == "--primary-arg" {
+                &mut primary_args
+            } else {
+                &mut reference_args
+            };
+            if target.len() >= 16 {
+                return Err(format!("too many {option} values (maximum 16)"));
+            }
+            target.push(OsString::from(value));
+            continue;
+        }
+        if values.contains_key(&option) {
+            return Err(format!("invalid or repeated option: {option}"));
+        }
         values.insert(option, value);
     }
     if values.len() != 14 {
@@ -165,7 +189,9 @@ fn parse_request(args: impl IntoIterator<Item = String>) -> Result<Request, Stri
         body,
         window,
         primary_program,
+        primary_args,
         reference_program,
+        reference_args,
         latitude_tolerance: nonnegative_finite("--latitude-tolerance-deg")?,
         speed_tolerance: nonnegative_finite("--speed-tolerance-deg-per-day")?,
         event_time_tolerance,
@@ -204,8 +230,12 @@ fn candidate_json(candidate: &LatitudeObservedCandidate) -> Value {
 /// Returns whether any sampled disagreement was observed. On provider errors,
 /// returns without printing even a partially computed JSON document.
 fn run(request: Request) -> Result<bool, String> {
-    let primary = ProcessLatitudeProvider::spawn(&request.primary_program)?;
-    let reference = ProcessLatitudeProvider::spawn(&request.reference_program)?;
+    let primary =
+        ProcessLatitudeProvider::spawn_with_args(&request.primary_program, &request.primary_args)?;
+    let reference = ProcessLatitudeProvider::spawn_with_args(
+        &request.reference_program,
+        &request.reference_args,
+    )?;
     check_matching_conventions(primary.identity(), reference.identity())?;
 
     let mut disagreement = false;
@@ -391,6 +421,8 @@ mod tests {
         assert_eq!(request.mode, Mode::Samples);
         assert_eq!(request.window.end_us, 2_000_000);
         assert_eq!(request.max_probes, 100);
+        assert!(request.primary_args.is_empty());
+        assert!(request.reference_args.is_empty());
     }
 
     #[test]
@@ -420,5 +452,28 @@ mod tests {
         let mut unknown = base;
         unknown[0] = "--typo".into();
         assert!(parse_request(unknown).is_err());
+    }
+
+    #[test]
+    fn literal_repeated_interpreter_arguments_are_separate_and_bounded() {
+        let mut provided = options();
+        provided.extend([
+            "--primary-arg".to_string(),
+            "bridge.cjs".to_string(),
+            "--primary-arg".to_string(),
+            "a path with spaces".to_string(),
+            "--reference-arg".to_string(),
+            "other.cjs".to_string(),
+        ]);
+        let parsed = parse_request(provided.clone()).unwrap();
+        assert_eq!(parsed.primary_args, ["bridge.cjs", "a path with spaces"]);
+        assert_eq!(parsed.reference_args, ["other.cjs"]);
+        provided.extend(["--primary-arg".to_string(), "".to_string()]);
+        assert!(parse_request(provided).is_err());
+        let mut extra = options();
+        for _ in 0..17 {
+            extra.extend(["--primary-arg".to_string(), "x".to_string()]);
+        }
+        assert!(parse_request(extra).is_err());
     }
 }

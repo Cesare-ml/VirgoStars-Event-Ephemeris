@@ -43,6 +43,15 @@ fn mode_exe(exe: &PathBuf, mode: &str) -> PathBuf {
 }
 
 fn run(mode: &str, primary: &PathBuf, reference: &PathBuf) -> Output {
+    run_with_primary_args(mode, primary, reference, &[])
+}
+
+fn run_with_primary_args(
+    mode: &str,
+    primary: &PathBuf,
+    reference: &PathBuf,
+    primary_args: &[&str],
+) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_vseph-compare-latitudes"));
     command.args([
         "--mode",
@@ -62,6 +71,9 @@ fn run(mode: &str, primary: &PathBuf, reference: &PathBuf) -> Output {
     command.arg(primary);
     command.arg("--reference-program");
     command.arg(reference);
+    for value in primary_args {
+        command.args(["--primary-arg", value]);
+    }
     command.args([
         "--latitude-tolerance-deg",
         "0.01",
@@ -77,6 +89,28 @@ fn run(mode: &str, primary: &PathBuf, reference: &PathBuf) -> Output {
         "3000",
     ]);
     command.output().unwrap()
+}
+
+#[test]
+fn provider_program_receives_literal_args_without_shell_reinterpretation() {
+    let (_directory, exe) = compiled_mock();
+    let requires = mode_exe(&exe, "args_required");
+    let rejected = run("samples", &requires, &exe);
+    assert_eq!(rejected.status.code(), Some(2));
+    assert!(rejected.stdout.is_empty());
+    let accepted = run_with_primary_args(
+        "samples",
+        &requires,
+        &exe,
+        &["--source", "path with spaces"],
+    );
+    assert!(
+        accepted.status.success(),
+        "{}",
+        String::from_utf8_lossy(&accepted.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&accepted.stdout).unwrap();
+    assert_eq!(report["samples"]["samples_checked"], 2);
 }
 
 #[test]
