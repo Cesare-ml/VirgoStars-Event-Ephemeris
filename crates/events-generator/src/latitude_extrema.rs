@@ -85,7 +85,9 @@ fn refine_sampled_peak<P: LatitudeProvider>(
         let first = (left as i128 + width * 382 / 1000) as i64;
         let second = (left as i128 + width * 618 / 1000) as i64;
         if first <= left || second >= right || first >= second {
-            break;
+            // Integer timestamps cannot provide two distinct interior
+            // probes. Do not return a bracket wider than requested.
+            return Err(GenerationError::AmbiguousLatitudeSpeedExtremum);
         }
         let first_speed = checked_latitude_speed(provider, body, first, remaining_probes)?;
         let second_speed = checked_latitude_speed(provider, body, second, remaining_probes)?;
@@ -121,8 +123,9 @@ fn refine_sampled_peak<P: LatitudeProvider>(
 /// observed bracket to the requested UTC precision and returns the speed
 /// sampled at its midpoint. The caller owns the *total* provider-probe budget.
 /// Adjacent equal speed samples, invalid positions/speeds, an insufficient
-/// scan grid and budget exhaustion fail closed. Endpoint-only peaks and two
-/// extrema hidden within a coarse sample interval are not discoverable here:
+/// scan grid, unattainable integer precision and budget exhaustion fail
+/// closed. Endpoint-only peaks and multiple extrema hidden within a coarse
+/// sample interval are not discoverable here:
 /// **a successful scan never certifies per-body temporal coverage.**
 pub fn latitude_speed_extremum_candidates<P: LatitudeProvider>(
     provider: &P,

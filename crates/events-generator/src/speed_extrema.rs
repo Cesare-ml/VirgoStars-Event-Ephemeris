@@ -81,7 +81,9 @@ fn measured_local_peak<P: LongitudeProvider>(
         let first = (left as i128 + width * 382 / 1000) as i64;
         let second = (left as i128 + width * 618 / 1000) as i64;
         if first <= left || second >= right || first >= second {
-            break;
+            // Integer timestamps cannot provide two distinct interior
+            // probes. Do not return a bracket wider than requested.
+            return Err(GenerationError::AmbiguousSpeedExtremum);
         }
         let v1 = checked_speed(provider, body, first, remaining_probes)?;
         let v2 = checked_speed(provider, body, second, remaining_probes)?;
@@ -133,8 +135,9 @@ fn classified_peak(
 /// A strict sign change of sampled speed **slopes** brackets a peak. Refinement
 /// uses bounded unimodal optimization, counted against `remaining_probes`.
 /// Adjacent equal speeds, a search interval with fewer than three time points,
-/// and budget exhaustion fail closed. Multiple hidden extrema within one
-/// coarse step may still be missed; an empty result is never a completeness
+/// refinement that cannot reach the requested integer precision, and budget
+/// exhaustion fail closed. Multiple hidden extrema within one coarse step
+/// may still be missed; an empty result is never a completeness
 /// certificate. Time windows are half-open `[start_us, end_us)`.
 pub fn speed_extremum_candidates<P: LongitudeProvider>(
     provider: &P,

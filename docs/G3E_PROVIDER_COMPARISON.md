@@ -12,6 +12,13 @@ historical checkpoints.
 
 **Status: experimental Rust generator code, no astronomical certification (2026-11-18).**
 
+The longitudinal and latitudinal speed-peak refiners use integer UTC
+microseconds. If two distinct interior probes cannot be represented while
+the candidate bracket is still wider than the requested precision, they now
+return an explicit ambiguity error instead of reporting a wider bracket as
+though it met the request. This can reject very fine precision settings.
+Numerical bracket width is not physical accuracy or coverage certification.
+
 `latitude_provider_compare::compare_latitude_event_providers` accepts two separately supplied implementations of `LatitudeProvider`, the same `BodyId`, a half-open UTC `SearchWindow`, an adaptive depth and separate probe budgets. The function never opens or modifies the original source data, P0 archive, database or offline consumer.
 
 ## What is actually compared

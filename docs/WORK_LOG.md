@@ -1,3 +1,18 @@
+## 2026-11-18 — Fail closed on unattainable peak precision
+
+- Two synthetic parabolic providers exposed that the longitude-speed and
+  latitude-speed peak refiners could stop with a bracket wider than the
+  requested microsecond precision when distinct integer interior probes
+  could no longer be chosen. Both refiners now return their explicit
+  ambiguity error in this case, without a partial candidate list.
+- Synthetic direct/retrograde and northward/southward cases reject the
+  unattainable one-microsecond setting and succeed at a wider three-
+  microsecond precision. This does not establish physical accuracy,
+  scientific uncertainty or completeness.
+- On Windows the complete locked Rust validator passed (one optional
+  snapshot test ignored), as did 80 Node JSON/event-review/fixture tests.
+  No real astronomical provider or owner-smoke/binding suite was run.
+
 ## 2026-11-18 — Owner restriction on ephemeris provider use
 
 - The owner directs this project to prepare tools for later calculations and
