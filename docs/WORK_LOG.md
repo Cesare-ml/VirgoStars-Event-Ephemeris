@@ -7,8 +7,9 @@
   ambiguity error in this case, without a partial candidate list.
 - Synthetic direct/retrograde and northward/southward cases reject the
   unattainable one-microsecond setting and succeed at a wider three-
-  microsecond precision. This does not establish physical accuracy,
-  scientific uncertainty or completeness.
+  microsecond precision. Both adaptive scan entry points also propagate the
+  ambiguity under the same synthetic precision limit. This does not establish
+  physical accuracy, scientific uncertainty or completeness.
 - On Windows the complete locked Rust validator passed (one optional
   snapshot test ignored), as did 80 Node JSON/event-review/fixture tests.
   No real astronomical provider or owner-smoke/binding suite was run.
