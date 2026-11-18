@@ -73,10 +73,15 @@ fn sample_pair<P: LongitudeProvider>(
 ) -> Result<PairSample, GenerationError> {
     let a_sample = checked_sample(provider, a, t)?;
     let b_sample = checked_sample(provider, b, t)?;
+    let longitude_difference = b_sample.longitude_degrees - a_sample.longitude_degrees;
+    let relative_speed =
+        b_sample.longitude_speed_degrees_per_day - a_sample.longitude_speed_degrees_per_day;
+    if !longitude_difference.is_finite() || !relative_speed.is_finite() {
+        return Err(GenerationError::InvalidSample);
+    }
     Ok(PairSample {
-        separation: (b_sample.longitude_degrees - a_sample.longitude_degrees).rem_euclid(360.0),
-        relative_speed: b_sample.longitude_speed_degrees_per_day
-            - a_sample.longitude_speed_degrees_per_day,
+        separation: longitude_difference.rem_euclid(360.0),
+        relative_speed,
     })
 }
 

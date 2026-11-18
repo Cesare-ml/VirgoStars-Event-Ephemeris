@@ -1,3 +1,14 @@
+## 2026-11-18 — Reject overflowing aspect pair arithmetic
+
+- Synthetic midpoint samples with individually finite inputs exposed two
+  non-finite derived values: longitude difference and relative speed. Both
+  are now checked before use, so direct, adaptive and tangency scans return
+  `InvalidSample` rather than using invalid arithmetic.
+- These extreme synthetic values test defensive numerical behavior only; they
+  are not astronomical measurements or coverage evidence.
+- The complete locked Rust validator passed locally on Windows; one optional
+  snapshot test was ignored. No real ephemeris provider was run.
+
 ## 2026-11-18 — Synthetic aspect edge and failure checks
 
 - Extended the synthetic invariants to 112 combinations, including windows
